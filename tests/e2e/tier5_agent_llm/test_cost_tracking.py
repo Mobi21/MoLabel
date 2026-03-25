@@ -28,11 +28,14 @@ async def test_cost_tracking_per_output_and_aggregation(
 ) -> None:
     """T5-07: Per-output tokens, per-run cost, cost summary aggregation."""
     with checkpoint(ctx, "session_setup"):
-        await client.login("reviewer-t5-07")
+        ws_resp = await client.post(
+            "/api/v1/workspaces", json={"path": "/tmp/ws-cost-tracking-test", "workspace_name": "Cost Tracking Test"}
+        )
+        assert ws_resp.status_code == 201
 
     with checkpoint(ctx, "agent_run_api_returns_cost_fields"):
         run_resp = await client.post(
-            "/agent-runs",
+            "/api/v1/agent-runs",
             json={
                 "workspace_id": "00000000-0000-0000-0000-000000000001",
                 "dataset_id": "00000000-0000-0000-0000-000000000002",
@@ -116,7 +119,7 @@ async def test_cost_tracking_per_output_and_aggregation(
     with checkpoint(ctx, "cost_summary_via_api"):
         # API endpoint for cost summary
         cost_resp = await client.get(
-            "/costs/summary",
+            "/api/v1/costs/summary",
             params={"workspace_id": "00000000-0000-0000-0000-000000000001"},
         )
         # Endpoint may return 200 with empty data or redirect — either is acceptable

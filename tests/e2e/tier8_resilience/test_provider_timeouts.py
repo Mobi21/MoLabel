@@ -27,16 +27,10 @@ async def test_provider_timeouts(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Provider Timeout Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-provider-timeout-test", "workspace_name": "Provider Timeout Test"}
         )
         assert ws.status_code == 201
         _ws_id = ws.json()["workspace_id"]
-
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Tester"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
 
     # ── Checkpoint 2: Simulate timeout then success pattern ───────────────────
     with checkpoint(ctx, "timeout_then_success"):
@@ -95,31 +89,32 @@ async def test_provider_timeouts(client, ctx):
     with checkpoint(ctx, "model_profile"):
         # Create a model profile (provider config)
         model_resp = await client.post(
-            "/model-profiles",
+            "/api/v1/model-profiles",
             json={
+                "model_profile_slug": "minimax-2-7",
                 "model_identifier": "minimax-2.7",
-                "provider": "anthropic",
+                "provider_type": "anthropic",
                 "base_url": "https://api.minimax.chat/v1",
-                "display_name": "MiniMax 2.7",
             },
         )
         assert model_resp.status_code == 201
-        model_id = model_resp.json()["model_profile_id"]
+        model_id = model_resp.json()["id"]
         assert model_id
 
     # ── Checkpoint 5: Runtime profile with retry config ───────────────────────
     with checkpoint(ctx, "runtime_profile"):
         rt_resp = await client.post(
-            "/runtime-profiles",
+            "/api/v1/runtime-profiles",
             json={
-                "profile_name": "Retry Profile",
-                "max_retries": 3,
-                "retry_delay_seconds": 1.0,
+                "runtime_profile_slug": "retry-profile",
                 "timeout_seconds": 30,
-                "batch_size": 10,
+                "retry_config": {
+                    "max_retries": 3,
+                    "initial_delay_seconds": 1.0,
+                },
             },
         )
         assert rt_resp.status_code == 201
         rt_body = rt_resp.json()
-        assert rt_body.get("max_retries") == 3
         assert rt_body.get("timeout_seconds") == 30
+        assert rt_body.get("retry_config", {}).get("max_retries") == 3

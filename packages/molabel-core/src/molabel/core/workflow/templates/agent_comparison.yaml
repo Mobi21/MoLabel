@@ -1,0 +1,54 @@
+name: "Agent Comparison"
+version: 1
+description: >
+  Run multiple models on the same data, compare outputs side-by-side
+  with human review, analyze agreement, and export the best results.
+
+steps:
+  - id: ingest
+    type: data_ingest
+    config:
+      source: "data/raw/*.jsonl"
+
+  - id: normalize
+    type: data_normalize
+    config:
+      schema_ref: "schemas/default.yaml"
+
+  - id: compare_models
+    type: agent_compare
+    config:
+      models:
+        - "claude-sonnet-4-20250514"
+        - "gpt-4o"
+        - "llama-3-70b"
+      prompt_ref: "prompts/default.yaml"
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 100
+      breakpoint: true
+
+  - id: agreement
+    type: agreement_analysis
+    config:
+      analysis_type: human_agent
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.80
+
+  - id: select_best
+    type: gate
+    config:
+      message: "Review comparison results. Select best model and approve export."
+      require_reason: true
+
+  - id: export_results
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

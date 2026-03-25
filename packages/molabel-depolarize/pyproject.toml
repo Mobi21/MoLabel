@@ -1,0 +1,21 @@
+[project]
+name = "molabel-depolarize"
+version = "0.1.0"
+description = "DePolarize reference implementation for MoLabel"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+    "molabel-core",
+    "molabel-plugins",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+molabel-core = { workspace = true }
+molabel-plugins = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/molabel_depolarize"]

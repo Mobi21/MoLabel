@@ -29,19 +29,13 @@ async def test_dataset_operations(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Dataset Operations Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-dataset-operations-test", "workspace_name": "Dataset Operations Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Operator"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Operations Dataset",
                 "workspace_id": ws_id,
@@ -53,7 +47,7 @@ async def test_dataset_operations(client, ctx):
 
     # ── Checkpoint 2: Analytics API returns correct shape ─────────────────────
     with checkpoint(ctx, "analytics_api"):
-        analytics_resp = await client.get(f"/datasets/{ds_id}/analytics")
+        analytics_resp = await client.get(f"/api/v1/datasets/{ds_id}/analytics")
         assert analytics_resp.status_code == 200
         analytics = analytics_resp.json()
         assert analytics["dataset_id"] == ds_id
@@ -157,7 +151,7 @@ async def test_dataset_operations(client, ctx):
 
     # ── Checkpoint 5: Records API ─────────────────────────────────────────────
     with checkpoint(ctx, "records_api"):
-        records_resp = await client.get(f"/datasets/{ds_id}/records")
+        records_resp = await client.get(f"/api/v1/datasets/{ds_id}/records")
         assert records_resp.status_code == 200
         records_body = records_resp.json()
         assert "items" in records_body

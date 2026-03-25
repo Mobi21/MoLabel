@@ -30,19 +30,13 @@ async def test_export_jsonl(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "JSONL Export Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-jsonl-export-test", "workspace_name": "JSONL Export Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Exporter"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "JSONL Export Dataset",
                 "workspace_id": ws_id,
@@ -144,7 +138,7 @@ async def test_export_jsonl(client, ctx):
     # ── Checkpoint 5: API export endpoint ────────────────────────────────────
     with checkpoint(ctx, "api_export"):
         resp = await client.post(
-            "/exports",
+            "/api/v1/exports",
             json={
                 "workspace_id": ws_id,
                 "dataset_id": ds_id,

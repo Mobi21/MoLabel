@@ -26,23 +26,19 @@ async def test_label_mapping(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Label Mapping Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-label-mapping-test", "workspace_name": "Label Mapping Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Mapper"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         # Create task schema for sentiment
         schema = await client.post(
-            "/task-schemas",
+            "/api/v1/task-schemas",
             json={
-                "task_slug": "sentiment",
+                "workspace_id": ws_id,
+                "task_schema_slug": "sentiment",
                 "task_type": "classification",
+                "title": "Sentiment Classification",
                 "label_fields": [
                     {
                         "name": "sentiment",
@@ -87,7 +83,7 @@ async def test_label_mapping(client, ctx):
         ]
 
         preview_resp = await client.post(
-            "/label-mappings/preview",
+            "/api/v1/label-mappings/preview",
             json={
                 "source_system": "legacy_rating_system",
                 "task_schema_id": schema_id,
@@ -125,7 +121,7 @@ async def test_label_mapping(client, ctx):
             },
         ]
         preview2_resp = await client.post(
-            "/label-mappings/preview",
+            "/api/v1/label-mappings/preview",
             json={
                 "source_system": "test",
                 "task_schema_id": schema_id,
@@ -147,7 +143,7 @@ async def test_label_mapping(client, ctx):
     # ── Checkpoint 4: Save the mapping ───────────────────────────────────────
     with checkpoint(ctx, "save"):
         save_resp = await client.post(
-            "/label-mappings",
+            "/api/v1/label-mappings",
             json={
                 "name": "Rating to Sentiment v1",
                 "mapping_slug": "rating-to-sentiment-v1",

@@ -28,19 +28,13 @@ async def test_import_parquet(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Parquet Import Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-parquet-import-test", "workspace_name": "Parquet Import Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Importer"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Parquet Dataset",
                 "workspace_id": ws_id,
@@ -151,7 +145,7 @@ async def test_import_parquet(client, ctx):
     # ── Checkpoint 4: API import ──────────────────────────────────────────────
     with checkpoint(ctx, "api_import"):
         resp = await client.post(
-            f"/datasets/{ds_id}/import",
+            f"/api/v1/datasets/{ds_id}/import",
             json={"source_uri": "test://parquet"},
         )
         assert resp.status_code == 202

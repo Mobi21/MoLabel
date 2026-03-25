@@ -44,10 +44,9 @@ async def _setup(client: InstrumentedClient) -> dict:
     mp = await client.post(
         f"{BASE}/model-profiles",
         json={
-            "name": "Deletion Safety Model",
+            "model_profile_slug": "deletion-safety-model",
             "provider_type": "openai_compatible",
             "model_identifier": "gpt-4o",
-            "workspace_id": workspace_id,
         },
     )
     assert mp.status_code == 201
@@ -114,7 +113,7 @@ async def test_deletion_safety(
 
     # --- Fake resource deletions return 404 with error body ---
     with checkpoint(ctx, "fake_resource_deletion_returns_404"):
-        fake_mp_id = "00000000-0000-0000-0000-del3t1onsafe"
+        fake_mp_id = "00000000-0000-0000-0000-de1e7100faac"
         resp = await client.delete(f"{BASE}/model-profiles/{fake_mp_id}")
         assert resp.status_code == 404, resp.text
         body = resp.json()
@@ -122,7 +121,7 @@ async def test_deletion_safety(
 
     # --- Runtime profile delete also returns 404 for unknown ---
     with checkpoint(ctx, "fake_runtime_profile_deletion_returns_404"):
-        fake_rp_id = "00000000-0000-0000-0000-runt1mepr0f1"
+        fake_rp_id = "00000000-0000-0000-0000-f00000000001"
         resp = await client.delete(f"{BASE}/runtime-profiles/{fake_rp_id}")
         assert resp.status_code == 404, resp.text
         body = resp.json()

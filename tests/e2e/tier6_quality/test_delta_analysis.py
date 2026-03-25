@@ -151,9 +151,9 @@ async def test_delta_analysis_snapshot_comparison(
         cat_field = result_rates.fields.get("category")
         assert cat_field is not None
 
-        assert cat_field.human_distribution["a"] == pytest.approx(0.60, abs=1e-9)
-        assert cat_field.agent_distribution["a"] == pytest.approx(0.40, abs=1e-9)
-        assert cat_field.deltas["a"] == pytest.approx(-0.20, abs=1e-9)
+        assert cat_field.human_distribution["A"] == pytest.approx(0.60, abs=1e-9)
+        assert cat_field.agent_distribution["A"] == pytest.approx(0.40, abs=1e-9)
+        assert cat_field.deltas["A"] == pytest.approx(-0.20, abs=1e-9)
 
     with checkpoint(ctx, "multi_field_analysis"):
         multi_records = [

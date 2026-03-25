@@ -27,19 +27,13 @@ async def test_empty_dataset(client, ctx):
     # ── Checkpoint 1: Setup empty dataset ────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Empty Dataset Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-empty-dataset-test", "workspace_name": "Empty Dataset Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "EmptyTester"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Empty Dataset",
                 "workspace_id": ws_id,
@@ -51,7 +45,7 @@ async def test_empty_dataset(client, ctx):
 
     # ── Checkpoint 2: Records list is empty (not an error) ────────────────────
     with checkpoint(ctx, "empty_records_list"):
-        records_resp = await client.get(f"/datasets/{ds_id}/records")
+        records_resp = await client.get(f"/api/v1/datasets/{ds_id}/records")
         assert records_resp.status_code == 200
         body = records_resp.json()
         assert body["items"] == []
@@ -59,7 +53,7 @@ async def test_empty_dataset(client, ctx):
 
     # ── Checkpoint 3: Analytics returns zeros ─────────────────────────────────
     with checkpoint(ctx, "analytics_zeros"):
-        analytics_resp = await client.get(f"/datasets/{ds_id}/analytics")
+        analytics_resp = await client.get(f"/api/v1/datasets/{ds_id}/analytics")
         assert analytics_resp.status_code == 200
         analytics = analytics_resp.json()
         assert analytics["record_count"] == 0
@@ -69,7 +63,7 @@ async def test_empty_dataset(client, ctx):
     # ── Checkpoint 4: Snapshot on empty dataset ───────────────────────────────
     with checkpoint(ctx, "empty_snapshot"):
         snap_resp = await client.post(
-            f"/datasets/{ds_id}/snapshots",
+            f"/api/v1/datasets/{ds_id}/snapshots",
             json={"name": "empty-snapshot", "snapshot_type": "full"},
         )
         assert snap_resp.status_code == 201
@@ -80,7 +74,7 @@ async def test_empty_dataset(client, ctx):
     # ── Checkpoint 5: Export on empty dataset returns 202 ────────────────────
     with checkpoint(ctx, "empty_export"):
         export_resp = await client.post(
-            "/exports",
+            "/api/v1/exports",
             json={
                 "workspace_id": ws_id,
                 "dataset_id": ds_id,

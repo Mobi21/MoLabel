@@ -35,19 +35,13 @@ async def test_large_dataset(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Large Dataset Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-large-dataset-test", "workspace_name": "Large Dataset Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Batcher"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Large Dataset",
                 "workspace_id": ws_id,
@@ -141,7 +135,7 @@ async def test_large_dataset(client, ctx):
     with checkpoint(ctx, "pagination"):
         # API should respect limit param
         resp = await client.get(
-            f"/datasets/{ds_id}/records",
+            f"/api/v1/datasets/{ds_id}/records",
             params={"limit": PAGE_SIZE},
         )
         assert resp.status_code == 200
@@ -196,7 +190,7 @@ async def test_large_dataset(client, ctx):
     # ── Checkpoint 7: Import API ──────────────────────────────────────────────
     with checkpoint(ctx, "api_import"):
         resp2 = await client.post(
-            f"/datasets/{ds_id}/import",
+            f"/api/v1/datasets/{ds_id}/import",
             json={"source_uri": "test://large"},
         )
         assert resp2.status_code == 202

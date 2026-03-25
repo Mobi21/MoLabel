@@ -37,7 +37,10 @@ async def test_batch_partial_failure_eight_of_ten(
     - The comparison service handles errors gracefully
     """
     with checkpoint(ctx, "session_setup"):
-        await client.login("reviewer-t5-09")
+        ws_resp = await client.post(
+            "/api/v1/workspaces", json={"path": "/tmp/ws-batch-partial-failure-test", "workspace_name": "Batch Partial Failure Test"}
+        )
+        assert ws_resp.status_code == 201
 
     with checkpoint(ctx, "verify_agent_run_status_enum"):
         assert AgentRunStatus.partially_completed == "partially_completed"
@@ -99,7 +102,7 @@ async def test_batch_partial_failure_eight_of_ten(
     with checkpoint(ctx, "api_agent_run_partial_failure_response"):
         # The API endpoint returns a run with status "pending" (async) initially
         run_resp = await client.post(
-            "/agent-runs",
+            "/api/v1/agent-runs",
             json={
                 "workspace_id": "00000000-0000-0000-0000-000000000001",
                 "dataset_id": "00000000-0000-0000-0000-000000000002",

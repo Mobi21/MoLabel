@@ -125,19 +125,29 @@ async def test_workspace_401_without_session(
     client: InstrumentedClient,
     ctx: TestContext,
 ) -> None:
-    """T3-03: 401 without session cookie on authenticated endpoints."""
+    """T3-03: POST /workspaces is public (bootstrap); reindex requires auth."""
 
     # Ensure no session cookie is set
     client._session_cookie = None
+    client._client.cookies.clear()
 
-    with checkpoint(ctx, "create_without_auth"):
+    with checkpoint(ctx, "create_without_auth_returns_201"):
         resp = await client.post(
             f"{BASE}/workspaces",
             json={"path": "/tmp/ws-no-auth", "workspace_name": "No Auth WS"},
         )
-        assert resp.status_code == 401, resp.text
+        assert resp.status_code == 201, resp.text
         body = resp.json()
-        assert "error" in body
+        assert "first_reviewer" in body
+        assert body["first_reviewer"]["id"]
+        assert body["first_reviewer"]["display_name"]
+        assert body["first_reviewer"]["avatar_color"]
+        # Session cookie is auto-set by the workspace bootstrap
+        assert client._session_cookie is not None
+
+    # Clear the session cookie again before testing auth-protected endpoint
+    client._session_cookie = None
+    client._client.cookies.clear()
 
     with checkpoint(ctx, "reindex_without_auth"):
         resp = await client.post(

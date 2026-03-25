@@ -41,38 +41,39 @@ async def test_claim_expiry_returns_to_pool(
     """
     with checkpoint(ctx, "workspace_and_data_setup"):
         ws_resp = await client.post(
-            "/workspaces", json={"workspace_name": "claim-expiry-ws"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-claim-expiry-ws", "workspace_name": "claim-expiry-ws"}
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]
 
         ds_resp = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "workspace_id": ws_id,
                 "dataset_name": "expiry-ds",
-                "text_field": "text",
+                "source_type": "jsonl",
             },
         )
         assert ds_resp.status_code == 201
         ds_id = ds_resp.json()["dataset_id"]
 
         import_resp = await client.post(
-            f"/datasets/{ds_id}/import",
+            f"/api/v1/datasets/{ds_id}/import",
             json={
                 "source_type": "jsonl",
                 "records": [{"text": "Record for expiry testing."}],
-                "text_field": "text",
+                "source_type": "jsonl",
             },
         )
         assert import_resp.status_code in (200, 201, 202)
 
     with checkpoint(ctx, "schema_and_queue"):
         schema_resp = await client.post(
-            "/task-schemas",
+            "/api/v1/task-schemas",
             json={
                 "workspace_id": ws_id,
-                "task_slug": "expiry-test",
+                "task_schema_slug": "expiry-test",
+                "title": "Expiry Test",
                 "task_type": "classification",
                 "label_fields": [
                     {
@@ -86,21 +87,10 @@ async def test_claim_expiry_returns_to_pool(
         )
         assert schema_resp.status_code == 201
         schema_id = schema_resp.json()["task_schema_id"]
-
-        queue_resp = await client.post(
-            "/queues",
-            json={
-                "workspace_id": ws_id,
-                "dataset_id": ds_id,
-                "task_schema_id": schema_id,
-                "queue_name": "expiry-queue",
-            },
-        )
-        assert queue_resp.status_code == 201
-        queue_id = queue_resp.json()["queue_id"]
+        queue_id = f"{ds_id}:{schema_id}"
 
     with checkpoint(ctx, "initial_claim"):
-        claim_resp = await client.post(f"/queues/{queue_id}/claim")
+        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
         assert claim_resp.status_code == 200
         body = claim_resp.json()
         if body.get("queue_empty"):
@@ -110,7 +100,7 @@ async def test_claim_expiry_returns_to_pool(
 
     with checkpoint(ctx, "release_simulates_expiry"):
         # Release the claim — this makes the task available again
-        release_resp = await client.post(f"/review-tasks/{task_id}/release")
+        release_resp = await client.post(f"/api/v1/review-tasks/{task_id}/release")
         assert release_resp.status_code == 200
         released = release_resp.json()
         assert released["task"]["status"] == "available"
@@ -118,14 +108,14 @@ async def test_claim_expiry_returns_to_pool(
 
     with checkpoint(ctx, "task_returns_to_pool"):
         # Check queue status — task should be available again
-        status_resp = await client.get(f"/queues/{queue_id}/status")
+        status_resp = await client.get(f"/api/v1/queues/{queue_id}/status")
         assert status_resp.status_code == 200
         status = status_resp.json()
         assert status["available"] >= 1
 
     with checkpoint(ctx, "reclaim_after_expiry"):
         # Re-claim the task
-        reclaim_resp = await client.post(f"/queues/{queue_id}/claim")
+        reclaim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
         assert reclaim_resp.status_code == 200
         reclaim_body = reclaim_resp.json()
 
@@ -140,7 +130,7 @@ async def test_claim_expiry_returns_to_pool(
             assert reclaimed_task["id"] == task_id
             # Cleanup
             cleanup_resp = await client.post(
-                f"/review-tasks/{task_id}/submit",
+                f"/api/v1/review-tasks/{task_id}/submit",
                 json={
                     "labels": {"label": "yes"},
                     "decision": "accept",

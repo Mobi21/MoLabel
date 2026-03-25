@@ -1,0 +1,47 @@
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+molabel-core = { workspace = true }
+molabel-app = { workspace = true }
+molabel-plugins = { workspace = true }
+molabel-depolarize = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "anyio>=4.12.1",
+    "httpx>=0.28.1",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+markers = [
+    "e2e: End-to-end test",
+    "tier1: Full pipeline test",
+    "tier2: Complex workflow test",
+    "tier3: API coverage test",
+    "tier4: Queue and review test",
+    "tier5: Agent and LLM test",
+    "tier6: Quality and analytics test",
+    "tier7: Data management test",
+    "tier8: Resilience test",
+    "tier9: Cross-cutting test",
+    "real_llm: Requires real LLM API call",
+    "slow: Test takes >30 seconds",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["molabel"]

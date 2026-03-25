@@ -104,6 +104,7 @@ async def test_plugin_lifecycle(
 
     with checkpoint(ctx, "plugin_lifecycle_requires_auth"):
         client._session_cookie = None
+        client._client.cookies.clear()
         resp = await client.get(
             f"{BASE}/plugins",
             params={"workspace_id": WORKSPACE_ID},

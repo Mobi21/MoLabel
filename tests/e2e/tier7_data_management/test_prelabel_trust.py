@@ -28,16 +28,10 @@ async def test_prelabel_trust(client, ctx):
     # ── Checkpoint 1: Setup workspace + session ───────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Pre-label Trust Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-pre-label-trust-test", "workspace_name": "Pre-label Trust Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
-
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Importer"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
 
     # ── Checkpoint 2: Verify TrustLevel enum values ───────────────────────────
     with checkpoint(ctx, "trust_level_enum"):
@@ -108,7 +102,7 @@ async def test_prelabel_trust(client, ctx):
     # ── Checkpoint 5: API endpoint for import ────────────────────────────────
     with checkpoint(ctx, "api_import"):
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Pre-label Dataset",
                 "workspace_id": ws_id,
@@ -119,7 +113,7 @@ async def test_prelabel_trust(client, ctx):
         ds_id = ds.json()["dataset_id"]
 
         resp = await client.post(
-            f"/datasets/{ds_id}/import",
+            f"/api/v1/datasets/{ds_id}/import",
             json={"source_uri": "test://prelabels"},
         )
         assert resp.status_code == 202

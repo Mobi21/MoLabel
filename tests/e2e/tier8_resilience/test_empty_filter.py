@@ -27,19 +27,13 @@ async def test_empty_filter(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Empty Filter Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-empty-filter-test", "workspace_name": "Empty Filter Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "FilterTester"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Filter Dataset",
                 "workspace_id": ws_id,
@@ -86,7 +80,7 @@ async def test_empty_filter(client, ctx):
     # ── Checkpoint 4: Export API with empty filter spec ───────────────────────
     with checkpoint(ctx, "api_export_with_filter"):
         export_resp = await client.post(
-            "/exports",
+            "/api/v1/exports",
             json={
                 "workspace_id": ws_id,
                 "dataset_id": ds_id,
@@ -108,7 +102,7 @@ async def test_empty_filter(client, ctx):
     # ── Checkpoint 5: Preview with empty result ───────────────────────────────
     with checkpoint(ctx, "preview_empty"):
         preview_resp = await client.post(
-            "/exports/preview",
+            "/api/v1/exports/preview",
             json={
                 "workspace_id": ws_id,
                 "dataset_id": ds_id,

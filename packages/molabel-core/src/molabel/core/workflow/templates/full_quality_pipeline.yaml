@@ -1,0 +1,72 @@
+name: "Full Quality Pipeline"
+version: 1
+description: >
+  Comprehensive pipeline: ingest, calibration, agent run, human review,
+  agreement analysis, adjudication, quality check, export, and release
+  validation. Maps to the original fixed 12-step lifecycle.
+
+steps:
+  - id: ingest
+    type: data_ingest
+    config:
+      source: "data/raw/*.jsonl"
+
+  - id: normalize
+    type: data_normalize
+    config:
+      schema_ref: "schemas/default.yaml"
+
+  - id: calibration
+    type: human_calibration
+    config:
+      sample_size: 20
+      min_reviewers: 2
+      task_schema_id: default
+
+  - id: agent_label
+    type: agent_run
+    config:
+      prompt_ref: "prompts/default.yaml"
+      model: "claude-sonnet-4-20250514"
+      agent_role: proposer
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 200
+      breakpoint: true
+
+  - id: agreement
+    type: agreement_analysis
+    config:
+      analysis_type: both
+
+  - id: adjudication
+    type: human_adjudication
+    config:
+      adjudication_policy: majority_vote
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.85
+      min_coverage: 0.95
+      min_confidence: 0.80
+
+  - id: approve_export
+    type: gate
+    config:
+      message: "Quality checks passed. Approve export?"
+      require_reason: false
+
+  - id: export_results
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"
+
+  - id: validate_release
+    type: release_validation
+    config:
+      validation_gates: []

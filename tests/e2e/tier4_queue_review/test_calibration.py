@@ -122,37 +122,38 @@ async def test_calibration_reviewer_alignment(
     with checkpoint(ctx, "calibration_api_queue"):
         # Verify API-level calibration flag
         ws_resp = await client.post(
-            "/workspaces", json={"workspace_name": "calibration-ws"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-calibration-ws", "workspace_name": "calibration-ws"}
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]
 
         ds_resp = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "workspace_id": ws_id,
                 "dataset_name": "calib-ds",
-                "text_field": "text",
+                "source_type": "jsonl",
             },
         )
         assert ds_resp.status_code == 201
         ds_id = ds_resp.json()["dataset_id"]
 
         import_resp = await client.post(
-            f"/datasets/{ds_id}/import",
+            f"/api/v1/datasets/{ds_id}/import",
             json={
                 "source_type": "jsonl",
                 "records": [{"text": "Calibration record."}],
-                "text_field": "text",
+                "source_type": "jsonl",
             },
         )
         assert import_resp.status_code in (200, 201, 202)
 
         schema_resp = await client.post(
-            "/task-schemas",
+            "/api/v1/task-schemas",
             json={
                 "workspace_id": ws_id,
-                "task_slug": "calibration-test",
+                "task_schema_slug": "calibration-test",
+                "title": "Calibration Test",
                 "task_type": "classification",
                 "label_fields": [
                     {
@@ -166,21 +167,9 @@ async def test_calibration_reviewer_alignment(
         )
         assert schema_resp.status_code == 201
         schema_id_api = schema_resp.json()["task_schema_id"]
+        queue_id = f"{ds_id}:{schema_id_api}"
 
-        queue_resp = await client.post(
-            "/queues",
-            json={
-                "workspace_id": ws_id,
-                "dataset_id": ds_id,
-                "task_schema_id": schema_id_api,
-                "queue_name": "calibration-queue",
-                "is_calibration": True,
-            },
-        )
-        assert queue_resp.status_code == 201
-        queue_id = queue_resp.json()["queue_id"]
-
-        claim_resp = await client.post(f"/queues/{queue_id}/claim")
+        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
         assert claim_resp.status_code == 200
         body = claim_resp.json()
         if not body.get("queue_empty"):

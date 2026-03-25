@@ -1,0 +1,38 @@
+name: "Quick Agentic Label"
+version: 1
+description: >
+  Ingest data, run an agent for labeling, spot-check a random sample
+  with human review, and export the results. Minimal human involvement
+  for fast iteration.
+
+steps:
+  - id: ingest
+    type: data_ingest
+    config:
+      source: "data/raw/*.jsonl"
+
+  - id: agent_label
+    type: agent_run
+    config:
+      prompt_ref: "prompts/default.yaml"
+      model: "claude-sonnet-4-20250514"
+      agent_role: proposer
+
+  - id: spot_check
+    type: data_sample
+    config:
+      sample_strategy: random
+      sample_size: 50
+      seed: 42
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: all
+      breakpoint: true
+
+  - id: export_results
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

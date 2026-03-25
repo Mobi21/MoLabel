@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Test logs (generated, not committed)
+tests/e2e/logs/
+
+# Dev runtime state
+workbench/
+
+# Rust/Tauri
+target/
+src-tauri/target/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store

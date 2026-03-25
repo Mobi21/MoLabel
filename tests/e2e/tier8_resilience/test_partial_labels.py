@@ -32,19 +32,13 @@ async def test_partial_labels(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Partial Labels Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-partial-labels-test", "workspace_name": "Partial Labels Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "PartialTester"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Partial Labels Dataset",
                 "workspace_id": ws_id,
@@ -78,9 +72,8 @@ async def test_partial_labels(client, ctx):
         labels: dict[str, list[ReviewEvent]] = {}
         for rec in all_records[:LABELED]:
             event = ReviewEvent(
-                workspace_id=uuid.uuid4(),
+                id=uuid.uuid4(),
                 record_id=rec.id,
-                task_schema_id=uuid.uuid4(),
                 source=ReviewEventSource.human,
                 labels={"sentiment": "positive"},
             )
@@ -137,7 +130,7 @@ async def test_partial_labels(client, ctx):
     # ── Checkpoint 5: API export with filter ─────────────────────────────────
     with checkpoint(ctx, "api_export_filtered"):
         export_resp = await client.post(
-            "/exports",
+            "/api/v1/exports",
             json={
                 "workspace_id": ws_id,
                 "dataset_id": ds_id,

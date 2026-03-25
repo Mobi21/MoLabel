@@ -1,0 +1,53 @@
+name: "Human-in-the-Loop Review"
+version: 1
+description: >
+  Agent labels with human review and quality-driven refinement loop.
+  The loop continues until agreement reaches 0.90 or 5 iterations complete.
+
+steps:
+  - id: ingest
+    type: data_ingest
+    config:
+      source: "data/raw/*.jsonl"
+
+  - id: normalize
+    type: data_normalize
+    config:
+      schema_ref: "schemas/default.yaml"
+
+  - id: agent_label
+    type: agent_run
+    config:
+      prompt_ref: "prompts/default.yaml"
+      model: "claude-sonnet-4-20250514"
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: low_confidence
+      sample_size: 100
+      breakpoint: true
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.85
+      min_coverage: 0.95
+
+  - id: refinement_loop
+    type: loop
+    config:
+      steps: [agent_label, review, quality]
+      termination:
+        type: metric
+        metric: "quality.agreement"
+        operator: ">="
+        threshold: 0.90
+        max_iterations: 5
+
+  - id: export_results
+    type: export
+    depends_on: [refinement_loop]
+    config:
+      format: jsonl
+      destination: "exports/"

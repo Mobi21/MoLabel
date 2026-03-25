@@ -34,11 +34,14 @@ async def test_two_model_comparison_run(
     """T5-03: 2-model comparison — separate runs, per-model accuracy + agreement_rate.
     """
     with checkpoint(ctx, "session_setup"):
-        await client.login("reviewer-t5-03")
+        ws_resp = await client.post(
+            "/api/v1/workspaces", json={"path": "/tmp/ws-two-model-comparison-test", "workspace_name": "Two Model Comparison Test"}
+        )
+        assert ws_resp.status_code == 201
 
     with checkpoint(ctx, "create_comparison_run_via_api"):
         compare_resp = await client.post(
-            "/agent-runs/compare",
+            "/api/v1/agent-runs/compare",
             json={
                 "workspace_id": "00000000-0000-0000-0000-000000000001",
                 "dataset_id": "00000000-0000-0000-0000-000000000002",
@@ -130,11 +133,14 @@ async def test_three_model_comparison_run(
 ) -> None:
     """T5-04: 3-model comparison — 3 agent runs, all appear in comparison result."""
     with checkpoint(ctx, "session_setup"):
-        await client.login("reviewer-t5-04")
+        ws_resp = await client.post(
+            "/api/v1/workspaces", json={"path": "/tmp/ws-three-model-comparison-test", "workspace_name": "Three Model Comparison Test"}
+        )
+        assert ws_resp.status_code == 201
 
     with checkpoint(ctx, "create_three_model_comparison_via_api"):
         compare_resp = await client.post(
-            "/agent-runs/compare",
+            "/api/v1/agent-runs/compare",
             json={
                 "workspace_id": "00000000-0000-0000-0000-000000000001",
                 "dataset_id": "00000000-0000-0000-0000-000000000002",

@@ -235,9 +235,12 @@ async def test_krippendorffs_alpha_ordinal_and_missing(
         assert result_missing.overall.percent_agreement == pytest.approx(1.0)
 
     with checkpoint(ctx, "quality_api_endpoint_agreement"):
-        await client.login("reviewer-t6-02")
+        ws_resp = await client.post(
+            "/api/v1/workspaces", json={"path": "/tmp/ws-agreement-metrics-test", "workspace_name": "Agreement Metrics Test"}
+        )
+        assert ws_resp.status_code == 201
         agreement_resp = await client.get(
-            "/quality/agreement",
+            "/api/v1/quality/agreement",
             params={"workspace_id": "00000000-0000-0000-0000-000000000001"},
         )
         assert agreement_resp.status_code == 200

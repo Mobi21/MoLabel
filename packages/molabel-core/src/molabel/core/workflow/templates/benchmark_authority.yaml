@@ -1,0 +1,58 @@
+name: "Benchmark Authority"
+version: 1
+description: >
+  Establish ground-truth labels through multi-round expert review,
+  adjudication, and agreement analysis. Creates a snapshot as the
+  authoritative benchmark.
+
+steps:
+  - id: ingest
+    type: data_ingest
+    config:
+      source: "data/raw/*.jsonl"
+
+  - id: normalize
+    type: data_normalize
+    config:
+      schema_ref: "schemas/default.yaml"
+
+  - id: expert_review_1
+    type: human_review
+    config:
+      sample_strategy: all
+      task_schema_id: default
+      breakpoint: true
+
+  - id: expert_review_2
+    type: human_review
+    config:
+      sample_strategy: all
+      task_schema_id: default
+
+  - id: agreement
+    type: agreement_analysis
+    depends_on: [expert_review_1, expert_review_2]
+    config:
+      analysis_type: inter_annotator
+
+  - id: adjudication
+    type: human_adjudication
+    config:
+      adjudication_policy: expert_consensus
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.90
+      min_coverage: 1.0
+
+  - id: approve_benchmark
+    type: gate
+    config:
+      message: "Agreement target met. Approve as benchmark?"
+      require_reason: true
+
+  - id: create_snapshot
+    type: snapshot
+    config:
+      snapshot_name: "benchmark_ground_truth"

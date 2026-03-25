@@ -30,19 +30,13 @@ async def test_malformed_input(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Malformed Input Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-malformed-input-test", "workspace_name": "Malformed Input Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Tester"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Malformed Input Dataset",
                 "workspace_id": ws_id,
@@ -140,7 +134,7 @@ async def test_malformed_input(client, ctx):
     # ── Checkpoint 5: API import endpoint ─────────────────────────────────────
     with checkpoint(ctx, "api_import"):
         resp = await client.post(
-            f"/datasets/{ds_id}/import",
+            f"/api/v1/datasets/{ds_id}/import",
             json={"source_uri": "test://malformed"},
         )
         assert resp.status_code == 202

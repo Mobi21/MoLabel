@@ -42,18 +42,12 @@ async def test_long_text(client, ctx):
 
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
-        ws = await client.post("/workspaces", json={"workspace_name": "Long Text Test"})
+        ws = await client.post("/api/v1/workspaces", json={"path": "/tmp/ws-long-text-test", "workspace_name": "Long Text Test"})
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "LongTextTester"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Long Text Dataset",
                 "workspace_id": ws_id,
@@ -177,7 +171,7 @@ async def test_long_text(client, ctx):
     # ── Checkpoint 6: API import ──────────────────────────────────────────────
     with checkpoint(ctx, "api_import"):
         resp = await client.post(
-            f"/datasets/{ds_id}/import",
+            f"/api/v1/datasets/{ds_id}/import",
             json={"source_uri": "test://long-text"},
         )
         assert resp.status_code == 202

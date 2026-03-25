@@ -1,0 +1,25 @@
+[project]
+name = "molabel-app"
+version = "0.1.0"
+description = "FastAPI backend API for MoLabel"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+    "molabel-core",
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+
+]
+
+[project.scripts]
+molabel-dev = "molabel.app.dev:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+molabel-core = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/molabel"]

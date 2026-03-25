@@ -32,7 +32,10 @@ async def test_adjudication_flow_detect_build_resolve(
     - POST /adjudication/resolve
     """
     with checkpoint(ctx, "session_setup"):
-        await client.login("adjudicator-t4-10")
+        ws_resp = await client.post(
+            "/api/v1/workspaces", json={"path": "/tmp/ws-adjudication-test", "workspace_name": "Adjudication Test"}
+        )
+        assert ws_resp.status_code == 201
 
     # Prepare two conflicting review events for the same record
     record_id = str(uuid.uuid4())
@@ -40,14 +43,14 @@ async def test_adjudication_flow_detect_build_resolve(
 
     conflicting_events = [
         {
-            "review_event_id": str(uuid.uuid4()),
+            "id": str(uuid.uuid4()),
             "reviewer_id": str(uuid.uuid4()),
             "labels": {"sentiment": "positive"},
             "decision": "accept",
             "source": "human",
         },
         {
-            "review_event_id": str(uuid.uuid4()),
+            "id": str(uuid.uuid4()),
             "reviewer_id": str(uuid.uuid4()),
             "labels": {"sentiment": "negative"},
             "decision": "accept",
@@ -57,7 +60,7 @@ async def test_adjudication_flow_detect_build_resolve(
 
     with checkpoint(ctx, "detect_disagreements"):
         detect_resp = await client.post(
-            "/adjudication/detect",
+            "/api/v1/adjudication/detect",
             json={
                 "review_events_by_record": {record_id: conflicting_events},
                 "task_schema_id": task_schema_id,
@@ -78,7 +81,7 @@ async def test_adjudication_flow_detect_build_resolve(
 
     with checkpoint(ctx, "build_adjudication_queue"):
         build_resp = await client.post(
-            "/adjudication/queue/build",
+            "/api/v1/adjudication/queue/build",
             json={
                 "review_events_by_record": {record_id: conflicting_events},
                 "task_schema_id": task_schema_id,
@@ -98,7 +101,7 @@ async def test_adjudication_flow_detect_build_resolve(
         queue_item_id = queue_item["id"]
 
     with checkpoint(ctx, "get_adjudication_queue"):
-        get_queue_resp = await client.get("/adjudication/queue")
+        get_queue_resp = await client.get("/api/v1/adjudication/queue")
         assert get_queue_resp.status_code == 200
         queue_body = get_queue_resp.json()
         assert "items" in queue_body
@@ -106,7 +109,7 @@ async def test_adjudication_flow_detect_build_resolve(
 
     with checkpoint(ctx, "resolve_adjudication"):
         resolve_resp = await client.post(
-            "/adjudication/resolve",
+            "/api/v1/adjudication/resolve",
             json={
                 "queue_item_id": queue_item_id,
                 "resolution": "resolve",
@@ -123,7 +126,7 @@ async def test_adjudication_flow_detect_build_resolve(
         assert resolve_body["rationale"] is not None
 
     with checkpoint(ctx, "verify_queue_after_resolution"):
-        after_resp = await client.get("/adjudication/queue")
+        after_resp = await client.get("/api/v1/adjudication/queue")
         assert after_resp.status_code == 200
         after_body = after_resp.json()
         # Resolved item should not appear in unresolved count

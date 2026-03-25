@@ -1,0 +1,37 @@
+[project]
+name = "molabel-plugins"
+version = "0.1.0"
+description = "MoLabel built-in task type plugins: text labeling, chat review, and more"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+    "molabel-core",
+]
+
+[project.optional-dependencies]
+parquet = ["pyarrow>=14.0"]
+huggingface = ["datasets>=2.0"]
+all = ["pyarrow>=14.0", "datasets>=2.0"]
+
+[project.entry-points."molabel.plugins"]
+csv_loader = "molabel.plugins.loaders.csv_loader:register"
+jsonl_loader = "molabel.plugins.loaders.jsonl_loader:register"
+json_loader = "molabel.plugins.loaders.json_loader:register"
+parquet_loader = "molabel.plugins.loaders.parquet_loader:register"
+yaml_loader = "molabel.plugins.loaders.yaml_loader:register"
+markdown_loader = "molabel.plugins.loaders.markdown_loader:register"
+huggingface_loader = "molabel.plugins.loaders.huggingface_loader:register"
+jsonl_exporter = "molabel.plugins.exporters.jsonl_exporter:register"
+csv_exporter = "molabel.plugins.exporters.csv_exporter:register"
+parquet_exporter = "molabel.plugins.exporters.parquet_exporter:register"
+huggingface_exporter = "molabel.plugins.exporters.huggingface_exporter:register"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+molabel-core = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/molabel"]

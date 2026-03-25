@@ -99,9 +99,12 @@ async def test_chi_squared_drift_detection(
         assert sentiment_drift_shift.severity != DriftSeverity.none
 
     with checkpoint(ctx, "drift_api_endpoint"):
-        await client.login("reviewer-t6-03")
+        ws_resp = await client.post(
+            "/api/v1/workspaces", json={"path": "/tmp/ws-drift-detection-test", "workspace_name": "Drift Detection Test"}
+        )
+        assert ws_resp.status_code == 201
         drift_resp = await client.get(
-            "/quality/drift",
+            "/api/v1/quality/drift",
             params={"workspace_id": "00000000-0000-0000-0000-000000000001"},
         )
         assert drift_resp.status_code == 200

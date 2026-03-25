@@ -70,19 +70,13 @@ async def test_nested_json(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Nested JSON Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-nested-json-test", "workspace_name": "Nested JSON Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "NestedTester"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Nested JSON Dataset",
                 "workspace_id": ws_id,
@@ -255,7 +249,7 @@ async def test_nested_json(client, ctx):
     # ── Checkpoint 7: API import ──────────────────────────────────────────────
     with checkpoint(ctx, "api_import"):
         resp = await client.post(
-            f"/datasets/{ds_id}/import",
+            f"/api/v1/datasets/{ds_id}/import",
             json={"source_uri": "test://nested-json"},
         )
         assert resp.status_code == 202

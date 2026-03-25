@@ -27,19 +27,13 @@ async def test_concurrent_operations(client, ctx):
     # ── Checkpoint 1: Setup shared dataset ───────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Concurrent Ops Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-concurrent-ops-test", "workspace_name": "Concurrent Ops Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Concurrent Tester"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Concurrent Dataset",
                 "workspace_id": ws_id,
@@ -50,10 +44,12 @@ async def test_concurrent_operations(client, ctx):
         ds_id = ds.json()["dataset_id"]
 
         schema = await client.post(
-            "/task-schemas",
+            "/api/v1/task-schemas",
             json={
-                "task_slug": "sentiment-concurrent",
+                "workspace_id": ws_id,
+                "task_schema_slug": "sentiment-concurrent",
                 "task_type": "classification",
+                "title": "Sentiment Concurrent",
                 "label_fields": [
                     {
                         "name": "sentiment",
@@ -68,21 +64,21 @@ async def test_concurrent_operations(client, ctx):
         _schema_id = schema.json()["task_schema_id"]
 
         model = await client.post(
-            "/model-profiles",
+            "/api/v1/model-profiles",
             json={
+                "model_profile_slug": "concurrent-test-model",
                 "model_identifier": "minimax-2.7",
-                "provider": "anthropic",
-                "display_name": "Concurrent Test Model",
+                "provider_type": "anthropic",
             },
         )
         assert model.status_code == 201
-        _model_id = model.json()["model_profile_id"]
+        _model_id = model.json()["id"]
 
     # ── Checkpoint 2: Concurrent dataset reads ────────────────────────────────
     with checkpoint(ctx, "concurrent_reads"):
 
         async def read_records():
-            return await client.get(f"/datasets/{ds_id}/records")
+            return await client.get(f"/api/v1/datasets/{ds_id}/records")
 
         # Fire 5 concurrent reads
         results = await asyncio.gather(*[read_records() for _ in range(5)])
@@ -97,7 +93,7 @@ async def test_concurrent_operations(client, ctx):
     with checkpoint(ctx, "concurrent_analytics"):
 
         async def read_analytics():
-            return await client.get(f"/datasets/{ds_id}/analytics")
+            return await client.get(f"/api/v1/datasets/{ds_id}/analytics")
 
         analytics_results = await asyncio.gather(*[read_analytics() for _ in range(3)])
         for resp in analytics_results:
@@ -109,7 +105,7 @@ async def test_concurrent_operations(client, ctx):
 
         async def create_snapshot(name: str):
             return await client.post(
-                f"/datasets/{ds_id}/snapshots",
+                f"/api/v1/datasets/{ds_id}/snapshots",
                 json={"name": name, "snapshot_type": "full"},
             )
 
@@ -130,7 +126,7 @@ async def test_concurrent_operations(client, ctx):
 
         async def import_data(uri: str):
             return await client.post(
-                f"/datasets/{ds_id}/import",
+                f"/api/v1/datasets/{ds_id}/import",
                 json={"source_uri": uri},
             )
 

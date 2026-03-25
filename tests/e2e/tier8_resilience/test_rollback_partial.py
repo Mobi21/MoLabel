@@ -30,19 +30,13 @@ async def test_rollback_partial(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/workspaces", json={"workspace_name": "Rollback Partial Test"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-rollback-partial-test", "workspace_name": "Rollback Partial Test"}
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Rollbacker"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Rollback Dataset",
                 "workspace_id": ws_id,
@@ -124,7 +118,7 @@ async def test_rollback_partial(client, ctx):
     # ── Checkpoint 5: Snapshot before failure (restore point) ─────────────────
     with checkpoint(ctx, "snapshot_restore_point"):
         snap_resp = await client.post(
-            f"/datasets/{ds_id}/snapshots",
+            f"/api/v1/datasets/{ds_id}/snapshots",
             json={
                 "name": "pre-failure-snapshot",
                 "description": "State before agent failure",

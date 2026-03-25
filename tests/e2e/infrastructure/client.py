@@ -11,10 +11,35 @@ from __future__ import annotations
 import logging
 import os
 import time
+from typing import Any
 
 import httpx
 
 from tests.e2e.infrastructure.logging_config import TestContext
+
+
+class _StreamingASGITransport(httpx.ASGITransport):
+    """ASGI transport that sets spec_version='2.4' in the ASGI scope.
+
+    This makes Starlette's StreamingResponse use the simple streaming code
+    path (without anyio task groups), which allows asyncio.wait_for to
+    properly cancel infinite SSE generators during tests.
+    """
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        original_app = self.app
+
+        async def _patched_app(scope: dict[str, Any], receive: Any, send: Any) -> None:
+            if scope.get("type") == "http":
+                asgi_info = scope.setdefault("asgi", {})
+                asgi_info.setdefault("spec_version", "2.4")
+            await original_app(scope, receive, send)
+
+        self.app = _patched_app
+        try:
+            return await super().handle_async_request(request)
+        finally:
+            self.app = original_app
 
 
 class E2EClient:
@@ -25,26 +50,51 @@ class E2EClient:
     from the environment on startup.
     """
 
-    def __init__(self, db_url: str = "sqlite+aiosqlite://") -> None:
+    def __init__(self, db_url: str = "sqlite:///:memory:") -> None:
         os.environ["MOLABEL_DB_URL"] = db_url
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import StaticPool
+
         from molabel.app.main import create_app
+        from molabel.app.services.session import get_or_create_app_secret
+        from molabel.core.database import create_all_tables
 
         self.app = create_app()
+
+        # httpx ASGITransport does not fire ASGI lifespan events, so we
+        # bootstrap the app state (engine + secret) manually here.
+        engine = create_engine(
+            db_url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        create_all_tables(engine)
+        self.app.state.engine = engine
+        self.app.state.app_secret = get_or_create_app_secret()
+
         self._client = httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=self.app),
+            transport=_StreamingASGITransport(app=self.app),
             base_url="http://test",
             timeout=30.0,
         )
         self._session_cookie: str | None = None
 
     async def login(self, reviewer_id: str) -> None:
-        resp = await self.post("/sessions", json={"reviewer_id": reviewer_id})
-        self._session_cookie = resp.cookies.get("molabel_session")
+        """Switch the active session to the given reviewer profile."""
+        resp = await self.post("/api/v1/sessions", json={"reviewer_id": reviewer_id})
+        cookie = resp.cookies.get("molabel_session")
+        if cookie:
+            self._session_cookie = cookie
 
     async def request(self, method: str, path: str, **kwargs: object) -> httpx.Response:
         if self._session_cookie:
             kwargs.setdefault("cookies", {})["molabel_session"] = self._session_cookie  # type: ignore[index]
-        return await self._client.request(method, path, **kwargs)
+        resp = await self._client.request(method, path, **kwargs)
+        # Auto-capture session cookie set by any endpoint (e.g. POST /workspaces).
+        cookie = resp.cookies.get("molabel_session")
+        if cookie:
+            self._session_cookie = cookie
+        return resp
 
     async def get(self, path: str, **kw: object) -> httpx.Response:
         return await self.request("GET", path, **kw)

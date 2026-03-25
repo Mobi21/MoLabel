@@ -183,6 +183,7 @@ async def test_cost_pipeline(
 
     with checkpoint(ctx, "cost_requires_auth"):
         client._session_cookie = None
+        client._client.cookies.clear()
         resp = await client.get(
             f"{BASE}/costs",
             params={"workspace_id": workspace_id},

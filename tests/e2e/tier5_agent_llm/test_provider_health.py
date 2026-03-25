@@ -53,7 +53,7 @@ async def test_all_provider_types_return_health_status(
 
     for provider_type in ALL_PROVIDER_TYPES:
         with checkpoint(ctx, f"health_check_{provider_type.value}"):
-            resp = await client.get(f"/providers/health/{provider_type.value}")
+            resp = await client.get(f"/api/v1/providers/health/{provider_type.value}")
             # The health endpoint always returns 200 with HealthStatus
             # (is_healthy may be False if no real API key is configured)
             assert resp.status_code == 200, (
@@ -84,14 +84,14 @@ async def test_all_provider_types_return_health_status(
             assert body["provider_type"] == provider_type.value
 
     with checkpoint(ctx, "scan_providers_endpoint"):
-        scan_resp = await client.post("/providers/scan")
+        scan_resp = await client.post("/api/v1/providers/scan")
         assert scan_resp.status_code == 200
         scan_body = scan_resp.json()
         assert "providers" in scan_body
         assert isinstance(scan_body["providers"], list)
 
     with checkpoint(ctx, "list_providers_endpoint"):
-        list_resp = await client.get("/providers")
+        list_resp = await client.get("/api/v1/providers")
         assert list_resp.status_code == 200
         list_body = list_resp.json()
         assert "providers" in list_body

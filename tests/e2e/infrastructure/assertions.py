@@ -8,7 +8,7 @@ breakdowns in the run report.
 Usage::
 
     with checkpoint(ctx, "workspace_setup"):
-        resp = await client.post("/workspaces", json={"workspace_name": "Test"})
+        resp = await client.post("/api/v1/workspaces", json={"workspace_name": "Test"})
         assert resp.status_code == 201
         ws_id = resp.json()["workspace_id"]
 """

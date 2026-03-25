@@ -60,6 +60,7 @@ async def test_error_format(
     # --- 401: no session cookie ---
     with checkpoint(ctx, "error_401_schema"):
         client._session_cookie = None
+        client._client.cookies.clear()
         resp = await client.get(f"{BASE}/me")
         assert resp.status_code == 401, resp.text
         body = resp.json()
@@ -82,7 +83,7 @@ async def test_error_format(
     # --- 404: unknown resource ---
     with checkpoint(ctx, "error_404_workspace_schema"):
         resp = await client.get(
-            f"{BASE}/workspaces/00000000-0000-0000-0000-err0rf0rmat1"
+            f"{BASE}/workspaces/00000000-0000-0000-0000-f00fa7000001"
         )
         assert resp.status_code == 404, resp.text
         body = resp.json()
@@ -90,7 +91,7 @@ async def test_error_format(
 
     with checkpoint(ctx, "error_404_model_profile_schema"):
         resp = await client.get(
-            f"{BASE}/model-profiles/00000000-0000-0000-0000-err0rf0rmat2"
+            f"{BASE}/model-profiles/00000000-0000-0000-0000-f00fa7000002"
         )
         assert resp.status_code == 404, resp.text
         body = resp.json()
@@ -103,14 +104,14 @@ async def test_error_format(
         _assert_error_response(body, "404_plugin")
 
     with checkpoint(ctx, "error_404_audit_event_schema"):
-        resp = await client.get(f"{BASE}/audit/00000000-0000-0000-0000-err0rf0rmat3")
+        resp = await client.get(f"{BASE}/audit/00000000-0000-0000-0000-f00fa7000003")
         assert resp.status_code == 404, resp.text
         body = resp.json()
         _assert_error_response(body, "404_audit")
 
     with checkpoint(ctx, "error_404_adjudication_schema"):
         resp = await client.get(
-            f"{BASE}/adjudication/00000000-0000-0000-0000-err0rf0rmat4"
+            f"{BASE}/adjudication/00000000-0000-0000-0000-f00fa7000004"
         )
         assert resp.status_code == 404, resp.text
         body = resp.json()
@@ -146,7 +147,7 @@ async def test_error_format(
     with checkpoint(ctx, "error_json_content_type"):
         # All error responses must have JSON Content-Type
         resp = await client.get(
-            f"{BASE}/workspaces/00000000-0000-0000-0000-err0rf0rmat5"
+            f"{BASE}/workspaces/00000000-0000-0000-0000-f00fa7000005"
         )
         assert resp.status_code == 404
         assert "application/json" in resp.headers.get("content-type", ""), (

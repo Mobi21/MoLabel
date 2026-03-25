@@ -18,12 +18,13 @@ from tests.e2e.infrastructure.parallel import SHARED_WORKSPACE
 
 def _make_schema(task_slug: str, fields: list[dict]) -> TaskSchema:
     """Build a minimal TaskSchema for validation testing."""
+    import uuid as _uuid
     label_fields = [LabelFieldDefinition(**f) for f in fields]
     return TaskSchema(
-        task_schema_id="00000000-0000-0000-0000-000000000001",
-        workspace_id="00000000-0000-0000-0000-000000000002",
-        task_slug=task_slug,
+        id=_uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        task_schema_slug=task_slug,
         task_type="classification",
+        title=task_slug.replace("-", " ").title(),
         label_fields=label_fields,
         version=1,
     )

@@ -37,38 +37,39 @@ async def test_draft_saving_last_write_wins(
     """
     with checkpoint(ctx, "workspace_and_data_setup"):
         ws_resp = await client.post(
-            "/workspaces", json={"workspace_name": "draft-test-ws"}
+            "/api/v1/workspaces", json={"path": "/tmp/ws-draft-test-ws", "workspace_name": "draft-test-ws"}
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]
 
         ds_resp = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "workspace_id": ws_id,
                 "dataset_name": "draft-ds",
-                "text_field": "text",
+                "source_type": "jsonl",
             },
         )
         assert ds_resp.status_code == 201
         ds_id = ds_resp.json()["dataset_id"]
 
         import_resp = await client.post(
-            f"/datasets/{ds_id}/import",
+            f"/api/v1/datasets/{ds_id}/import",
             json={
                 "source_type": "jsonl",
                 "records": [{"text": "Record for draft testing."}],
-                "text_field": "text",
+                "source_type": "jsonl",
             },
         )
         assert import_resp.status_code in (200, 201, 202)
 
     with checkpoint(ctx, "schema_and_queue"):
         schema_resp = await client.post(
-            "/task-schemas",
+            "/api/v1/task-schemas",
             json={
                 "workspace_id": ws_id,
-                "task_slug": "draft-test",
+                "task_schema_slug": "draft-test",
+                "title": "Draft Test",
                 "task_type": "classification",
                 "label_fields": [
                     {
@@ -82,21 +83,10 @@ async def test_draft_saving_last_write_wins(
         )
         assert schema_resp.status_code == 201
         schema_id = schema_resp.json()["task_schema_id"]
-
-        queue_resp = await client.post(
-            "/queues",
-            json={
-                "workspace_id": ws_id,
-                "dataset_id": ds_id,
-                "task_schema_id": schema_id,
-                "queue_name": "draft-queue",
-            },
-        )
-        assert queue_resp.status_code == 201
-        queue_id = queue_resp.json()["queue_id"]
+        queue_id = f"{ds_id}:{schema_id}"
 
     with checkpoint(ctx, "claim_task"):
-        claim_resp = await client.post(f"/queues/{queue_id}/claim")
+        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
         assert claim_resp.status_code == 200
         body = claim_resp.json()
         if body.get("queue_empty"):
@@ -107,7 +97,7 @@ async def test_draft_saving_last_write_wins(
 
     with checkpoint(ctx, "save_first_draft"):
         draft1_resp = await client.post(
-            f"/review-tasks/{task_id}/draft",
+            f"/api/v1/review-tasks/{task_id}/draft",
             json={"draft_labels": {"category": "A"}},
         )
         assert draft1_resp.status_code == 200
@@ -118,7 +108,7 @@ async def test_draft_saving_last_write_wins(
 
     with checkpoint(ctx, "overwrite_draft_last_write_wins"):
         draft2_resp = await client.post(
-            f"/review-tasks/{task_id}/draft",
+            f"/api/v1/review-tasks/{task_id}/draft",
             json={"draft_labels": {"category": "B"}},
         )
         assert draft2_resp.status_code == 200
@@ -129,7 +119,7 @@ async def test_draft_saving_last_write_wins(
     with checkpoint(ctx, "submit_uses_body_not_draft"):
         # Submit with "C" — different from the saved draft "B"
         submit_resp = await client.post(
-            f"/review-tasks/{task_id}/submit",
+            f"/api/v1/review-tasks/{task_id}/submit",
             json={
                 "labels": {"category": "C"},
                 "decision": "accept",

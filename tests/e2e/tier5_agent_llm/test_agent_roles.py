@@ -37,7 +37,10 @@ async def test_all_eight_agent_roles(
 ) -> None:
     """T5-10: All 8 AgentRole enum values accepted by the agent-runs API."""
     with checkpoint(ctx, "session_setup"):
-        await client.login("reviewer-t5-10")
+        ws_resp = await client.post(
+            "/api/v1/workspaces", json={"path": "/tmp/ws-agent-roles-test", "workspace_name": "Agent Roles Test"}
+        )
+        assert ws_resp.status_code == 201
 
     with checkpoint(ctx, "verify_agent_role_enum_coverage"):
         expected_roles = {
@@ -60,7 +63,7 @@ async def test_all_eight_agent_roles(
     for role in ALL_AGENT_ROLES:
         with checkpoint(ctx, f"start_agent_run_role_{role.value}"):
             run_resp = await client.post(
-                "/agent-runs",
+                "/api/v1/agent-runs",
                 json={
                     "workspace_id": "00000000-0000-0000-0000-000000000001",
                     "dataset_id": "00000000-0000-0000-0000-000000000002",
@@ -93,7 +96,7 @@ async def test_all_eight_agent_roles(
 
     with checkpoint(ctx, "list_agent_runs_includes_all_roles"):
         list_resp = await client.get(
-            "/agent-runs",
+            "/api/v1/agent-runs",
             params={"workspace_id": "00000000-0000-0000-0000-000000000001"},
         )
         assert list_resp.status_code == 200

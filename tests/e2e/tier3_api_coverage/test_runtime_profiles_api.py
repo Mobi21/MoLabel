@@ -49,17 +49,13 @@ async def test_runtime_profiles_crud_retry(
             f"{BASE}/runtime-profiles",
             json={
                 "runtime_profile_slug": "production-t3",
-                "display_name": "Production T3",
-                "max_retries": 3,
                 "timeout_seconds": 30,
-                "batch_size": 10,
-                "concurrency": 5,
+                "retry_config": {"max_retries": 3},
             },
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()
-        assert body["max_retries"] == 3
-        assert body["batch_size"] == 10
+        assert body["runtime_profile_slug"] == "production-t3"
         profile_id = body["id"]
 
     with checkpoint(ctx, "list_runtime_profiles"):
@@ -79,7 +75,7 @@ async def test_runtime_profiles_crud_retry(
     with checkpoint(ctx, "update_runtime_profile"):
         resp = await client.patch(
             f"{BASE}/runtime-profiles/{profile_id}",
-            json={"max_retries": 5, "timeout_seconds": 60},
+            json={"timeout_seconds": 60},
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()

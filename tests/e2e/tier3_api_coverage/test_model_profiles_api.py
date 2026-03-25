@@ -99,7 +99,7 @@ async def test_model_profiles_crud_connectivity_delete(
         resp = await client.post(f"{BASE}/model-profiles/{profile_id}/test")
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert "is_reachable" in body
+        assert "health" in body
 
     with checkpoint(ctx, "delete_model_profile"):
         resp = await client.delete(f"{BASE}/model-profiles/{profile_id}")

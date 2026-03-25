@@ -24,18 +24,12 @@ async def test_snapshot_lifecycle(client, ctx):
 
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
-        ws = await client.post("/workspaces", json={"workspace_name": "Snapshot Test"})
+        ws = await client.post("/api/v1/workspaces", json={"path": "/tmp/ws-snapshot-test", "workspace_name": "Snapshot Test"})
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 
-        reviewer = await client.post(
-            "/reviewer-profiles", json={"display_name": "Snapper"}
-        )
-        assert reviewer.status_code == 201
-        await client.login(reviewer.json()["reviewer_id"])
-
         ds = await client.post(
-            "/datasets",
+            "/api/v1/datasets",
             json={
                 "dataset_name": "Snapshot Dataset",
                 "workspace_id": ws_id,
@@ -48,7 +42,7 @@ async def test_snapshot_lifecycle(client, ctx):
     # ── Checkpoint 2: Create snapshot-1 ──────────────────────────────────────
     with checkpoint(ctx, "create_snapshot_1"):
         snap1_resp = await client.post(
-            f"/datasets/{ds_id}/snapshots",
+            f"/api/v1/datasets/{ds_id}/snapshots",
             json={
                 "name": "snapshot-1",
                 "description": "Initial state",
@@ -66,7 +60,7 @@ async def test_snapshot_lifecycle(client, ctx):
     # ── Checkpoint 3: Create snapshot-2 ──────────────────────────────────────
     with checkpoint(ctx, "create_snapshot_2"):
         snap2_resp = await client.post(
-            f"/datasets/{ds_id}/snapshots",
+            f"/api/v1/datasets/{ds_id}/snapshots",
             json={
                 "name": "snapshot-2",
                 "description": "After labeling",
@@ -81,7 +75,7 @@ async def test_snapshot_lifecycle(client, ctx):
 
     # ── Checkpoint 4: List snapshots ─────────────────────────────────────────
     with checkpoint(ctx, "list_snapshots"):
-        list_resp = await client.get(f"/datasets/{ds_id}/snapshots")
+        list_resp = await client.get(f"/api/v1/datasets/{ds_id}/snapshots")
         assert list_resp.status_code == 200
         items = list_resp.json()["items"]
         assert len(items) >= 2
@@ -98,7 +92,7 @@ async def test_snapshot_lifecycle(client, ctx):
     # ── Checkpoint 5: Compare snapshots (diff) ────────────────────────────────
     with checkpoint(ctx, "diff"):
         diff_resp = await client.get(
-            f"/datasets/{ds_id}/snapshots/{snap2_id}/diff",
+            f"/api/v1/datasets/{ds_id}/snapshots/{snap2_id}/diff",
             params={"compare_to": snap1_id},
         )
         assert diff_resp.status_code == 200
