@@ -1,0 +1,36 @@
+name: "Human Triage Step (T2-33)"
+version: 1
+description: >
+  A human_triage step routes records into categories (pass, fail, needs_review).
+  triage_mode=True is forwarded to the review service. Category counts are
+  tracked in context variables. Records are routed by triage decision.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: triage
+    type: human_triage
+    config:
+      categories:
+        - pass
+        - fail
+        - needs_review
+      routing:
+        pass: export_step
+        fail: reject_pool
+        needs_review: adjudication_queue
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.70
+
+  - id: export_step
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/passed/"

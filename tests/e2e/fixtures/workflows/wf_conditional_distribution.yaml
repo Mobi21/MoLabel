@@ -1,0 +1,53 @@
+name: "Conditional on Distribution (T2-07)"
+version: 1
+description: >
+  Routes workflow based on label distribution skew. If more than 70% of
+  outputs fall into a single class, route to data resampling; otherwise
+  proceed normally. Tests skewed-data routing.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: distribution_check
+    type: quality_check
+    config:
+      check_distribution: true
+
+  - id: distribution_branch
+    type: conditional
+    config:
+      predicate: "label_distribution.max_class_ratio > 0.7"
+      then_steps:
+        - id: resample
+          type: data_sample
+          config:
+            sample_strategy: stratified
+            target_distribution:
+              positive: 0.33
+              negative: 0.33
+              neutral: 0.34
+        - id: relabel
+          type: agent_run
+          config:
+            agent_role: proposer
+            prompt_ref: "prompts/sentiment-v1"
+        - id: review_resampled
+          type: human_review
+          config:
+            sample_strategy: all
+      else_steps:
+        - id: standard_review
+          type: human_review
+          config:
+            sample_strategy: stratified
+            sample_size: 20
+
+  - id: final_export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

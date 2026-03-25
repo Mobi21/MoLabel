@@ -1,0 +1,15 @@
+{
+  "task_slug": "sentiment",
+  "task_type": "classification",
+  "title": "Sentiment Classification",
+  "label_fields": [
+    {
+      "name": "sentiment",
+      "field_type": "categorical",
+      "options": ["positive", "negative", "neutral"],
+      "required": true,
+      "description": "Overall sentiment expressed in the text"
+    }
+  ],
+  "blind_review_policy": "hide_agent_outputs_by_default"
+}

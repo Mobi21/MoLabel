@@ -1,0 +1,36 @@
+name: "Parallel Multi-Dataset Processing (T2-13)"
+version: 1
+description: >
+  Processes two separate datasets in parallel, each going through their own
+  agent_run. Record sets must not cross-contaminate between the two branches.
+
+steps:
+  - id: parallel_datasets
+    type: parallel
+    config:
+      fail_fast: false
+      steps:
+        - id: agent_dataset_a
+          type: agent_run
+          config:
+            agent_role: proposer
+            prompt_ref: "prompts/sentiment-v1"
+            dataset_tag: "dataset_a"
+        - id: agent_dataset_b
+          type: agent_run
+          config:
+            agent_role: proposer
+            prompt_ref: "prompts/sentiment-v1"
+            dataset_tag: "dataset_b"
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 20
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

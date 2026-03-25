@@ -1,0 +1,45 @@
+name: "Conditional on Quality (T2-08)"
+version: 1
+description: >
+  Routes workflow based on inter-annotator agreement. If agreement >= 0.85
+  proceed to export; otherwise go to adjudication first. Tests
+  quality-driven routing to export vs more review.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: human_review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 30
+
+  - id: agreement
+    type: agreement_analysis
+    config:
+      analysis_type: human_agent
+
+  - id: quality_branch
+    type: conditional
+    config:
+      predicate: "agreement.overall >= 0.85"
+      then_steps:
+        - id: direct_export
+          type: export
+          config:
+            format: jsonl
+            destination: "exports/"
+      else_steps:
+        - id: adjudicate
+          type: human_adjudication
+          config:
+            adjudication_policy: majority_vote
+        - id: post_adj_export
+          type: export
+          config:
+            format: jsonl
+            destination: "exports/"

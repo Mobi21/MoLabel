@@ -1,0 +1,4 @@
+{"timestamp": "2026-03-25T20:56:36.714094+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_30_full_quality_pipeline_template] Starting: test_t2_30_full_quality_pipeline_template"}
+{"timestamp": "2026-03-25T20:56:36.738436+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_30_full_quality_pipeline_template] FAILED (25ms, 0 API calls)"}
+{"timestamp": "2026-03-25T20:56:36.739654+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_31_iterative_refinement_template] Starting: test_t2_31_iterative_refinement_template"}
+{"timestamp": "2026-03-25T20:56:36.755298+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_31_iterative_refinement_template] FAILED (16ms, 0 API calls)"}

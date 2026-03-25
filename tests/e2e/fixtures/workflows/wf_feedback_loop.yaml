@@ -1,0 +1,62 @@
+name: "Agent Feedback Loop (T2-32)"
+version: 1
+description: >
+  Full agent feedback cycle: agent run -> human review -> correction batch
+  accumulation -> prompt refinement -> re-run with new prompt version.
+  Tests correction batch lifecycle, prompt v2 creation, and v1 vs v2
+  comparison via agent_compare step.
+
+steps:
+  - id: initial_agent_run
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: human_review
+    type: human_review
+    config:
+      sample_strategy: low_confidence
+      sample_size: 25
+      breakpoint: true
+
+  - id: agreement
+    type: agreement_analysis
+    config:
+      analysis_type: human_agent
+
+  - id: quality_check
+    type: quality_check
+    config:
+      min_agreement: 0.85
+
+  - id: snapshot_baseline
+    type: snapshot
+    config:
+      snapshot_name: "pre_refinement_baseline"
+
+  - id: refined_agent_run
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v2"
+      use_corrections: true
+
+  - id: compare_versions
+    type: agent_compare
+    config:
+      compare_runs: [initial_agent_run, refined_agent_run]
+      merge_strategy: prefer_higher_confidence
+
+  - id: final_review
+    type: human_review
+    config:
+      sample_strategy: disagreement_first
+      sample_size: 15
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"
+      include_run_metadata: true

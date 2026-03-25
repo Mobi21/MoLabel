@@ -1,0 +1,24 @@
+name: "Pause on Every Step (T2-18)"
+version: 1
+description: >
+  Workflow with pause_on_every_step=true. Every step triggers a breakpoint
+  and the operator must continue each one individually.
+pause_on_every_step: true
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.80
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

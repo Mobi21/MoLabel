@@ -1,0 +1,32 @@
+name: "Count-Based Loop (T2-01)"
+version: 1
+description: >
+  A simple loop that runs exactly 3 times regardless of quality metrics.
+  Tests iteration counter, loop body execution, and step output archiving
+  with __iter_N suffixes.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: human_review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 10
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.70
+
+  - id: count_loop
+    type: loop
+    config:
+      steps: [agent_label, human_review, quality]
+      termination:
+        type: count
+        count: 3

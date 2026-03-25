@@ -1,0 +1,14 @@
+{
+  "task_slug": "ner",
+  "task_type": "span_annotation",
+  "title": "Named Entity Recognition",
+  "label_fields": [
+    {
+      "name": "entities",
+      "field_type": "json",
+      "required": true,
+      "description": "JSON array of entity spans. Each span: {\"start\": <char_offset>, \"end\": <char_offset>, \"label\": \"PERSON|ORG|LOC|DATE|MONEY\", \"text\": \"<matched_text>\"}"
+    }
+  ],
+  "blind_review_policy": "hide_agent_outputs_by_default"
+}

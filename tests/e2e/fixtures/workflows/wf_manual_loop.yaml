@@ -1,0 +1,38 @@
+name: "Manual Termination Loop (T2-04)"
+version: 1
+description: >
+  Loop with manual termination: an operator gate after each iteration
+  decides whether to continue or stop. Tests gate pause/approve/reject
+  controls within a loop body.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: human_review
+    type: human_review
+    config:
+      sample_strategy: all
+      sample_size: 10
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.70
+
+  - id: operator_gate
+    type: gate
+    config:
+      message: "Review quality results. Continue loop iteration or stop?"
+      require_reason: false
+
+  - id: manual_loop
+    type: loop
+    config:
+      steps: [agent_label, human_review, quality, operator_gate]
+      termination:
+        type: manual
+        max_iterations: 5

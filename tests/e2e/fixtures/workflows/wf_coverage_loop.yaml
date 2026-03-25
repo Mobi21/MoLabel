@@ -1,0 +1,32 @@
+name: "Coverage-Based Loop (T2-03)"
+version: 1
+description: >
+  Loop that terminates when review coverage reaches 95% of all records.
+  Tests coverage target termination with reason = coverage_target_met.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: human_review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 20
+
+  - id: quality
+    type: quality_check
+    config:
+      min_coverage: 0.80
+
+  - id: coverage_loop
+    type: loop
+    config:
+      steps: [agent_label, human_review, quality]
+      termination:
+        type: coverage
+        coverage_target: 0.95
+        max_iterations: 15

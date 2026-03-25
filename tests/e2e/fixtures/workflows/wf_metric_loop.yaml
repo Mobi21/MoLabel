@@ -1,0 +1,35 @@
+name: "Metric-Based Loop (T2-02)"
+version: 1
+description: >
+  Loop that terminates early when quality agreement reaches 0.95.
+  Tests metric threshold termination with reason = metric_threshold_met.
+  max_iterations provides a safety backstop.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: human_review
+    type: human_review
+    config:
+      sample_strategy: low_confidence
+      sample_size: 15
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.80
+
+  - id: metric_loop
+    type: loop
+    config:
+      steps: [agent_label, human_review, quality]
+      termination:
+        type: metric
+        metric: "quality.agreement"
+        operator: ">="
+        threshold: 0.95
+        max_iterations: 10

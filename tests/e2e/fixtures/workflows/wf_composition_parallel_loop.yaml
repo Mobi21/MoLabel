@@ -1,0 +1,59 @@
+name: "Composition: Parallel Steps Inside Loop (T2-21)"
+version: 1
+description: >
+  A loop whose body includes a parallel step running two agents simultaneously.
+  Tests that context is archived between iterations, parallel outputs are
+  merged per iteration, and metrics accumulate correctly.
+
+steps:
+  - id: parallel_labelers
+    type: parallel
+    config:
+      fail_fast: false
+      steps:
+        - id: agent_alpha
+          type: agent_run
+          config:
+            agent_role: proposer
+            model_profile_ref: "model-profile-a"
+            prompt_ref: "prompts/sentiment-v1"
+        - id: agent_beta
+          type: agent_run
+          config:
+            agent_role: critic
+            model_profile_ref: "model-profile-b"
+            prompt_ref: "prompts/sentiment-v1"
+
+  - id: agreement
+    type: agreement_analysis
+    config:
+      analysis_type: inter_agent
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.80
+
+  - id: parallel_loop
+    type: loop
+    config:
+      steps: [parallel_labelers, agreement, quality]
+      termination:
+        type: metric
+        metric: "quality.agreement"
+        operator: ">="
+        threshold: 0.90
+        max_iterations: 4
+
+  - id: human_review
+    type: human_review
+    depends_on: [parallel_loop]
+    config:
+      sample_strategy: disagreement_first
+      sample_size: 20
+
+  - id: final_export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

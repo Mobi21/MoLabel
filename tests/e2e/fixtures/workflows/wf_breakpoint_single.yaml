@@ -1,0 +1,31 @@
+name: "Single Step Breakpoint (T2-17)"
+version: 1
+description: >
+  A simple workflow with a breakpoint on the review step.
+  Engine pauses before that step until the operator continues.
+  The continue API allows overriding step config at the breakpoint.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: review
+    type: human_review
+    breakpoint: true
+    config:
+      sample_strategy: stratified
+      sample_size: 20
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.80
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

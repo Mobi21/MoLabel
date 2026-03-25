@@ -1,0 +1,2 @@
+{"timestamp": "2026-03-25T20:45:02.211239+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_01_count_based_loop] Starting: test_t2_01_count_based_loop"}
+{"timestamp": "2026-03-25T20:45:02.567979+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_01_count_based_loop] PASSED (357ms, 0 API calls)"}

@@ -1,0 +1,50 @@
+name: "Quality Gate Before Export (T2-16)"
+version: 1
+description: >
+  Quality check results are surfaced in a gate step. The gate message
+  includes computed metric values (agreement, coverage, confidence).
+  Only passes if the operator approves after reviewing the metrics.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: human_review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 25
+
+  - id: agreement
+    type: agreement_analysis
+    config:
+      analysis_type: both
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.85
+      min_coverage: 0.90
+      min_confidence: 0.75
+
+  - id: quality_gate
+    type: gate
+    config:
+      message: >
+        Quality check complete. Agreement: {quality.agreement:.2f},
+        Coverage: {quality.coverage:.2f}, Confidence: {quality.confidence:.2f}.
+        Approve to proceed with export, or reject to run additional review.
+      require_reason: true
+      include_metrics:
+        - quality.agreement
+        - quality.coverage
+        - quality.confidence
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

@@ -1,0 +1,29 @@
+name: "Lifecycle Pause Resume (T2-24, T2-25, T2-26)"
+version: 1
+description: >
+  Simple workflow for testing pause, resume, and cancel lifecycle
+  operations mid-execution.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.80
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 20
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

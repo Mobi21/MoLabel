@@ -1,0 +1,8 @@
+{"timestamp": "2026-03-25T20:45:15.341498+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_06_branch_by_confidence] Starting: test_t2_06_branch_by_confidence"}
+{"timestamp": "2026-03-25T20:45:15.365344+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_06_branch_by_confidence] FAILED (24ms, 0 API calls)"}
+{"timestamp": "2026-03-25T20:45:15.366353+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_07_branch_by_distribution] Starting: test_t2_07_branch_by_distribution"}
+{"timestamp": "2026-03-25T20:45:15.372938+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_07_branch_by_distribution] FAILED (7ms, 0 API calls)"}
+{"timestamp": "2026-03-25T20:45:15.373792+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_08_branch_by_quality] Starting: test_t2_08_branch_by_quality"}
+{"timestamp": "2026-03-25T20:45:15.380203+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_08_branch_by_quality] FAILED (6ms, 0 API calls)"}
+{"timestamp": "2026-03-25T20:45:15.381015+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_09_nested_predicates] Starting: test_t2_09_nested_predicates"}
+{"timestamp": "2026-03-25T20:45:15.393209+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_09_nested_predicates] FAILED (12ms, 0 API calls)"}

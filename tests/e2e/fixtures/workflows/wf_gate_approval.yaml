@@ -1,0 +1,36 @@
+name: "Approval Gate (T2-14, T2-15)"
+version: 1
+description: >
+  Agent labeling followed by a manual approval gate before export.
+  On approve: stores operator_id and decided_at, unblocks export.
+  On reject: cancels the workflow and all pending steps.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 20
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.80
+
+  - id: approval_gate
+    type: gate
+    config:
+      message: "Agent labeling complete. Review quality metrics and approve or reject export."
+      require_reason: false
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

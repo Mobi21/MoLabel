@@ -1,0 +1,35 @@
+name: "Parallel Wait-All Mode (T2-12)"
+version: 1
+description: >
+  Runs two agent steps in parallel with fail_fast=false. Even when one
+  child fails, the other completes. The parallel step reports is_partial=True
+  and records the partial failure without cancelling the workflow.
+
+steps:
+  - id: parallel_agents
+    type: parallel
+    config:
+      fail_fast: false
+      steps:
+        - id: agent_ok
+          type: agent_run
+          config:
+            agent_role: proposer
+            prompt_ref: "prompts/sentiment-v1"
+        - id: agent_fail
+          type: agent_run
+          config:
+            agent_role: proposer
+            prompt_ref: "prompts/sentiment-v1"
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 10
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

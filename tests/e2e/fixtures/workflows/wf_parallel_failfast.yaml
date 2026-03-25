@@ -1,0 +1,35 @@
+name: "Parallel Fail-Fast (T2-11)"
+version: 1
+description: >
+  Runs two agent steps in parallel with fail_fast=true. If either step
+  fails, the remaining parallel steps are cancelled and is_partial=True
+  is set on the parallel step result. Tests fail-fast cancellation behavior.
+
+steps:
+  - id: parallel_agents
+    type: parallel
+    config:
+      fail_fast: true
+      steps:
+        - id: agent_primary
+          type: agent_run
+          config:
+            agent_role: proposer
+            prompt_ref: "prompts/sentiment-v1"
+        - id: agent_backup
+          type: agent_run
+          config:
+            agent_role: proposer
+            prompt_ref: "prompts/sentiment-v2"
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 15
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

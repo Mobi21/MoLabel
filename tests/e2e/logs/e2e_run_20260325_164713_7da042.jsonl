@@ -1,0 +1,2 @@
+{"timestamp": "2026-03-25T20:47:13.318400+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_03_coverage_based_loop] Starting: test_t2_03_coverage_based_loop"}
+{"timestamp": "2026-03-25T20:47:13.342531+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_03_coverage_based_loop] FAILED (24ms, 0 API calls)"}

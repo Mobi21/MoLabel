@@ -1,0 +1,62 @@
+name: "Composition: Loop with Conditional Body (T2-20)"
+version: 1
+description: >
+  A loop whose body contains a conditional step. The conditional evaluates
+  differently on each iteration as quality metrics improve, testing that
+  context is correctly threaded through nested control flow.
+
+steps:
+  - id: initial_agent
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: initial_review
+    type: human_review
+    config:
+      sample_strategy: low_confidence
+      sample_size: 10
+
+  - id: quality_check_inner
+    type: quality_check
+    config:
+      min_agreement: 0.70
+
+  - id: route_by_quality
+    type: conditional
+    config:
+      predicate: "quality.agreement >= 0.85"
+      then_steps:
+        - id: snapshot_good
+          type: snapshot
+          config:
+            snapshot_name: "iteration_checkpoint_good"
+      else_steps:
+        - id: extra_review
+          type: human_review
+          config:
+            sample_strategy: disagreement_first
+            sample_size: 15
+        - id: snapshot_needs_work
+          type: snapshot
+          config:
+            snapshot_name: "iteration_checkpoint_needs_work"
+
+  - id: refinement_loop
+    type: loop
+    config:
+      steps: [initial_agent, initial_review, quality_check_inner, route_by_quality]
+      termination:
+        type: metric
+        metric: "quality.agreement"
+        operator: ">="
+        threshold: 0.90
+        max_iterations: 5
+
+  - id: final_export
+    type: export
+    depends_on: [refinement_loop]
+    config:
+      format: jsonl
+      destination: "exports/"

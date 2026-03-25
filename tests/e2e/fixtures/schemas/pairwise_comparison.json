@@ -1,0 +1,23 @@
+{
+  "task_slug": "pairwise-comparison",
+  "task_type": "comparison",
+  "title": "Pairwise Response Comparison",
+  "label_fields": [
+    {
+      "name": "preferred",
+      "field_type": "categorical",
+      "options": ["A", "B", "tie"],
+      "required": true,
+      "description": "Which response is better overall? A, B, or tie if both are equally good"
+    },
+    {
+      "name": "confidence",
+      "field_type": "numeric",
+      "scale_min": 0.0,
+      "scale_max": 1.0,
+      "required": false,
+      "description": "How confident are you in this preference? (0.0 = uncertain, 1.0 = very confident)"
+    }
+  ],
+  "blind_review_policy": "show_agent_outputs"
+}

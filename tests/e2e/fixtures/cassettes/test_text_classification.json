@@ -1,0 +1,107 @@
+[
+  {
+    "id": "msg_01AbCdEfGhIjKlMn1234567",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-haiku-20241022",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"sentiment\": \"positive\"}"
+      }
+    ],
+    "usage": {
+      "input_tokens": 312,
+      "output_tokens": 8,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    },
+    "latency_ms": 423
+  },
+  {
+    "id": "msg_02BcDeFgHiJkLmNo2345678",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-haiku-20241022",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"sentiment\": \"negative\"}"
+      }
+    ],
+    "usage": {
+      "input_tokens": 298,
+      "output_tokens": 8,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    },
+    "latency_ms": 389
+  },
+  {
+    "id": "msg_03CdEfGhIjKlMnOp3456789",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-haiku-20241022",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"sentiment\": \"neutral\"}"
+      }
+    ],
+    "usage": {
+      "input_tokens": 305,
+      "output_tokens": 7,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    },
+    "latency_ms": 411
+  },
+  {
+    "id": "msg_04DeFgHiJkLmNoPq4567890",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-haiku-20241022",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"sentiment\": \"positive\"}"
+      }
+    ],
+    "usage": {
+      "input_tokens": 321,
+      "output_tokens": 8,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    },
+    "latency_ms": 398
+  },
+  {
+    "id": "msg_05EfGhIjKlMnOpQr5678901",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-haiku-20241022",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"sentiment\": \"negative\"}"
+      }
+    ],
+    "usage": {
+      "input_tokens": 289,
+      "output_tokens": 8,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    },
+    "latency_ms": 445
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "task_slug": "content-moderation",
+  "task_type": "classification",
+  "title": "Content Moderation",
+  "label_fields": [
+    {
+      "name": "severity",
+      "field_type": "ordinal",
+      "options": ["1", "2", "3", "4", "5"],
+      "scale_min": 1,
+      "scale_max": 5,
+      "required": true,
+      "description": "Severity of content violation: 1=clearly safe, 2=borderline/mildly rude, 3=moderately harmful, 4=severely harmful, 5=extreme/illegal"
+    },
+    {
+      "name": "rationale",
+      "field_type": "text",
+      "required": false,
+      "description": "Brief explanation for the severity rating, especially for ambiguous or borderline cases"
+    }
+  ],
+  "blind_review_policy": "hide_agent_outputs_by_default"
+}

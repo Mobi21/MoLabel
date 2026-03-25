@@ -1,0 +1,2 @@
+{"timestamp": "2026-03-25T20:46:27.682179+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_09_nested_predicates] Starting: test_t2_09_nested_predicates"}
+{"timestamp": "2026-03-25T20:46:27.704200+00:00", "level": "INFO", "logger": "molabel.e2e", "message": "[test_t2_09_nested_predicates] FAILED (22ms, 0 API calls)"}

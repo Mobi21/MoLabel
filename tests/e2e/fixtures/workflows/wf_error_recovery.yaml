@@ -1,0 +1,30 @@
+name: "Error Recovery Workflow (T2-27, T2-28, T2-29)"
+version: 1
+description: >
+  Workflow for testing provider failure + retry, crash recovery
+  (interrupted step detection), and step timeout scenarios.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+      timeout_seconds: 2
+
+  - id: quality
+    type: quality_check
+    config:
+      min_agreement: 0.80
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 20
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

@@ -1,0 +1,24 @@
+{
+  "task_slug": "topic-tagging",
+  "task_type": "multi_label",
+  "title": "Topic Tagging",
+  "label_fields": [
+    {
+      "name": "topics",
+      "field_type": "multi_select",
+      "options": [
+        "politics",
+        "sports",
+        "technology",
+        "science",
+        "health",
+        "entertainment",
+        "business",
+        "environment"
+      ],
+      "required": true,
+      "description": "All applicable topic categories for this article (select all that apply)"
+    }
+  ],
+  "blind_review_policy": "hide_agent_outputs_by_default"
+}

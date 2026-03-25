@@ -1,0 +1,40 @@
+name: "Conditional on Confidence (T2-06)"
+version: 1
+description: >
+  Routes workflow based on average agent confidence. If avg_confidence >= 0.8
+  then proceed to export; otherwise route to additional human review.
+  Tests then/else branch selection and skipped step status.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: quality
+    type: quality_check
+    config:
+      min_confidence: 0.70
+
+  - id: confidence_branch
+    type: conditional
+    config:
+      predicate: "avg_confidence >= 0.8"
+      then_steps:
+        - id: direct_export
+          type: export
+          config:
+            format: jsonl
+            destination: "exports/"
+      else_steps:
+        - id: additional_review
+          type: human_review
+          config:
+            sample_strategy: low_confidence
+            sample_size: 30
+        - id: final_export
+          type: export
+          config:
+            format: jsonl
+            destination: "exports/"

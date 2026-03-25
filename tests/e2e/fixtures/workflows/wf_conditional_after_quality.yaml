@@ -1,0 +1,47 @@
+name: "Conditional After Quality Check (T2-23)"
+version: 1
+description: >
+  A quality_check step writes metrics to context. A conditional step
+  immediately after evaluates those metrics to route either to direct
+  export (if quality passed) or to additional human review.
+
+steps:
+  - id: agent_label
+    type: agent_run
+    config:
+      agent_role: proposer
+      prompt_ref: "prompts/sentiment-v1"
+
+  - id: human_review
+    type: human_review
+    config:
+      sample_strategy: stratified
+      sample_size: 20
+
+  - id: quality_check
+    type: quality_check
+    config:
+      min_agreement: 0.85
+      min_coverage: 0.90
+
+  - id: quality_route
+    type: conditional
+    config:
+      predicate: "quality.agreement >= 0.85"
+      then_steps:
+        - id: direct_export
+          type: export
+          config:
+            format: jsonl
+            destination: "exports/"
+      else_steps:
+        - id: extra_review
+          type: human_review
+          config:
+            sample_strategy: disagreement_first
+            sample_size: 30
+        - id: post_review_export
+          type: export
+          config:
+            format: jsonl
+            destination: "exports/"

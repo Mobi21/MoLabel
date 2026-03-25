@@ -1,0 +1,37 @@
+name: "Gate After Parallel (T2-22)"
+version: 1
+description: >
+  Three agent steps run in parallel, then a gate step aggregates the
+  outputs for operator approval before the final export. The gate
+  step can read parallel child outputs from the context.
+
+steps:
+  - id: parallel_agents
+    type: parallel
+    config:
+      fail_fast: false
+      steps:
+        - id: agent_a
+          type: agent_run
+          config:
+            agent_role: proposer
+            model_profile_ref: "model-profile-a"
+            prompt_ref: "prompts/sentiment-v1"
+        - id: agent_b
+          type: agent_run
+          config:
+            agent_role: critic
+            model_profile_ref: "model-profile-b"
+            prompt_ref: "prompts/sentiment-v1"
+
+  - id: review_gate
+    type: gate
+    config:
+      message: "Parallel agent runs complete. Review outputs and approve export."
+      require_reason: false
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"

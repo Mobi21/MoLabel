@@ -1,0 +1,49 @@
+name: "Parallel 3-Model Comparison (T2-10)"
+version: 1
+description: >
+  Runs three agent labeling passes in parallel using different model
+  profiles. All three complete, outputs are merged, and metric conflicts
+  are flagged as warnings. Tests parallel execution and output merging.
+
+steps:
+  - id: parallel_agents
+    type: parallel
+    config:
+      fail_fast: false
+      steps:
+        - id: agent_a
+          type: agent_run
+          config:
+            agent_role: proposer
+            model_profile_ref: "model-profile-a"
+            prompt_ref: "prompts/sentiment-v1"
+        - id: agent_b
+          type: agent_run
+          config:
+            agent_role: proposer
+            model_profile_ref: "model-profile-b"
+            prompt_ref: "prompts/sentiment-v1"
+        - id: agent_c
+          type: agent_run
+          config:
+            agent_role: proposer
+            model_profile_ref: "model-profile-c"
+            prompt_ref: "prompts/sentiment-v1"
+
+  - id: compare
+    type: agent_compare
+    config:
+      merge_strategy: majority_vote
+      flag_conflicts: true
+
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: disagreement_first
+      sample_size: 20
+
+  - id: export
+    type: export
+    config:
+      format: jsonl
+      destination: "exports/"
