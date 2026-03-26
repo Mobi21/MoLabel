@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "recipes": [
+    {
+      "name": "Detect workspace",
+      "steps": ["molabel workspace detect", "molabel status --json"]
+    },
+    {
+      "name": "Inspect workflow templates",
+      "steps": ["molabel workflow templates --json"]
+    }
+  ]
+}

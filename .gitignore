@@ -4,8 +4,15 @@ __pycache__/
 *.so
 .venv/
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
 dist/
 build/
+*.tsbuildinfo
+
+# Local secrets
+.env
+.superpowers/
 
 # Test logs (generated, not committed)
 tests/e2e/logs/
@@ -20,6 +27,8 @@ src-tauri/target/
 # Frontend
 frontend/node_modules/
 frontend/dist/
+cli/node_modules/
+cli/dist/
 
 # OS
 .DS_Store

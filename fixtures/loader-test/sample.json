@@ -1,0 +1,5 @@
+[
+  {"id": "j1", "text": "Hello world", "tags": ["greeting"]},
+  {"id": "j2", "text": "Goodbye world", "tags": ["farewell"]},
+  {"id": "j3", "text": "Something else", "tags": ["misc"]}
+]

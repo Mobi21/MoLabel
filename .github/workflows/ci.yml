@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - run: uv sync
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Tests
+        run: uv run pytest tests/ -v --tb=short
+
+      # TODO: Coverage reporting (non-blocking, SC-012)
+      # - name: Coverage
+      #   run: uv run pytest tests/ -v --cov=molabel --cov-report=xml || true
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: cd frontend && npm ci
+
+      - name: Type check
+        run: cd frontend && npx tsc --noEmit
+
+      - name: Tests
+        run: cd frontend && npm run test -- --run
+
+      - name: Build
+        run: cd frontend && npm run build
+
+      # TODO: Lighthouse CI (non-blocking, SC-012)
+      # - name: Lighthouse
+      #   run: cd frontend && npx lhci autorun || true
+
+  openapi-sync:
+    runs-on: ubuntu-latest
+    needs: [python]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - run: uv sync
+
+      - name: Generate OpenAPI spec
+        run: |
+          uv run python -c "
+          from molabel.app.main import create_app
+          import json
+          print(json.dumps(create_app().openapi()))
+          " > /tmp/openapi.json
+
+      - name: Verify spec generated
+        run: echo "OpenAPI spec generated successfully"

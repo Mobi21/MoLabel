@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://molabel.dev/cli/commands.schema.json",
+  "title": "MoLabel CLI Command Manifest",
+  "type": "object",
+  "required": ["version", "commands"],
+  "properties": {
+    "version": { "type": "string" },
+    "commands": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/command" }
+    }
+  },
+  "$defs": {
+    "command": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "group": { "type": "string" },
+        "flags": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/flag" }
+        }
+      }
+    },
+    "flag": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "required": { "type": "boolean" }
+      }
+    }
+  }
+}

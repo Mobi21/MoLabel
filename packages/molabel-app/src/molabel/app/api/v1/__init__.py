@@ -11,6 +11,7 @@ from molabel.app.api.v1.adjudication import router as adjudication_router
 from molabel.app.api.v1.agent_runs import router as agent_runs_router
 from molabel.app.api.v1.assistant import router as assistant_router
 from molabel.app.api.v1.audit import router as audit_router
+from molabel.app.api.v1.cli import router as cli_router
 from molabel.app.api.v1.corrections import router as corrections_router
 from molabel.app.api.v1.costs import router as costs_router
 from molabel.app.api.v1.datasets import router as datasets_router
@@ -69,6 +70,7 @@ router.include_router(sessions_router)
 router.include_router(audit_router)
 router.include_router(plugins_router)
 router.include_router(costs_router)
+router.include_router(cli_router)
 
 # AI assistant
 router.include_router(assistant_router)
