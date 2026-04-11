@@ -1,0 +1,19 @@
+benchmark_id: evidence-inference
+baselines:
+- baseline_id: oracle
+  name: Evidence Inference Oracle
+  source: molabel_local
+  mode: model
+  variant: paper_direct
+  split_id: dev
+  metrics:
+    joint_effect_evidence: 1.0
+  notes: Exact replay of the paper-direct gold.
+- baseline_id: always_no_difference
+  name: Always No Difference Floor
+  source: molabel_local
+  mode: model
+  variant: molabel_operated
+  split_id: dev
+  metrics: {}
+  notes: Predict no_difference with empty evidence for every record.

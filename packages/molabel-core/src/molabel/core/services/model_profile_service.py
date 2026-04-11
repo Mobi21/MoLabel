@@ -284,6 +284,11 @@ class ModelProfileService:
         profile_id = uuid4()
         now = datetime.now(UTC)
 
+        # Persist base_url in routing_metadata so it survives DB round-trips
+        routing_metadata = dict(data.routing_metadata) if data.routing_metadata else {}
+        if data.base_url:
+            routing_metadata["base_url"] = data.base_url
+
         record = {
             "id": profile_id,
             "workspace_id": workspace_id,
@@ -301,7 +306,7 @@ class ModelProfileService:
             "cost_per_output_token": data.cost_per_output_token,
             "is_available": None,
             "capability_tags": data.capability_tags,
-            "routing_metadata": data.routing_metadata,
+            "routing_metadata": routing_metadata,
             "created_at": now,
             "updated_at": now,
         }
@@ -436,6 +441,11 @@ class ModelProfileService:
         provider_type = record["provider_type"]
         auth_ref = record.get("auth_ref")
         base_url = record.get("base_url")
+        # Fall back to routing_metadata for DB round-tripped records
+        if not base_url:
+            rm = record.get("routing_metadata")
+            if isinstance(rm, dict):
+                base_url = rm.get("base_url")
 
         if provider_type == ProviderType.openai_compatible:
             from molabel.core.providers.openai_adapter import OpenAIAdapter
@@ -461,7 +471,10 @@ class ModelProfileService:
         if provider_type == ProviderType.anthropic:
             from molabel.core.providers.anthropic_adapter import AnthropicAdapter
 
-            return AnthropicAdapter(auth_ref=auth_ref)
+            kwargs: dict[str, Any] = {"auth_ref": auth_ref}
+            if base_url:
+                kwargs["base_url"] = base_url
+            return AnthropicAdapter(**kwargs)
 
         if provider_type == ProviderType.custom:
             from molabel.core.providers.custom_adapter import CustomAdapter

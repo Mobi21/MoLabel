@@ -2,4 +2,20 @@
 
 - Detect workspace: `molabel workspace detect`
 - Check backend: `molabel doctor --json`
+- Show command contract: `molabel manifest --json`
+- List reviewer profiles: `molabel session list-reviewers --json`
+- List datasets: `molabel dataset list --json`
+- Create a task schema from JSON: `molabel task-schema create --file schema.json --json`
+- Create a prompt from JSON: `molabel prompt create --file prompt.json --json`
 - Show templates: `molabel workflow templates --json`
+- Run a workflow: `molabel workflow run <selector> --json`
+- Inspect executions: `molabel workflow execution <selector> <execution-id> --json`
+- Claim review work: `molabel queue claim <queue-id> --json`
+- Submit a review: `molabel review submit <task-id> --labels-file labels.json --decision accept_ai --json`
+- Inspect adjudication queue: `molabel adjudication queue --json`
+- Show quality dashboard: `molabel quality dashboard --json`
+- Create an export: `molabel export create --file export.json --json`
+- Create a release: `molabel release create --file release.json --json`
+- Read a canonical artifact: `molabel artifact read <kind> <selector> --json`
+- Diff a proposed change: `molabel artifact diff <kind> <selector> --candidate-file <path>`
+- Write a canonical artifact safely: `molabel artifact write <kind> <selector> --content-file <path> --expected-hash <hash>`

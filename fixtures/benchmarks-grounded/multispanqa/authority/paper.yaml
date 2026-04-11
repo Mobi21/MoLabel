@@ -1,0 +1,12 @@
+benchmark_id: multispanqa
+paper_title: 'MultiSpanQA: A Dataset for Multi-Span Question Answering'
+paper_url: https://aclanthology.org/2022.naacl-main.90/
+citation: Li et al. (2022)
+publication_year: 2022
+dataset_name: MultiSpanQA
+dataset_url: https://aclanthology.org/2022.naacl-main.90/
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Discontiguous multi-span answer extraction.
+original_task_definition: Answer the question with one grounded span artifact that
+  may contain multiple ordered segments.

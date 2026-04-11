@@ -1,0 +1,27 @@
+benchmark_id: banking77
+record_id_field: record_id
+dataset_label_fields:
+  - source_label
+target_label_fields:
+  - intent_label
+field_mappings:
+  - dataset_field: source_label
+    target_field: intent_label
+    mapping:
+      activate_my_card: activate_my_card
+      atm_support: atm_support
+      balance_not_updated_after_cheque_or_cash_deposit: balance_not_updated_after_cheque_or_cash_deposit
+      card_arrival: card_arrival
+      card_delivery_estimate: card_delivery_estimate
+      card_not_working: card_not_working
+      cash_withdrawal_charge: cash_withdrawal_charge
+      declined_card_payment: declined_card_payment
+      exchange_rate: exchange_rate
+      extra_charge_on_statement: extra_charge_on_statement
+      failed_transfer: failed_transfer
+      lost_or_stolen_card: lost_or_stolen_card
+      pending_transfer: pending_transfer
+      refund_not_showing_up: refund_not_showing_up
+      supported_cards_and_currencies: supported_cards_and_currencies
+      transfer_not_received_by_recipient: transfer_not_received_by_recipient
+    notes: Preserve canonical BANKING77 intent identifiers verbatim.

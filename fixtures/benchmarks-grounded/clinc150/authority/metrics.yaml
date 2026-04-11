@@ -1,0 +1,71 @@
+benchmark_id: clinc150
+aggregation: weighted_mean
+primary_metric_id: intent_accuracy
+metrics:
+  - metric_id: intent_accuracy
+    name: Intent Accuracy
+    metric_type: accuracy
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+      - molabel_operated
+    fields:
+      - intent_label
+    weight: 1.0
+  - metric_id: oos_recall
+    name: Out-of-Scope Recall
+    metric_type: binary_recall
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+      - molabel_operated
+    fields:
+      - is_out_of_scope
+    positive_value: true
+    weight: 0.5
+  - metric_id: intent_exact_match
+    name: Intent Exact Match
+    metric_type: exact_match
+    modes:
+      - workflow
+      - operator
+    variants:
+      - molabel_operated
+    fields:
+      - intent_label
+      - is_out_of_scope
+    weight: 0.5
+    notes: Exact match on the normalized MoLabel label view.
+tax_definitions:
+  - tax_id: model_tax
+    name: Model Tax
+    minuend_mode: model
+    minuend_variant: paper_direct
+    subtrahend_mode: model
+    subtrahend_variant: molabel_operated
+  - tax_id: workflow_tax
+    name: Workflow Tax
+    minuend_mode: model
+    minuend_variant: molabel_operated
+    subtrahend_mode: workflow
+    subtrahend_variant: molabel_operated
+  - tax_id: review_lift
+    name: Review Lift
+    minuend_mode: workflow
+    minuend_variant: molabel_operated
+    subtrahend_mode: workflow
+    subtrahend_variant: molabel_operated
+    minuend_stage: workflow_reviewed
+    subtrahend_stage: workflow_autorun
+  - tax_id: operator_tax
+    name: Operator Tax
+    minuend_mode: workflow
+    minuend_variant: molabel_operated
+    subtrahend_mode: operator
+    subtrahend_variant: molabel_operated

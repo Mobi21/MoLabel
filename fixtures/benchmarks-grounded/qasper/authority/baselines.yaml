@@ -1,0 +1,19 @@
+benchmark_id: qasper
+baselines:
+- baseline_id: oracle
+  name: QASPER Oracle
+  source: molabel_local
+  mode: model
+  variant: paper_direct
+  split_id: dev
+  metrics:
+    joint_answer_support: 1.0
+  notes: Exact replay of the paper-direct QA bundle.
+- baseline_id: blank_answer_floor
+  name: Blank Answer Floor
+  source: molabel_local
+  mode: model
+  variant: molabel_operated
+  split_id: dev
+  metrics: {}
+  notes: Predict blank answers with no supporting facts and no unanswerable flag.

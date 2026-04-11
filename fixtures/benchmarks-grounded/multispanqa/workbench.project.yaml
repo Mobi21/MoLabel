@@ -1,0 +1,19 @@
+workspace_id: 56af0bd5-77ac-5b28-8a71-0c5845d14fe6
+workspace_name: MultiSpanQA Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: multispanqa_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: multispanqa_grounded_v1
+  definition_path: workbench/config/task-schemas/multispanqa-grounded-v1.yaml
+export_targets:
+- export_id: multispanqa_grounded_export
+  output_namespace: workbench/exports/multispanqa
+validation_gates: []

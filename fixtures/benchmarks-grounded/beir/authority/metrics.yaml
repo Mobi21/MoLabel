@@ -1,0 +1,108 @@
+benchmark_id: beir
+aggregation: weighted_mean
+primary_metric_id: ndcg_at_5
+metrics:
+- metric_id: ndcg_at_5
+  name: nDCG@5
+  metric_type: ndcg_at_k
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - ranking
+  metric_options:
+    qrels_field: qrels
+    k: 5
+    fixed_depth: 5
+    require_corpus_metadata: true
+  weight: 1.0
+- metric_id: map
+  name: MAP
+  metric_type: map
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - ranking
+  metric_options:
+    qrels_field: qrels
+    k: 5
+  weight: 0.0
+- metric_id: mrr
+  name: MRR
+  metric_type: mrr
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - ranking
+  metric_options:
+    qrels_field: qrels
+    k: 5
+  weight: 0.0
+- metric_id: recall_at_5
+  name: Recall@5
+  metric_type: recall_at_k
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - ranking
+  metric_options:
+    qrels_field: qrels
+    k: 5
+  weight: 0.0
+- metric_id: precision_at_5
+  name: Precision@5
+  metric_type: precision_at_k
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - ranking
+  metric_options:
+    qrels_field: qrels
+    k: 5
+  weight: 0.0
+tax_definitions:
+- tax_id: model_tax
+  name: Model Tax
+  minuend_mode: model
+  minuend_variant: paper_direct
+  subtrahend_mode: model
+  subtrahend_variant: molabel_operated
+  notes: Gap between paper-direct and MoLabel-operated scoring.
+- tax_id: workflow_tax
+  name: Workflow Tax
+  minuend_mode: model
+  minuend_variant: molabel_operated
+  subtrahend_mode: workflow
+  subtrahend_variant: molabel_operated
+  notes: Gap introduced by workflow execution.
+- tax_id: operator_tax
+  name: Operator Tax
+  minuend_mode: workflow
+  minuend_variant: molabel_operated
+  subtrahend_mode: operator
+  subtrahend_variant: molabel_operated
+  notes: Gap introduced by the external CLI operator.

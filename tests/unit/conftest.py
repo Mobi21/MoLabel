@@ -7,6 +7,7 @@ test_queue_claims.py.
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -59,6 +60,17 @@ class TaskData:
     priority: int
 
 
+@dataclass
+class RecordData:
+    """Holds record fields for test reference without ORM."""
+
+    id: uuid.UUID
+    external_id: str
+    workspace_id: uuid.UUID
+    dataset_id: uuid.UUID
+    payload: dict[str, object]
+
+
 # ---------------------------------------------------------------------------
 # Database fixtures
 # ---------------------------------------------------------------------------
@@ -105,6 +117,18 @@ def engine():
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 last_active_at TEXT,
                 workspace_id TEXT NOT NULL REFERENCES workspaces(id)
+            )
+        """)
+        )
+        conn.execute(
+            text("""
+            CREATE TABLE records (
+                id TEXT PRIMARY KEY,
+                external_id TEXT,
+                stable_fields TEXT NOT NULL,
+                payload TEXT,
+                workspace_id TEXT NOT NULL,
+                dataset_id TEXT NOT NULL
             )
         """)
         )
@@ -319,6 +343,57 @@ def insert_reviewer(
         display_name=display_name,
         avatar_color=avatar_color,
         workspace_id=workspace.id,
+    )
+
+
+def insert_record(
+    engine,
+    workspace: WorkspaceData,
+    *,
+    dataset_id: uuid.UUID,
+    record_id: uuid.UUID | None = None,
+    external_id: str | None = None,
+    stable_fields: dict[str, object] | None = None,
+    payload: dict[str, object] | None = None,
+) -> RecordData:
+    """Helper to insert a record for claim/review tests."""
+    rid = record_id or uuid.uuid4()
+    record_payload = payload or {}
+    stable = stable_fields or {
+        "record_id": external_id or str(rid),
+    }
+    ext_id = external_id or str(rid)
+
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO records "
+                "("
+                "id, external_id, stable_fields, payload, "
+                "workspace_id, dataset_id"
+                ") "
+                "VALUES ("
+                ":id, :external_id, :stable_fields, :payload, "
+                ":workspace_id, :dataset_id"
+                ")"
+            ),
+            {
+                "id": str(rid),
+                "external_id": ext_id,
+                "stable_fields": json.dumps(stable),
+                "payload": json.dumps(record_payload),
+                "workspace_id": str(workspace.id),
+                "dataset_id": str(dataset_id),
+            },
+        )
+        conn.commit()
+
+    return RecordData(
+        id=rid,
+        external_id=ext_id,
+        workspace_id=workspace.id,
+        dataset_id=dataset_id,
+        payload=record_payload,
     )
 
 

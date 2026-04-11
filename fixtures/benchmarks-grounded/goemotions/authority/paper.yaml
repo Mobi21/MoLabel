@@ -1,0 +1,30 @@
+benchmark_id: goemotions
+paper_title: "GoEmotions: A Dataset of Fine-Grained Emotions"
+paper_url: https://aclanthology.org/2020.acl-main.372/
+citation: >
+  Demszky, Movshovitz-Attias, Ko, Cowen, Nemade, Ravi. GoEmotions: A Dataset of
+  Fine-Grained Emotions. ACL 2020.
+publication_year: 2020
+dataset_name: GoEmotions
+dataset_url: https://github.com/google-research/google-research/tree/master/goemotions
+source_repository_url: https://github.com/google-research/google-research
+dataset_license: Apache-2.0
+repository_license: Apache-2.0
+redistribution_status: allowed
+task_summary: >
+  Multi-label emotion classification over 27 emotion categories plus neutral,
+  annotated on Reddit comments.
+original_task_definition: >
+  Predict the set of emotions expressed in a short text span, drawing from
+  the 28-way GoEmotions taxonomy. A record may have one or multiple labels.
+original_metrics:
+  - per-label precision, recall, F1
+  - macro F1
+  - micro F1
+notes:
+  - Full dataset has 58k Reddit comments with 27 emotion categories plus neutral.
+  - Annotators often disagree; the paper uses majority/union aggregations.
+  - The fixture preserves disagreement cases in the operator view so that
+    downstream review logic has something real to escalate.
+  - This fixture does NOT implement paper-faithful micro-F1; see README for the
+    set-valued proxy used instead and why.

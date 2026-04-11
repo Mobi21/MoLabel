@@ -116,6 +116,38 @@ def _workspace_root_from_request(workspace_root: str | None) -> Path:
     return Path.cwd().resolve()
 
 
+def _selector_looks_like_path(selector: str) -> bool:
+    return (
+        selector.startswith(".")
+        or "/" in selector
+        or "\\" in selector
+        or Path(selector).is_absolute()
+    )
+
+
+def _canonical_artifact_relative_path(
+    *,
+    kind: ArtifactKind,
+    selector: str,
+) -> Path | None:
+    canonical_roots: dict[ArtifactKind, tuple[str, str]] = {
+        "workflow": ("workbench/workflows", ".yaml"),
+        "prompt": ("workbench/prompts", ".yaml"),
+        "task_schema": ("workbench/config/task-schemas", ".yaml"),
+        "workspace_manifest": ("", ""),
+    }
+    if kind == "workspace_manifest":
+        return Path("workbench.project.yaml")
+
+    mapping = canonical_roots.get(kind)
+    if mapping is None or _selector_looks_like_path(selector):
+        return None
+
+    directory, extension = mapping
+    filename = selector if selector.endswith(extension) else f"{selector}{extension}"
+    return Path(directory) / filename
+
+
 def _hash_text(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
@@ -286,11 +318,13 @@ def _resolve_artifact_path(
         return path, metadata
     except HTTPException:
         root = _workspace_root_from_request(workspace_root)
+        canonical = _canonical_artifact_relative_path(kind=kind, selector=selector)
+        if canonical is not None:
+            return _ensure_within_root(root, root / canonical), {}
+
         candidate = Path(selector)
         if not candidate.is_absolute():
             candidate = root / candidate
-        if not candidate.exists():
-            raise
         return _ensure_within_root(root, candidate), {}
 
 

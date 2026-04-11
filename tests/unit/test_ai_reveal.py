@@ -125,6 +125,29 @@ def _create_tasks_with_schema(
             record_id = uuid.uuid4()
             conn.execute(
                 text(
+                    "INSERT INTO records "
+                    "("
+                    "id, external_id, stable_fields, payload, "
+                    "workspace_id, dataset_id"
+                    ") "
+                    "VALUES ("
+                    ":id, :external_id, :stable_fields, :payload, "
+                    ":workspace_id, :dataset_id"
+                    ")"
+                ),
+                {
+                    "id": str(record_id),
+                    "external_id": f"reveal-record-{task_id}",
+                    "stable_fields": json.dumps(
+                        {"record_id": f"reveal-record-{task_id}"}
+                    ),
+                    "payload": json.dumps({"text": f"Reveal text for {task_id}"}),
+                    "workspace_id": str(workspace.id),
+                    "dataset_id": str(dataset_id),
+                },
+            )
+            conn.execute(
+                text(
                     "INSERT INTO review_tasks "
                     "(id, queue_id, record_id, task_schema_id, status, priority, "
                     "workspace_id, dataset_id) "
@@ -252,6 +275,10 @@ class TestRevealAIService:
         result = reveal_ai(engine, uuid.UUID(claimed["id"]), reviewer.id)
         assert result is not None
         assert result["blind_review_policy"] == "hide_agent_outputs_by_default"
+        assert result["record_external_id"] is not None
+        assert result["record_view"] is not None
+        assert result["record_view"]["payload"]["text"].startswith("Reveal text for ")
+        assert result["record_text"].startswith("Reveal text for ")
 
     def test_reveal_idempotent(self, engine, reviewer, workspace) -> None:
         """Calling reveal_ai twice succeeds and returns the same data."""
@@ -327,6 +354,51 @@ class TestRevealAIService:
         assert result is not None
         assert result["ai_revealed"] is True
         assert result["agent_output"] is not None
+
+    def test_reveal_scrubs_truth_bearing_fields(
+        self, engine, reviewer, workspace
+    ) -> None:
+        """Reveal response must not expose source/gold labels via record context."""
+        schema_id = _create_task_schema(
+            engine,
+            workspace,
+            blind_review_policy="hide_agent_outputs_by_default",
+        )
+        tasks = _create_tasks_with_schema(engine, workspace, schema_id)
+        _create_agent_output(engine, workspace, tasks[0].record_id, schema_id)
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    """
+                    UPDATE records
+                    SET payload = :payload
+                    WHERE id = :record_id
+                    """
+                ),
+                {
+                    "record_id": str(tasks[0].record_id),
+                    "payload": json.dumps(
+                        {
+                            "text": "Reveal-safe text",
+                            "source_label": "positive",
+                            "nested": {"gold_label": "negative"},
+                        }
+                    ),
+                },
+            )
+            conn.commit()
+
+        claimed = claim_next(engine, QUEUE_ID, reviewer.id)
+        assert claimed is not None
+
+        result = reveal_ai(engine, uuid.UUID(claimed["id"]), reviewer.id)
+        assert result is not None
+        assert result["record_text"] == "Reveal-safe text"
+        assert result["record_view"] is not None
+        payload = result["record_view"]["payload"]
+        assert payload["text"] == "Reveal-safe text"
+        assert "source_label" not in payload
+        assert "gold_label" not in payload["nested"]
 
     def test_reveal_with_no_agent_output(self, engine, reviewer, workspace) -> None:
         """reveal_ai succeeds but agent_output is None when no output exists."""

@@ -1,0 +1,11 @@
+benchmark_id: docvqa
+paper_title: 'DocVQA: A Dataset for VQA on Document Images'
+paper_url: https://arxiv.org/abs/2007.00398
+citation: Mathew et al. (2021)
+publication_year: 2021
+dataset_name: DocVQA
+dataset_url: https://arxiv.org/abs/2007.00398
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Document question answering on scanned pages.
+original_task_definition: Answer each question from the document page content.

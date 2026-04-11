@@ -31,12 +31,22 @@ from molabel.core.database import create_all_tables
 # Network binding configuration (SE-012)
 # ---------------------------------------------------------------------------
 
-#: Host to bind to.  ``0.0.0.0`` (default) makes the server accessible on
-#: the local network; ``127.0.0.1`` restricts to localhost only (single-user).
-MOLABEL_HOST: str = os.environ.get("MOLABEL_HOST", "0.0.0.0")
+#: Host to bind to. ``127.0.0.1`` (default) restricts the server to localhost
+#: only; ``0.0.0.0`` exposes it to the local network when explicitly requested.
+MOLABEL_HOST: str = os.environ.get("MOLABEL_HOST", "127.0.0.1")
 
 #: Port for the API server.
 MOLABEL_PORT: int = int(os.environ.get("MOLABEL_PORT", "8000"))
+
+_DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+    "tauri://localhost",
+)
 
 
 logger = logging.getLogger(__name__)
@@ -58,6 +68,20 @@ def _create_engine_from_env():
     if in_memory:
         kwargs["poolclass"] = StaticPool  # type: ignore[assignment]
     return create_engine(db_url, **kwargs)  # type: ignore[arg-type]
+
+
+def _cors_origins_from_env() -> list[str]:
+    """Return the allowed browser origins for the API.
+
+    By default, MoLabel only permits localhost/Tauri origins that are used by
+    the dev server and desktop shell. Set ``MOLABEL_CORS_ORIGINS`` to a
+    comma-separated list to override that allowlist, or to an empty string to
+    disable cross-origin browser access entirely.
+    """
+    raw = os.environ.get("MOLABEL_CORS_ORIGINS")
+    if raw is None:
+        return list(_DEFAULT_CORS_ORIGINS)
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 @asynccontextmanager
@@ -103,7 +127,7 @@ def create_app() -> FastAPI:
     # ----- middleware -----
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # TODO: restrict in production
+        allow_origins=_cors_origins_from_env(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

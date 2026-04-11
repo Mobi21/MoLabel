@@ -1,0 +1,30 @@
+benchmark_id: clinc150
+record_id_field: record_id
+dataset_label_fields:
+  - source_label
+target_label_fields:
+  - intent_label
+  - is_out_of_scope
+field_mappings:
+  - dataset_field: source_label
+    target_field: intent_label
+    mapping:
+      translate: translate
+      transfer: transfer
+      timer: timer
+      book_flight: book_flight
+      change_language: change_language
+      travel_suggestion: travel_suggestion
+      find_phone: find_phone
+      time: time
+      pay_bill: pay_bill
+      balance: balance
+      freeze_account: freeze_account
+      restaurant_reservation: restaurant_reservation
+      oos: oos
+    notes: Preserve original CLINC/OOS labels as canonical benchmark labels.
+  - dataset_field: source_label
+    target_field: is_out_of_scope
+    mapping:
+      oos: true
+    notes: Any source label other than `oos` maps to `false`.

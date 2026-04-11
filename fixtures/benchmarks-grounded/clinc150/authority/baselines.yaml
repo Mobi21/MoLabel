@@ -1,0 +1,22 @@
+benchmark_id: clinc150
+baselines:
+  - baseline_id: paper_oracle
+    name: CLINC150 Subset Oracle
+    source: molabel_local
+    mode: model
+    variant: paper_direct
+    split_id: test
+    metrics:
+      intent_accuracy: 1.0
+      oos_recall: 1.0
+    notes: Upper-bound reference that matches the paper-direct gold labels exactly.
+  - baseline_id: always_oos
+    name: Always OOS Heuristic
+    source: molabel_local
+    mode: model
+    variant: paper_direct
+    split_id: test
+    metrics:
+      intent_accuracy: 0.25
+      oos_recall: 1.0
+    notes: Predict the out-of-scope label for every utterance.

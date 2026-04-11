@@ -1,0 +1,19 @@
+workspace_id: fc6b7dbf-c4c5-5eb0-aa76-6846fa8eab77
+workspace_name: Toxic Spans Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: toxic_spans_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: toxic_spans_grounded_v1
+  definition_path: workbench/config/task-schemas/toxic-spans-grounded-v1.yaml
+export_targets:
+- export_id: toxic_spans_grounded_export
+  output_namespace: workbench/exports/toxic-spans
+validation_gates: []

@@ -1,0 +1,43 @@
+benchmark_id: goemotions
+record_id_field: record_id
+dataset_label_fields:
+  - source_emotions
+target_label_fields:
+  - emotion_labels
+field_mappings:
+  - dataset_field: source_emotions
+    target_field: emotion_labels
+    mapping:
+      admiration: admiration
+      amusement: amusement
+      anger: anger
+      annoyance: annoyance
+      approval: approval
+      caring: caring
+      confusion: confusion
+      curiosity: curiosity
+      desire: desire
+      disappointment: disappointment
+      disapproval: disapproval
+      disgust: disgust
+      embarrassment: embarrassment
+      excitement: excitement
+      fear: fear
+      gratitude: gratitude
+      grief: grief
+      joy: joy
+      love: love
+      nervousness: nervousness
+      optimism: optimism
+      pride: pride
+      realization: realization
+      relief: relief
+      remorse: remorse
+      sadness: sadness
+      surprise: surprise
+      neutral: neutral
+    lossy: false
+    notes: >
+      Preserve the canonical 28-label GoEmotions vocabulary. Predicted label
+      sets must be unique and use only these identifiers. Empty prediction
+      sets are semantically distinct from parser failures.

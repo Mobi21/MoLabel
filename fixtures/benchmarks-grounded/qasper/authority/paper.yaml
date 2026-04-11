@@ -1,0 +1,20 @@
+benchmark_id: qasper
+paper_title: 'QASPER: A Dataset for Open-Domain Question Answering over Scientific
+  Papers'
+paper_url: https://arxiv.org/abs/2105.03011
+citation: Dasigi et al. (2021)
+publication_year: 2021
+dataset_name: QASPER
+dataset_url: https://arxiv.org/abs/2105.03011
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Scientific QA with supporting evidence and explicit unanswerable handling.
+original_task_definition: Answer paper questions using evidence spans or declare them
+  unanswerable when the paper does not contain sufficient evidence.
+original_metrics:
+- answer_f1
+- evidence_f1
+- joint_f1
+notes:
+- The committed slice uses representative synthetic examples matched to the benchmark
+  task contract.

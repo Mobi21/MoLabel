@@ -1,0 +1,16 @@
+benchmark_id: hatexplain
+source_files:
+  - data/raw/dataset.jsonl
+  - workbench/benchmarks/scenario.yaml
+  - workbench/benchmarks/paper.yaml
+  - workbench/benchmarks/label-map.yaml
+  - workbench/benchmarks/metrics.yaml
+  - workbench/benchmarks/baselines.yaml
+  - workbench/benchmarks/operator.yaml
+  - workbench/benchmarks/gold/paper-direct.jsonl
+  - workbench/benchmarks/gold/molabel-operated.jsonl
+  - workbench/benchmarks/human-labels/reviewer-ada.jsonl
+  - workbench/benchmarks/reviews/reviewer-noa.jsonl
+notes:
+  - Provisional authority provenance for the transitional grounded fixture.
+  - The canonical pack should later compute hashes during validation.

@@ -406,7 +406,7 @@ Every item from the PRD, ADRs, architecture specs, and AGENTS.md. Each item is g
 - [x] `SE-009` Same-profile multi-session handling: independent claims, draft last-write-wins, audit warning (source: session-and-identity.md, Same-Profile Multi-Session)
 - [x] `SE-010` Mission control reviewer visibility: active/idle/offline status based on last_active_at plus current queue positions for active reviewers (source: session-and-identity.md, Session Visibility; PRD 18.8)
 - [x] `SE-011` Application secret auto-generation on first launch, stored in workbench/.molabel/app_secret (source: session-and-identity.md)
-- [x] `SE-012` Network binding: configurable MOLABEL_HOST (0.0.0.0 default, 127.0.0.1 for single-user) (source: session-and-identity.md, Security)
+- [x] `SE-012` Network binding: configurable MOLABEL_HOST (`127.0.0.1` default, `0.0.0.0` by opt-in for LAN exposure) (source: session-and-identity.md, Security)
 
 ---
 

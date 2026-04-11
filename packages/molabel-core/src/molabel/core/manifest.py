@@ -174,18 +174,51 @@ def detect_conflicts(
                     )
                 )
 
-    # 3. Plugin availability (entry-point check)
-    from importlib.metadata import entry_points
+    # 3. Plugin availability (canonical plugin ID / capability checks)
+    available_plugins: set[str] = set()
+    available_loaders: set[str] = set()
+    available_task_types: set[str] = set()
+    try:
+        from molabel.core.plugins.discovery import discover_plugins
+        from molabel.core.plugins.registry import PluginRegistry
 
-    discovered = {ep.name for ep in entry_points(group="molabel.plugins")}
+        registry = discover_plugins(PluginRegistry())
+        available_plugins = set(registry.list_plugin_ids())
+        available_loaders = set(registry.list_data_loaders())
+        available_task_types = set(registry.list_task_types())
+    except Exception:
+        logger.exception("Failed to discover plugins during manifest validation")
+
     for plugin_id in manifest.enabled_plugins:
-        if plugin_id not in discovered:
+        if plugin_id not in available_plugins:
             conflicts.append(
                 ManifestConflict(
                     conflict_type=ConflictType.plugin_unavailable,
                     entity_type="plugin",
                     entity_id=plugin_id,
-                    message=f"Plugin entry point not found: {plugin_id}",
+                    message=f"Plugin not found: {plugin_id}",
+                )
+            )
+
+    for ds in manifest.datasets:
+        if ds.loader_plugin and ds.loader_plugin not in available_loaders:
+            conflicts.append(
+                ManifestConflict(
+                    conflict_type=ConflictType.plugin_unavailable,
+                    entity_type="dataset_loader",
+                    entity_id=ds.dataset_id,
+                    message=f"Loader plugin not found: {ds.loader_plugin}",
+                )
+            )
+
+    for ts in manifest.task_schemas:
+        if ts.task_type_plugin and ts.task_type_plugin not in available_task_types:
+            conflicts.append(
+                ManifestConflict(
+                    conflict_type=ConflictType.plugin_unavailable,
+                    entity_type="task_type",
+                    entity_id=ts.task_schema_id,
+                    message=f"Task-type plugin not found: {ts.task_type_plugin}",
                 )
             )
 

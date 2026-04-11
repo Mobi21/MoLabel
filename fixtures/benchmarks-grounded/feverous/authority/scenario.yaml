@@ -1,0 +1,55 @@
+benchmark_id: feverous
+track: grounded
+name: FEVEROUS Grounded Benchmark
+authority_pack: true
+reference_workspace_root: ../workbench
+current_labeling_engine: MiniMax 2.7
+benchmark_profiles:
+  - canonical
+  - operator-primary
+  - smoke
+description: >
+  A small redistributable FEVEROUS dev slice covering sentence, table, and
+  multi-hop verification. The benchmark compares paper-direct evidence-set
+  scoring with MoLabel-operated flattened evidence atoms.
+raw_format: jsonl
+source_path: workbench/benchmarks/splits/dev.jsonl
+loader_plugin: molabel.loaders.jsonl
+record_id_field: id
+task_schema_path: workbench/config/task-schemas/feverous-verification-v1.yaml
+workflow_path: workbench/workflows/live-cli-feverous-verification.yaml
+paper_metadata_path: workbench/benchmarks/paper.yaml
+label_map_path: workbench/benchmarks/label-map.yaml
+metrics_path: workbench/benchmarks/metrics.yaml
+baselines_path: workbench/benchmarks/baselines.yaml
+operator_path: workbench/benchmarks/operator.yaml
+gold_labels_path: workbench/benchmarks/gold/molabel-operated/dev.jsonl
+paper_gold_path: workbench/benchmarks/gold/paper-direct/dev.jsonl
+molabel_gold_path: workbench/benchmarks/gold/molabel-operated/dev.jsonl
+split_paths:
+  - workbench/benchmarks/splits/dev.jsonl
+human_label_paths:
+  - workbench/benchmarks/human-labels/reviewer-ira.jsonl
+review_paths:
+  - workbench/benchmarks/reviews/reviewer-jo.jsonl
+evaluation_modes:
+  - model
+  - workflow
+  - operator
+scoring_variants:
+  - paper_direct
+  - molabel_operated
+evaluation_fields:
+  - verdict
+  - evidence_atoms
+default_model_profile:
+  provider_type: anthropic
+  provider_name: MiniMax
+  model_identifier: minimax-2.7
+  sdk_stack: anthropic_sdk
+  agent_role: proposer
+requires_dataset_download: false
+redistribution_notes:
+  - The committed slice is a small curated subset of the public FEVEROUS dev set.
+  - Paper-direct evaluation keeps the official nested evidence-set structure.
+  - MoLabel-operated evaluation flattens evidence atoms for workflow scoring.

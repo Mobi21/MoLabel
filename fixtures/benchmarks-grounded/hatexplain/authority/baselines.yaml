@@ -1,0 +1,21 @@
+benchmark_id: hatexplain
+baselines:
+  - baseline_id: repo_reference_models
+    name: HateXplain Repository Reference Models
+    source: paper
+    mode: model
+    variant: paper_direct
+    split_id: test
+    metrics: {}
+    notes: The repository includes BERT and other reference training scripts.
+  - baseline_id: subset_oracle
+    name: HateXplain Curated Subset Oracle
+    source: molabel_local
+    mode: model
+    variant: paper_direct
+    split_id: test
+    metrics:
+      stance_macro_f1: 1.0
+      target_jaccard: 1.0
+      rationale_token_f1: 1.0
+    notes: Oracle score on the committed benchmark slice.

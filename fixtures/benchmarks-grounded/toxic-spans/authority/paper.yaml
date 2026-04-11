@@ -1,0 +1,12 @@
+benchmark_id: toxic-spans
+paper_title: 'SemEval-2021 Task 5: Toxic Spans Detection'
+paper_url: https://aclanthology.org/2022.acl-long.259/
+citation: Pavlopoulos et al. (2022)
+publication_year: 2022
+dataset_name: Toxic Spans
+dataset_url: https://aclanthology.org/2022.acl-long.259/
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Character-grounded toxic span detection.
+original_task_definition: Mark the toxic character spans in the post without inventing
+  unsupported rationale boundaries.

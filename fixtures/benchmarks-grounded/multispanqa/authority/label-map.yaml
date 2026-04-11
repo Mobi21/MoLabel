@@ -1,0 +1,14 @@
+benchmark_id: multispanqa
+record_id_field: record_id
+dataset_label_fields:
+- answer_spans
+target_label_fields:
+- spans
+field_mappings:
+- dataset_field: answer_spans
+  target_field: spans
+  mapping:
+    structure: discontiguous_span_annotation
+  lossy: false
+  notes: MultiSpanQA answers remain ordered discontiguous segments inside one span
+    artifact.

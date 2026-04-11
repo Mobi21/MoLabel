@@ -1,0 +1,13 @@
+benchmark_id: goemotions
+dataset_name: GoEmotions
+paper_url: https://aclanthology.org/2020.acl-main.372/
+dataset_url: https://github.com/google-research/google-research/tree/master/goemotions
+source_repository_url: https://github.com/google-research/google-research
+dataset_license: Apache-2.0
+repository_license: Apache-2.0
+redistribution_status: allowed
+packaging_policy: vendorable_with_attribution
+raw_source_policy:
+  canonical: official GoEmotions test split semantics
+  operator_primary: curated balanced slice covering single-label, multi-label, neutral, and disagreement cases
+  smoke: tiny regression slice only

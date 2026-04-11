@@ -1,0 +1,61 @@
+benchmark_id: hatexplain
+track: grounded
+scenario_id: hatexplain
+name: HateXplain Grounded Benchmark
+authority_pack: true
+reference_workspace_root: ../workbench
+current_labeling_engine: MiniMax 2.7
+benchmark_profiles:
+  - canonical
+  - operator-primary
+  - smoke
+description: >
+  A paper-faithful explainable hate-speech benchmark built from a small public
+  subset of HateXplain. The subset preserves majority-vote labels, target
+  communities, and token-level rationale masks.
+raw_format: jsonl
+source_path: data/raw/dataset.jsonl
+loader_plugin: molabel.loaders.jsonl
+record_id_field: post_id
+task_schema_path: workbench/config/task-schemas/hatexplain-v1.yaml
+workflow_path: workbench/workflows/grounded-cli-hatexplain.yaml
+paper_metadata_path: workbench/benchmarks/paper.yaml
+label_map_path: workbench/benchmarks/label-map.yaml
+metrics_path: workbench/benchmarks/metrics.yaml
+baselines_path: workbench/benchmarks/baselines.yaml
+operator_path: workbench/benchmarks/operator.yaml
+gold_labels_path: workbench/benchmarks/gold/molabel-operated.jsonl
+paper_gold_path: workbench/benchmarks/gold/paper-direct.jsonl
+molabel_gold_path: workbench/benchmarks/gold/molabel-operated.jsonl
+split_paths:
+  - workbench/benchmarks/splits/test.jsonl
+human_label_paths:
+  - workbench/benchmarks/human-labels/reviewer-ada.jsonl
+review_paths:
+  - workbench/benchmarks/reviews/reviewer-noa.jsonl
+evaluation_modes:
+  - model
+  - workflow
+  - operator
+scoring_variants:
+  - paper_direct
+  - molabel_operated
+default_model_profile:
+  provider_type: anthropic
+  provider_name: MiniMax
+  model_identifier: minimax-2.7
+  sdk_stack: anthropic_sdk
+  agent_role: proposer
+evaluation_fields:
+  - stance_label
+  - target_communities
+  - rationale_token_mask
+requires_dataset_download: false
+redistribution_notes:
+  - The upstream repository license is MIT.
+  - Because the dataset contains social-media text, redistribution still requires review.
+subset_policy:
+  source_split: test
+  selection_strategy: curated-balanced
+  subset_size: 8
+expected_intentional_errors: 2

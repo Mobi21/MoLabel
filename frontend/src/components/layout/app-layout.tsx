@@ -2,7 +2,6 @@ import { Outlet } from 'react-router-dom'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { TopBar } from '@/components/layout/top-bar'
-import { AssistantPanel } from '@/components/assistant/assistant-panel'
 
 export function AppLayout() {
   return (
@@ -14,7 +13,6 @@ export function AppLayout() {
           <Outlet />
         </div>
       </SidebarInset>
-      <AssistantPanel />
     </SidebarProvider>
   )
 }

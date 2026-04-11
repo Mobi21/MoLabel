@@ -1,0 +1,13 @@
+benchmark_id: hatexplain
+dataset_name: HateXplain
+paper_url: https://arxiv.org/abs/2012.10289
+dataset_url: https://github.com/hate-alert/HateXplain
+source_repository_url: https://github.com/hate-alert/HateXplain
+dataset_license: license ambiguity under review
+repository_license: MIT
+redistribution_status: review_required
+packaging_policy: fetch_first_until_license_is_reconciled
+raw_source_policy:
+  canonical: preserve annotator votes, communities, and rationale structure
+  operator_primary: fixed-cost curated slice with provenance lock
+  smoke: tiny regression slice only

@@ -1,0 +1,19 @@
+benchmark_id: msmarco
+baselines:
+- baseline_id: oracle
+  name: MS MARCO Oracle
+  source: molabel_local
+  mode: model
+  variant: paper_direct
+  split_id: dev
+  metrics:
+    mrr_at_5: 1.0
+  notes: Places the first relevant passage first for every query.
+- baseline_id: reverse_rank_floor
+  name: Reverse Rank Floor
+  source: molabel_local
+  mode: model
+  variant: molabel_operated
+  split_id: dev
+  metrics: {}
+  notes: Ranks the known relevant passage last within the fixed depth.

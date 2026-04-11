@@ -1,0 +1,7 @@
+external_id,submitted_at,channel,customer_tier,subject,ticket_body,agent_notes,attachment_hint
+sup-001,2026-02-01T09:14:00Z,email,enterprise,"billing?? invoice still wrong","hi team - invoice INV-8821 still shows 17 seats, we cut to 12 last wk. also charged twice. pls fix asap <br> finance is blocked.","customer pasted html from email thread","invoice-screenshot.png"
+sup-002,2026-02-01T10:02:00Z,chat,pro,"login loop on ios","cant get in after latest ios update :( app says ""session expired"" then loops back to sign in. tried wifi + cellular. still broken broken.","duplicate phrase likely copied from live chat",""
+sup-003,2026-02-01T10:33:00Z,web,free,"feature request / maybe bug","not sure if bug or missing feature but export only gives csv, need parquet or duckdb. dataset has 4.2m rows so csv is kinda unusable.","contains mixed product feedback and request","screen-recording.mov"
+sup-004,2026-02-01T11:20:00Z,email,enterprise,"security concern","we found an ex-contractor account still active. pls disable NOW. there may be client PHI in old projects. legal asked me to escalate immediately.","all-caps urgency in original thread","audit-log.txt"
+sup-005,2026-02-01T12:08:00Z,chat,pro,"refund question","hola, pedi cancelacion hace 9 dias y no veo el reembolso. el bot me mando al FAQ 3 veces. necesito humano por favor.","language mixing; route to bilingual human if possible",""
+sup-006,2026-02-01T12:55:00Z,web,free,"docs typo","tiny thing: onboarding doc says `molabel stauts` lol. probably meant status. no rush.","low-risk content with obvious typo",""

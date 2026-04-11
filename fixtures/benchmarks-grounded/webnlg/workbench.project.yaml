@@ -1,0 +1,19 @@
+workspace_id: 2d03b45d-e69c-589e-aeb1-ea2b8c8feca1
+workspace_name: WebNLG Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: webnlg_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: webnlg_grounded_v1
+  definition_path: workbench/config/task-schemas/webnlg-grounded-v1.yaml
+export_targets:
+- export_id: webnlg_grounded_export
+  output_namespace: workbench/exports/webnlg
+validation_gates: []

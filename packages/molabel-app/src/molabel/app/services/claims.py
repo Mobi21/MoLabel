@@ -49,6 +49,17 @@ IDLE_THRESHOLD_MINUTES: int = 30
 # deployments. For multi-worker, move to the database or a shared cache.
 _expired_claim_notifications: dict[str, list[dict[str, Any]]] = {}
 
+_REVIEW_LEAK_FIELDS = frozenset(
+    {
+        "source_label",
+        "gold_label",
+        "gold_labels",
+        "ground_truth",
+        "ground_truth_label",
+        "ground_truth_labels",
+    }
+)
+
 
 def reset_expired_notifications() -> None:
     """Clear the in-memory notification store (useful for testing)."""
@@ -112,6 +123,42 @@ def _normalize_review_decision(
     return ReviewDecision(decision)
 
 
+def _parse_json_object(raw: Any) -> dict[str, Any] | None:
+    """Best-effort parse for JSON object columns."""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _scrub_review_value(raw: Any) -> Any:
+    """Recursively remove obvious gold-bearing fields from reviewer-visible data."""
+    if isinstance(raw, dict):
+        scrubbed: dict[str, Any] = {}
+        for key, value in raw.items():
+            if key.lower() in _REVIEW_LEAK_FIELDS:
+                continue
+            scrubbed[key] = _scrub_review_value(value)
+        return scrubbed
+    if isinstance(raw, list):
+        return [_scrub_review_value(value) for value in raw]
+    return raw
+
+
+def _extract_record_text(payload: dict[str, Any] | None) -> str | None:
+    """Return the best reviewer-facing text representation for a record payload."""
+    if not isinstance(payload, dict):
+        return None
+    for key in ("text", "content", "message", "review", "body", "input"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    rendered = json.dumps(payload, sort_keys=True, ensure_ascii=True)
+    return rendered if rendered != "{}" else None
+
+
 def _resolve_task_schema_version(conn, task_schema_id: str) -> int:
     """Best-effort lookup of the task schema version for review events."""
     try:
@@ -133,6 +180,146 @@ def _resolve_task_schema_version(conn, task_schema_id: str) -> int:
         return 1
 
     return int(row[0])
+
+
+def _normalize_submission_labels(
+    conn,
+    task_schema_id: str,
+    labels: dict[str, Any],
+) -> dict[str, Any]:
+    """Normalize submitted labels against the task schema's field definitions.
+
+    Performs case-insensitive matching for categorical/ordinal fields
+    and returns canonical form.  Falls through silently if the schema
+    or field definitions cannot be loaded.
+    """
+    if not labels:
+        return labels
+
+    try:
+        row = conn.execute(
+            text(
+                "SELECT label_fields FROM task_schemas "
+                "WHERE id = :task_schema_id LIMIT 1"
+            ),
+            {"task_schema_id": task_schema_id},
+        ).first()
+    except SQLAlchemyError:
+        return labels
+
+    if row is None or row[0] is None:
+        return labels
+
+    raw = row[0]
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return labels
+
+    if not isinstance(raw, list):
+        return labels
+
+    from molabel.core.agents.output_validator import _normalize_labels
+    from molabel.core.types import LabelFieldDefinition
+
+    field_defs: list[LabelFieldDefinition] = []
+    for entry in raw:
+        if isinstance(entry, dict):
+            try:
+                field_defs.append(LabelFieldDefinition(**entry))
+            except Exception:
+                continue
+
+    if not field_defs:
+        return labels
+
+    normalized, _ = _normalize_labels(labels, field_defs)
+    return normalized if normalized else labels
+
+
+def _resolve_effective_submission_labels(
+    conn,
+    *,
+    task_id: uuid.UUID,
+    explicit_labels: dict[str, Any],
+    decision: ReviewDecision | None,
+) -> dict[str, Any]:
+    """Resolve the labels that should be persisted for a review submission."""
+    if explicit_labels:
+        return explicit_labels
+
+    if decision != ReviewDecision.accept_ai:
+        return explicit_labels
+
+    row = conn.execute(
+        text("SELECT agent_output_ids FROM review_tasks WHERE id = :task_id"),
+        {"task_id": str(task_id)},
+    ).first()
+    if row is None or not row[0]:
+        return explicit_labels
+
+    try:
+        output_ids = json.loads(str(row[0]))
+    except (json.JSONDecodeError, TypeError):
+        return explicit_labels
+
+    if not isinstance(output_ids, list) or not output_ids:
+        return explicit_labels
+
+    output_row = conn.execute(
+        text("SELECT labels FROM agent_outputs WHERE id = :id LIMIT 1"),
+        {"id": str(output_ids[0])},
+    ).first()
+    if output_row is None:
+        return explicit_labels
+
+    labels = output_row[0]
+    if isinstance(labels, str):
+        try:
+            labels = json.loads(labels)
+        except (json.JSONDecodeError, TypeError):
+            return explicit_labels
+    return labels if isinstance(labels, dict) else explicit_labels
+
+
+def _get_record_context(
+    conn,
+    record_id: str,
+) -> dict[str, Any]:
+    """Fetch reviewer-safe record context for a claimed task."""
+    try:
+        row = conn.execute(
+            text(
+                """
+                SELECT external_id, stable_fields, payload
+                FROM records
+                WHERE id = :record_id
+                LIMIT 1
+                """
+            ),
+            {"record_id": record_id},
+        ).first()
+    except SQLAlchemyError:
+        row = None
+
+    if row is None:
+        return {
+            "record_external_id": None,
+            "record_view": None,
+            "record_text": None,
+        }
+
+    payload = _scrub_review_value(_parse_json_object(row[2]))
+
+    return {
+        "record_external_id": str(row[0]) if row[0] else None,
+        "record_view": {
+            "stable_fields": _scrub_review_value(_parse_json_object(row[1])),
+            "payload": payload,
+        },
+        "record_text": _extract_record_text(payload),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -294,9 +481,15 @@ def submit_review(
     """
     now = datetime.now(UTC).isoformat()
     normalized_decision = _normalize_review_decision(decision)
-    labels_json = json.dumps(labels)
 
     with engine.begin() as conn:
+        effective_labels = _resolve_effective_submission_labels(
+            conn,
+            task_id=task_id,
+            explicit_labels=labels,
+            decision=normalized_decision,
+        )
+        labels_json = json.dumps(effective_labels)
         result = conn.execute(
             text(
                 f"""
@@ -323,6 +516,10 @@ def submit_review(
             return None
 
         task_schema_id = str(row[3])
+        effective_labels = _normalize_submission_labels(
+            conn, task_schema_id, effective_labels,
+        )
+        labels_json = json.dumps(effective_labels)
         review_event_id = uuid.uuid4()
         task_schema_version = _resolve_task_schema_version(conn, task_schema_id)
         decision_value = (
@@ -379,6 +576,31 @@ def submit_review(
                 "workspace_id": str(row[18]),
             },
         )
+
+        if effective_labels:
+            try:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE records
+                        SET latest_label = :latest_label,
+                            label_count = COALESCE(label_count, 0) + 1,
+                            updated_at = :updated_at
+                        WHERE id = :record_id
+                        """
+                    ),
+                    {
+                        "latest_label": labels_json,
+                        "updated_at": now,
+                        "record_id": str(row[2]),
+                    },
+                )
+            except SQLAlchemyError:
+                logger.debug(
+                    "Skipping record label projection for review task %s; "
+                    "records table unavailable",
+                    task_id,
+                )
 
         return _row_to_task_dict(row)
 
@@ -848,6 +1070,7 @@ def apply_blind_review_policy(
     ai_revealed = task_dict.get("ai_revealed", False)
 
     with engine.connect() as conn:
+        task_dict.update(_get_record_context(conn, record_id))
         policy = _get_blind_review_policy(conn, task_schema_id)
 
         if policy == BlindReviewPolicy.no_agent:
@@ -957,6 +1180,7 @@ def reveal_ai(
             updated_task["record_id"],
             updated_task["task_schema_id"],
         )
+        updated_task.update(_get_record_context(conn, updated_task["record_id"]))
 
     updated_task["agent_output"] = agent_output
     updated_task["blind_review_policy"] = policy.value

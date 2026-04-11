@@ -1,0 +1,19 @@
+workspace_id: 567f6bba-4bd5-5971-868a-9b4b47522cb8
+workspace_name: MS MARCO Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: msmarco_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: msmarco_grounded_v1
+  definition_path: workbench/config/task-schemas/msmarco-grounded-v1.yaml
+export_targets:
+- export_id: msmarco_grounded_export
+  output_namespace: workbench/exports/msmarco
+validation_gates: []

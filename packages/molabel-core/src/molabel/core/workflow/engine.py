@@ -694,6 +694,7 @@ def create_default_registry() -> StepExecutorRegistry:
 
     # Agent steps
     registry.register("agent_run", AgentRunExecutor)
+    registry.register("agent_labeling", AgentRunExecutor)  # common alias
     registry.register("agent_compare", AgentCompareExecutor)
 
     # Human steps

@@ -1,0 +1,19 @@
+workspace_id: c1b0d150-0000-4c1c-8d50-000000000150
+workspace_name: CLINC150 Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: clinc150_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: clinc150_grounded_v1
+  definition_path: workbench/config/task-schemas/clinc150-grounded-v1.yaml
+export_targets:
+- export_id: clinc150_grounded_export
+  output_namespace: workbench/exports/clinc150-grounded
+validation_gates: []

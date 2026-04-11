@@ -22,7 +22,6 @@ from pathlib import Path
 # App Secret Management (SE-011)
 # ---------------------------------------------------------------------------
 
-_DEFAULT_SECRET_DIR = Path("workbench/.molabel")
 _SECRET_FILENAME = "app_secret"
 _SECRET_LENGTH = 64  # bytes of randomness
 

@@ -1,19 +1,17 @@
 workspace_id: fixture-text-classification
 workspace_name: Text Classification Fixture
 core_version: "0.1"
-enabled_plugins:
-  - molabel.plugins.text_labeling
+enabled_plugins: []
 datasets:
   - dataset_id: sample_texts
     source_paths:
       - data/samples.jsonl
-    loader_plugin: molabel.plugins.text_labeling
+    loader_plugin: molabel.loaders.jsonl
     record_kind: text
     canonical_id_strategy: source_record_id
     indexing_mode: projection
 task_schemas:
   - task_schema_id: sentiment_review_v1
-    task_type_plugin: molabel.plugins.text_labeling
     definition_path: config/sentiment_review_v1.yaml
 export_targets:
   - export_id: sentiment_export

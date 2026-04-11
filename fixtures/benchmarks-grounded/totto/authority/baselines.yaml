@@ -1,0 +1,19 @@
+benchmark_id: totto
+baselines:
+- baseline_id: oracle
+  name: ToTTo Oracle
+  source: molabel_local
+  mode: model
+  variant: paper_direct
+  split_id: dev
+  metrics:
+    grounded_generation_score: 1.0
+  notes: Exact replay of the paper-direct gold.
+- baseline_id: unsupported_floor
+  name: Unsupported Claim Floor
+  source: molabel_local
+  mode: model
+  variant: molabel_operated
+  split_id: dev
+  metrics: {}
+  notes: Drops anchors and required structured fields to expose grounding failures.

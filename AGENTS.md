@@ -4,7 +4,12 @@ Project-level guidance for AI agents working in this repository.
 
 ## Project Overview
 
-MoLabel is a local-first, GUI-first, modular data operations workbench. The canonical product specification lives in `docs/prd/agentic-data-operations-workbench-prd.md`.
+MoLabel is a local-first, agent-first, CLI-primary data operations workbench. The canonical product specification lives in `docs/prd/agentic-data-operations-workbench-prd.md`.
+The intended operating model is:
+
+- external agents use the public `molabel` CLI as the primary interface,
+- the backend API stays behind that CLI for normal project work,
+- the GUI is the manual control room, inspection surface, and review interface.
 
 ## Repository Layout
 
@@ -16,8 +21,8 @@ This is a uv workspace monorepo with four Python packages, a React frontend, and
 | molabel-app | `packages/molabel-app/` | `molabel.app` | FastAPI web application: REST API, backend logic |
 | molabel-plugins | `packages/molabel-plugins/` | `molabel.plugins` | Built-in task type plugins (text labeling, chat review, etc.) |
 | molabel-depolarize | `packages/molabel-depolarize/` | `molabel_depolarize` | DePolarize reference implementation (separate namespace) |
-| frontend | `frontend/` | N/A (standalone) | React frontend: workflow builder, data explorer, review UI, all screens |
-| tauri-shell | `src-tauri/` | N/A (Rust) | Tauri desktop app shell: window management, sidecar, system tray |
+| frontend | `frontend/` | N/A (standalone) | Work-in-progress React control-room UI; not yet ready for general use |
+| tauri-shell | `src-tauri/` | N/A (Rust) | Work-in-progress Tauri desktop shell: window management, sidecar, system tray |
 
 ## Module Boundary Rules
 

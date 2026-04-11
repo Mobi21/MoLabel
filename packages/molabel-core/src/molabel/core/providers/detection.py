@@ -190,7 +190,10 @@ class ProviderDetector:
         if provider_type == ProviderType.anthropic:
             from molabel.core.providers.anthropic_adapter import AnthropicAdapter
 
-            adapter = AnthropicAdapter(auth_ref=auth_ref or "ANTHROPIC_API_KEY")
+            adapter = AnthropicAdapter(
+                auth_ref=auth_ref or "ANTHROPIC_API_KEY",
+                base_url=base_url or "https://api.anthropic.com/v1",
+            )
             return await adapter._async_health_check()
 
         if provider_type == ProviderType.openrouter:

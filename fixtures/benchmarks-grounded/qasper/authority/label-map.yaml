@@ -1,0 +1,29 @@
+benchmark_id: qasper
+record_id_field: record_id
+dataset_label_fields:
+- answer
+- evidence
+- unanswerable
+target_label_fields:
+- qa_bundle
+field_mappings:
+- dataset_field: answer
+  target_field: qa_bundle
+  mapping:
+    structure: answer_text_plus_acceptables
+  lossy: false
+  notes: Answer text is preserved with acceptable-answer aliases.
+- dataset_field: evidence
+  target_field: qa_bundle
+  mapping:
+    structure: supporting_fact_pairs
+  lossy: false
+  notes: Evidence remains explicit as stable paper sentence ids.
+- dataset_field: unanswerable
+  target_field: qa_bundle
+  mapping:
+    'false': false
+    'true': true
+  lossy: false
+  notes: Unanswerable handling is preserved instead of being collapsed into blank-answer
+    behavior.

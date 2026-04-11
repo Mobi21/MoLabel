@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom'
-import { Sun, Moon, MessageSquare } from 'lucide-react'
+import { Sun, Moon } from 'lucide-react'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
@@ -46,7 +46,7 @@ function getBreadcrumb(pathname: string): string {
 
 export function TopBar() {
   const location = useLocation()
-  const { theme, toggleTheme, toggleAssistant } = useUIStore()
+  const { theme, toggleTheme } = useUIStore()
   const breadcrumb = getBreadcrumb(location.pathname)
 
   return (
@@ -76,21 +76,6 @@ export function TopBar() {
           <TooltipContent>
             {theme === 'dark' ? 'Light mode' : 'Dark mode'}
           </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={toggleAssistant}
-            >
-              <MessageSquare className="h-4 w-4" />
-              <span className="sr-only">Toggle assistant</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>AI Assistant</TooltipContent>
         </Tooltip>
 
         <DropdownMenu>

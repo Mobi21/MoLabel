@@ -1,0 +1,19 @@
+benchmark_id: evidence-inference
+paper_title: 'Evidence Inference 2.0: More Data, Better Models'
+paper_url: https://aclanthology.org/2020.bionlp-1.13/
+citation: Lehman et al. (2020)
+publication_year: 2020
+dataset_name: Evidence Inference 2.0
+dataset_url: https://aclanthology.org/2020.bionlp-1.13/
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Infer intervention effect direction with grouped rationale evidence.
+original_task_definition: Given an intervention, comparator, and outcome, predict
+  the effect direction and cite the supporting rationale sentences.
+original_metrics:
+- macro_f1
+- evidence_precision
+- evidence_recall
+notes:
+- The committed slice uses representative synthetic examples matched to the benchmark
+  task contract.

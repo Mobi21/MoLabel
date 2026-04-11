@@ -1,0 +1,19 @@
+workspace_id: 82a8b85d-afbb-5137-bb09-f6e0d77cfd45
+workspace_name: HotpotQA Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: hotpotqa_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: hotpotqa_grounded_v1
+  definition_path: workbench/config/task-schemas/hotpotqa-grounded-v1.yaml
+export_targets:
+- export_id: hotpotqa_grounded_export
+  output_namespace: workbench/exports/hotpotqa
+validation_gates: []

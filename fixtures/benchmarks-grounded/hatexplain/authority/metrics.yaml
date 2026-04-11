@@ -1,0 +1,75 @@
+benchmark_id: hatexplain
+aggregation: weighted_mean
+primary_metric_id: stance_macro_f1
+metrics:
+  - metric_id: stance_macro_f1
+    name: Stance Macro F1
+    metric_type: macro_f1
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+      - molabel_operated
+    fields:
+      - stance_label
+    weight: 1.0
+  - metric_id: target_jaccard
+    name: Target Community Jaccard
+    metric_type: jaccard
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+      - molabel_operated
+    fields:
+      - target_communities
+    weight: 0.5
+  - metric_id: rationale_token_f1
+    name: Rationale Token F1
+    metric_type: token_mask_f1
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+      - molabel_operated
+    fields:
+      - rationale_token_mask
+    weight: 0.5
+  - metric_id: operational_exact_match
+    name: Operational Exact Match
+    metric_type: exact_match
+    modes:
+      - workflow
+      - operator
+    variants:
+      - molabel_operated
+    fields:
+      - stance_label
+      - target_communities
+      - rationale_token_mask
+    weight: 0.5
+tax_definitions:
+  - tax_id: model_tax
+    name: Model Tax
+    minuend_mode: model
+    minuend_variant: paper_direct
+    subtrahend_mode: model
+    subtrahend_variant: molabel_operated
+  - tax_id: workflow_tax
+    name: Workflow Tax
+    minuend_mode: model
+    minuend_variant: molabel_operated
+    subtrahend_mode: workflow
+    subtrahend_variant: molabel_operated
+  - tax_id: operator_tax
+    name: Operator Tax
+    minuend_mode: workflow
+    minuend_variant: molabel_operated
+    subtrahend_mode: operator
+    subtrahend_variant: molabel_operated

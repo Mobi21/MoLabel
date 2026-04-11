@@ -1,0 +1,27 @@
+benchmark_id: hatexplain
+record_id_field: post_id
+dataset_label_fields:
+  - annotator_votes
+  - target_communities
+  - majority_rationale_mask
+target_label_fields:
+  - stance_label
+  - target_communities
+  - rationale_token_mask
+  - explanation_notes
+field_mappings:
+  - dataset_field: annotator_votes
+    target_field: stance_label
+    mapping:
+      strategy: majority_vote
+    notes: Use majority-vote label from the curated split artifact.
+  - dataset_field: target_communities
+    target_field: target_communities
+    mapping:
+      strategy: majority_vote_union
+    notes: Preserve the union of majority-vote target communities.
+  - dataset_field: majority_rationale_mask
+    target_field: rationale_token_mask
+    mapping:
+      strategy: preserve_binary_mask
+    notes: Preserve token alignment from the curated rationale mask.

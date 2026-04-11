@@ -1,0 +1,19 @@
+workspace_id: 6194688a-c804-5e7a-bd07-3a64ef64748b
+workspace_name: DocVQA Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: docvqa_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: docvqa_grounded_v1
+  definition_path: workbench/config/task-schemas/docvqa-grounded-v1.yaml
+export_targets:
+- export_id: docvqa_grounded_export
+  output_namespace: workbench/exports/docvqa
+validation_gates: []

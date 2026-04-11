@@ -1,0 +1,28 @@
+benchmark_id: banking77
+paper_title: "Efficient Intent Detection with Dual Sentence Encoders"
+paper_url: https://aclanthology.org/2020.nlp4convai-1.5/
+citation: >
+  Casanueva, Temčinas, Gerz, Henderson, Vulić. Efficient Intent Detection with
+  Dual Sentence Encoders. NLP4ConvAI 2020.
+publication_year: 2020
+dataset_name: BANKING77
+dataset_url: https://github.com/PolyAI-LDN/task-specific-datasets
+source_repository_url: https://github.com/PolyAI-LDN/task-specific-datasets
+dataset_license: MIT
+repository_license: MIT
+redistribution_status: allowed
+task_summary: >
+  Fine-grained single-label intent classification for online banking
+  customer-service queries over a closed label set of 77 intents.
+original_task_definition: >
+  Predict one BANKING77 intent for each customer utterance using the
+  canonical label space.
+original_metrics:
+  - accuracy
+  - macro F1
+notes:
+  - Full dataset structure is 77 fine-grained banking intents with 13,083 utterances.
+  - Official split is 10,003 train / 3,080 test.
+  - This fixture ships only a small curated subset of representative utterances,
+    biased towards near-neighbor intent confusions for the operator benchmark.
+  - The fixture slice is authored in house and does not redistribute the upstream text.

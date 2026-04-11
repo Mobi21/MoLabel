@@ -1,0 +1,20 @@
+benchmark_id: docvqa
+record_id_field: record_id
+dataset_label_fields:
+- answers
+- support_anchors
+target_label_fields:
+- qa_bundle
+field_mappings:
+- dataset_field: answers
+  target_field: qa_bundle
+  mapping:
+    structure: qa_answers
+  lossy: false
+  notes: Paper-direct scoring uses answer strings only.
+- dataset_field: support_anchors
+  target_field: qa_bundle
+  mapping:
+    structure: qa_supporting_facts
+  lossy: false
+  notes: MoLabel-operated scoring adds document-grounding anchors.

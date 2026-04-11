@@ -1,0 +1,12 @@
+benchmark_id: cuad
+paper_title: 'CUAD: An Expert-Annotated NLP Dataset for Legal Contract Review'
+paper_url: https://arxiv.org/abs/2103.06268
+citation: Hendrycks et al. (2021)
+publication_year: 2021
+dataset_name: CUAD
+dataset_url: https://arxiv.org/abs/2103.06268
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Legal clause extraction with stable source-grounded offsets.
+original_task_definition: Extract the contract clause span that answers the clause
+  type query.

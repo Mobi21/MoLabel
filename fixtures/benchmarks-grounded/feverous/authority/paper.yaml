@@ -1,0 +1,27 @@
+benchmark_id: feverous
+paper_title: "FEVEROUS: Fact Extraction and VERification Over Unstructured and Structured information"
+paper_url: https://aclanthology.org/2021.fever-1.1.pdf
+citation: "Aly et al., FEVEROUS: Fact Extraction and VERification Over Unstructured and Structured information, NeurIPS 2021 Dataset and Benchmarks."
+publication_year: 2021
+dataset_name: FEVEROUS
+dataset_url: https://fever.ai/dataset/feverous.html
+source_repository_url: https://github.com/Raldir/FEVEROUS
+dataset_license: Creative Commons Attribution-ShareAlike 3.0 / Wikipedia license terms
+repository_license: Apache-2.0
+redistribution_status: subset_allowed
+task_summary: >
+  Verify claims against Wikipedia sentences and table cells, returning
+  SUPPORTS, REFUTES, or NOT ENOUGH INFO.
+original_task_definition: >
+  A prediction is correct only if the verdict is correct and at least one
+  complete gold evidence set is contained in the predicted evidence.
+original_metrics:
+  - label accuracy
+  - evidence precision
+  - evidence recall
+  - evidence F1
+  - FEVEROUS score
+notes:
+  - FEVEROUS claims are annotated with evidence from sentences and/or table cells.
+  - The paper-direct score is captured exactly in the benchmark test harness.
+  - This repository only checks in a small curated dev subset.

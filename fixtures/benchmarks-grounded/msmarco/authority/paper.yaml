@@ -1,0 +1,17 @@
+benchmark_id: msmarco
+paper_title: 'MS MARCO: A Human Generated MAchine Reading COmprehension Dataset'
+paper_url: https://arxiv.org/abs/1611.09268
+citation: Nguyen et al. (2016)
+publication_year: 2016
+dataset_name: MS MARCO
+dataset_url: https://arxiv.org/abs/1611.09268
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Passage ranking scored primarily with reciprocal rank.
+original_task_definition: Rank passages for each query with reciprocal-rank emphasis
+  on placing the first relevant passage early.
+original_metrics:
+- MRR@10
+notes:
+- The committed slice uses representative synthetic examples matched to the benchmark
+  task contract.

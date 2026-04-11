@@ -1,0 +1,11 @@
+benchmark_id: evidence-inference
+dataset_name: Evidence Inference 2.0
+paper_url: https://aclanthology.org/2020.bionlp-1.13/
+dataset_url: https://aclanthology.org/2020.bionlp-1.13/
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+packaging_policy: synthetic_slice_only_pending_upstream_review
+raw_source_policy:
+  canonical: Paper-faithful synthetic slice with explicit provenance notes.
+  operator_primary: Curated benchmark subset small enough for repeated CLI runs.
+  smoke: Tiny regression subset only.

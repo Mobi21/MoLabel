@@ -1,0 +1,72 @@
+benchmark_id: totto
+aggregation: weighted_mean
+primary_metric_id: grounded_generation_score
+metrics:
+- metric_id: grounded_generation_score
+  name: Grounded Generation Score
+  metric_type: grounded_generation_score
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - generation
+  metric_options:
+    required_fields: &id001
+    - summary
+  weight: 1.0
+- metric_id: source_coverage
+  name: Source Coverage
+  metric_type: source_coverage
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - generation
+  metric_options:
+    required_fields: *id001
+  weight: 0.0
+- metric_id: unsupported_content_rate
+  name: Unsupported Content Rate
+  metric_type: unsupported_content_rate
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - generation
+  metric_options:
+    required_fields: *id001
+  weight: 0.0
+tax_definitions:
+- tax_id: model_tax
+  name: Model Tax
+  minuend_mode: model
+  minuend_variant: paper_direct
+  subtrahend_mode: model
+  subtrahend_variant: molabel_operated
+  notes: Gap between paper-direct and MoLabel-operated scoring.
+- tax_id: workflow_tax
+  name: Workflow Tax
+  minuend_mode: model
+  minuend_variant: molabel_operated
+  subtrahend_mode: workflow
+  subtrahend_variant: molabel_operated
+  notes: Gap introduced by workflow execution.
+- tax_id: operator_tax
+  name: Operator Tax
+  minuend_mode: workflow
+  minuend_variant: molabel_operated
+  subtrahend_mode: operator
+  subtrahend_variant: molabel_operated
+  notes: Gap introduced by the external CLI operator.

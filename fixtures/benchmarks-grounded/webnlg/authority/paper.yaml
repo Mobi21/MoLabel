@@ -1,0 +1,12 @@
+benchmark_id: webnlg
+paper_title: 'The WebNLG Challenge: Generating Text from RDF Data'
+paper_url: https://aclanthology.org/W17-3518/
+citation: Gardent et al. (2017)
+publication_year: 2017
+dataset_name: WebNLG
+dataset_url: https://aclanthology.org/W17-3518/
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Triple-grounded data-to-text generation.
+original_task_definition: Generate a verbalization supported by the provided source
+  triples only.

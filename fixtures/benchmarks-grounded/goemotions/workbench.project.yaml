@@ -1,0 +1,19 @@
+workspace_id: 9e0e0027-0000-4e27-8e27-000000000027
+workspace_name: GoEmotions Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: goemotions_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: goemotions_grounded_v1
+  definition_path: workbench/config/task-schemas/goemotions-grounded-v1.yaml
+export_targets:
+- export_id: goemotions_grounded_export
+  output_namespace: workbench/exports/goemotions-grounded
+validation_gates: []

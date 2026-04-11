@@ -1,0 +1,18 @@
+benchmark_id: beir
+source_files:
+- workbench/benchmarks/scenario.yaml
+- workbench/benchmarks/paper.yaml
+- workbench/benchmarks/label-map.yaml
+- workbench/benchmarks/metrics.yaml
+- workbench/benchmarks/baselines.yaml
+- workbench/benchmarks/operator.yaml
+- workbench/benchmarks/splits/dev.jsonl
+- workbench/benchmarks/human-labels/reviewer-human.jsonl
+- workbench/benchmarks/reviews/reviewer-expert.jsonl
+- workbench/config/task-schemas/beir-grounded-v1.yaml
+- workbench/workflows/beir-grounded.yaml
+notes:
+- Provisional authority provenance for the grounded beir fixture.
+- The committed records are representative synthetic examples matched to the benchmark
+  task contract.
+- The canonical pack can later add file hashes during validation.

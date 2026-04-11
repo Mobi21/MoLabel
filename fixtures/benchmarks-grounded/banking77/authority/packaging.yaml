@@ -1,0 +1,13 @@
+benchmark_id: banking77
+dataset_name: BANKING77
+paper_url: https://aclanthology.org/2020.nlp4convai-1.5/
+dataset_url: https://github.com/PolyAI-LDN/task-specific-datasets
+source_repository_url: https://github.com/PolyAI-LDN/task-specific-datasets
+dataset_license: MIT
+repository_license: MIT
+redistribution_status: allowed
+packaging_policy: vendorable_with_attribution
+raw_source_policy:
+  canonical: official BANKING77 test split semantics
+  operator_primary: curated confusion-heavy slice with provenance lock
+  smoke: tiny regression slice only

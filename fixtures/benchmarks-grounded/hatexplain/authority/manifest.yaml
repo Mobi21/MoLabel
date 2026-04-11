@@ -1,0 +1,13 @@
+benchmark_id: hatexplain
+track: grounded
+name: HateXplain Grounded Benchmark
+authority_pack: true
+reference_workspace_root: ../workbench
+current_labeling_engine: MiniMax 2.7
+benchmark_profiles:
+  - canonical
+  - operator-primary
+  - smoke
+notes:
+  - Canonical authority pack for the grounded HateXplain migration.
+  - The current workspace tree remains as transitional reference material.

@@ -1,0 +1,19 @@
+benchmark_id: feverous
+baselines:
+  - baseline_id: feverous_paper_reported_baseline
+    name: FEVEROUS Paper Reported Baseline
+    source: paper
+    mode: model
+    variant: paper_direct
+    split_id: dev
+    metrics: {}
+    notes: Paper-reported baseline from the FEVEROUS publication and shared-task paper.
+  - baseline_id: feverous_subset_oracle
+    name: FEVEROUS Curated Subset Oracle
+    source: molabel_local
+    mode: model
+    variant: molabel_operated
+    split_id: dev
+    metrics:
+      feverous_score_proxy: 1.0
+    notes: Oracle score on the committed 6-example dev slice.

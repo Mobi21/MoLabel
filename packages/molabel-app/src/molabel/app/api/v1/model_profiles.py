@@ -7,9 +7,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from molabel.app.middleware.session import CurrentReviewer
+from molabel.app.utils import get_engine
 from molabel.core.services.model_profile_service import (
     ConnectivityTestResult,
     ModelProfileCreate,
@@ -20,11 +21,17 @@ from molabel.core.services.model_profile_service import (
 
 router = APIRouter(prefix="/model-profiles", tags=["model-profiles"])
 
-# Service instance (will be replaced by DI in a later step).
+# In-memory fallback for endpoints that don't need DB yet.
 _service = ModelProfileService()
 
 # Default workspace for placeholder endpoints.
 _DEFAULT_WORKSPACE = UUID("00000000-0000-0000-0000-000000000001")
+
+
+def _get_service(request: Request) -> ModelProfileService:
+    """Return a service instance backed by the request's DB engine."""
+    engine = get_engine(request)
+    return ModelProfileService(engine=engine)
 
 
 # ---------------------------------------------------------------------------
@@ -45,19 +52,23 @@ class ModelProfileListResponse(ModelProfileResponse):
 
 @router.post("", response_model=ModelProfileResponse, status_code=201)
 async def create_model_profile(
+    request: Request,
     data: ModelProfileCreate,
     _reviewer: CurrentReviewer,
 ) -> ModelProfileResponse:
     """Create a new model profile."""
-    return _service.create(data, workspace_id=_DEFAULT_WORKSPACE)
+    service = _get_service(request)
+    return service.create(data, workspace_id=_DEFAULT_WORKSPACE)
 
 
 @router.get("", response_model=list[ModelProfileResponse])
 async def list_model_profiles(
+    request: Request,
     provider_type: str | None = None,
 ) -> list[ModelProfileResponse]:
     """List model profiles, optionally filtered by provider type."""
-    return _service.list_profiles(
+    service = _get_service(request)
+    return service.list_profiles(
         _DEFAULT_WORKSPACE,
         provider_type=provider_type,
     )
@@ -65,10 +76,12 @@ async def list_model_profiles(
 
 @router.get("/{profile_id}", response_model=ModelProfileResponse)
 async def get_model_profile(
+    request: Request,
     profile_id: UUID,
 ) -> ModelProfileResponse:
     """Get a model profile by ID."""
-    result = _service.get(profile_id)
+    service = _get_service(request)
+    result = service.get(profile_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Model profile not found")
     return result
@@ -76,12 +89,14 @@ async def get_model_profile(
 
 @router.patch("/{profile_id}", response_model=ModelProfileResponse)
 async def update_model_profile(
+    request: Request,
     profile_id: UUID,
     data: ModelProfileUpdate,
     _reviewer: CurrentReviewer,
 ) -> ModelProfileResponse:
     """Update an existing model profile."""
-    result = _service.update(profile_id, data)
+    service = _get_service(request)
+    result = service.update(profile_id, data)
     if result is None:
         raise HTTPException(status_code=404, detail="Model profile not found")
     return result
@@ -89,11 +104,13 @@ async def update_model_profile(
 
 @router.delete("/{profile_id}", status_code=204)
 async def delete_model_profile(
+    request: Request,
     profile_id: UUID,
     _reviewer: CurrentReviewer,
 ) -> None:
     """Delete a model profile."""
-    if not _service.delete(profile_id):
+    service = _get_service(request)
+    if not service.delete(profile_id):
         raise HTTPException(status_code=404, detail="Model profile not found")
 
 
@@ -102,8 +119,10 @@ async def delete_model_profile(
     response_model=ConnectivityTestResult,
 )
 async def test_model_profile(
+    request: Request,
     profile_id: UUID,
     _reviewer: CurrentReviewer,
 ) -> ConnectivityTestResult:
     """Test connectivity to the provider configured in a model profile."""
-    return _service.test_connectivity(profile_id)
+    service = _get_service(request)
+    return service.test_connectivity(profile_id)

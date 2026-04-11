@@ -1,0 +1,14 @@
+benchmark_id: webnlg
+record_id_field: record_id
+dataset_label_fields:
+- triples
+- reference_claims
+target_label_fields:
+- generation
+field_mappings:
+- dataset_field: reference_claims
+  target_field: generation
+  mapping:
+    structure: grounded_generation
+  lossy: false
+  notes: WebNLG verbalizations remain grounded to explicit source triples.

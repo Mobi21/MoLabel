@@ -1,0 +1,23 @@
+benchmark_id: banking77
+baselines:
+  - baseline_id: paper_oracle
+    name: BANKING77 Subset Oracle
+    source: molabel_local
+    mode: model
+    variant: paper_direct
+    split_id: test
+    metrics:
+      intent_accuracy: 1.0
+      intent_macro_f1: 1.0
+    notes: Upper-bound reference that matches the paper-direct gold labels exactly.
+  - baseline_id: majority_class_card_arrival
+    name: Always card_arrival Floor
+    source: molabel_local
+    mode: model
+    variant: paper_direct
+    split_id: test
+    metrics:
+      intent_accuracy: 0.0625
+    notes: >
+      Predict card_arrival for every utterance. Interpretable floor baseline
+      equal to 1 / subset_size on the 16-row curated slice.

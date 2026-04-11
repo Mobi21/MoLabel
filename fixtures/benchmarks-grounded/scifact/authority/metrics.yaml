@@ -1,0 +1,107 @@
+benchmark_id: scifact
+aggregation: weighted_mean
+primary_metric_id: scifact_joint_score_proxy
+metrics:
+  - metric_id: scifact_joint_score
+    name: SciFact Joint Verdict+Evidence Score
+    metric_type: feverous_score
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+    weight: 1.0
+    notes: >
+      Joint success rule: verdict correct AND at least one complete gold
+      rationale sentence set contained in the predicted evidence atoms
+      (or NEI verdict matches). Reuses the FEVEROUS joint scorer with
+      SciFact-aware verdict normalization.
+  - metric_id: scifact_joint_score_proxy
+    name: SciFact Joint Score Proxy
+    metric_type: exact_match
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - molabel_operated
+    fields:
+      - verdict
+      - evidence_atoms
+    weight: 1.0
+    notes: MoLabel-friendly proxy for the joint success criterion.
+  - metric_id: verdict_accuracy
+    name: Verdict Accuracy
+    metric_type: accuracy
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - molabel_operated
+    fields:
+      - verdict
+    weight: 0.0
+    notes: Verdict-only diagnostic accuracy.
+  - metric_id: evidence_precision
+    name: Evidence Precision
+    metric_type: set_precision
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - molabel_operated
+    fields:
+      - evidence_atoms
+    weight: 0.0
+    notes: Diagnostic evidence precision.
+  - metric_id: evidence_recall
+    name: Evidence Recall
+    metric_type: set_recall
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - molabel_operated
+    fields:
+      - evidence_atoms
+    weight: 0.0
+    notes: Diagnostic evidence recall.
+  - metric_id: evidence_f1
+    name: Evidence F1
+    metric_type: set_f1
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - molabel_operated
+    fields:
+      - evidence_atoms
+    weight: 0.0
+    notes: MoLabel-operated evidence atom score proxy.
+tax_definitions:
+  - tax_id: model_tax
+    name: Model Tax
+    minuend_mode: model
+    minuend_variant: paper_direct
+    subtrahend_mode: model
+    subtrahend_variant: molabel_operated
+    notes: Gap between paper-direct joint scoring and MoLabel-normalized scoring.
+  - tax_id: workflow_tax
+    name: Workflow Tax
+    minuend_mode: model
+    minuend_variant: molabel_operated
+    subtrahend_mode: workflow
+    subtrahend_variant: molabel_operated
+    notes: Gap introduced by MoLabel workflow operations.
+  - tax_id: operator_tax
+    name: Operator Tax
+    minuend_mode: workflow
+    minuend_variant: molabel_operated
+    subtrahend_mode: operator
+    subtrahend_variant: molabel_operated
+    notes: Gap introduced by the external CLI-and-skill operator.

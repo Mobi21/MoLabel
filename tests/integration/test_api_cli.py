@@ -259,6 +259,34 @@ async def test_selector_resolve_and_artifact_round_trip(client, app, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_artifact_write_creates_new_task_schema_at_canonical_path(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+
+    write_resp = await client.post(
+        "/api/v1/cli/artifacts/write",
+        headers={"X-MoLabel-Session": token},
+        json={
+            "kind": "task_schema",
+            "selector": "sentiment-demo-v2",
+            "content": "task_slug: sentiment_demo_v2\n",
+            "workspace_id": str(workspace_id),
+            "workspace_root": str(tmp_path),
+        },
+    )
+    assert write_resp.status_code == 200
+    body = write_resp.json()
+    assert body["resolved_path"].endswith(
+        "workbench/config/task-schemas/sentiment-demo-v2.yaml"
+    )
+    assert (
+        tmp_path / "workbench" / "config" / "task-schemas" / "sentiment-demo-v2.yaml"
+    ).read_text(encoding="utf-8") == "task_slug: sentiment_demo_v2\n"
+
+
+@pytest.mark.asyncio
 async def test_snapshot_restore_updates_dataset_and_records(client, app, tmp_path):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     token = _seed_reviewer(app.state.engine, workspace_id)

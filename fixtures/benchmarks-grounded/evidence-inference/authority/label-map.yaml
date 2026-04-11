@@ -1,0 +1,32 @@
+benchmark_id: evidence-inference
+record_id_field: record_id
+dataset_label_fields:
+- label
+- evidence_groups
+target_label_fields:
+- paper_label
+- decision
+- evidence_bundle
+field_mappings:
+- dataset_field: label
+  target_field: paper_label
+  mapping:
+    significantly_increased: significantly_increased
+    significantly_decreased: significantly_decreased
+    no_significant_difference: no_significant_difference
+  lossy: false
+  notes: Paper-direct labels preserve the paper task vocabulary.
+- dataset_field: label
+  target_field: decision
+  mapping:
+    significantly_increased: increase
+    significantly_decreased: decrease
+    no_significant_difference: no_difference
+  lossy: true
+  notes: MoLabel-operated labels normalize effect direction into a smaller vocabulary.
+- dataset_field: evidence_groups
+  target_field: evidence_bundle
+  mapping:
+    structure: multiple_acceptable_evidence_groups
+  lossy: false
+  notes: Evidence groups remain grouped; they are not flattened into one set.

@@ -118,6 +118,29 @@ def _create_tasks(
             record_id = uuid.uuid4()
             conn.execute(
                 text(
+                    "INSERT INTO records "
+                    "("
+                    "id, external_id, stable_fields, payload, "
+                    "workspace_id, dataset_id"
+                    ") "
+                    "VALUES ("
+                    ":id, :external_id, :stable_fields, :payload, "
+                    ":workspace_id, :dataset_id"
+                    ")"
+                ),
+                {
+                    "id": str(record_id),
+                    "external_id": f"queue-record-{task_id}",
+                    "stable_fields": json.dumps(
+                        {"record_id": f"queue-record-{task_id}"}
+                    ),
+                    "payload": json.dumps({"text": f"Queue text for {task_id}"}),
+                    "workspace_id": str(workspace.id),
+                    "dataset_id": str(dataset_id),
+                },
+            )
+            conn.execute(
+                text(
                     "INSERT INTO review_tasks "
                     "(id, queue_id, record_id, task_schema_id, status, priority, "
                     "workspace_id, dataset_id) "
@@ -262,6 +285,11 @@ class TestAtomicClaim:
         assert data["message"] == "claimed"
         assert data["task"]["status"] == "claimed"
         assert data["task"]["claimed_by"] == str(reviewer.id)
+        assert data["task"]["record_external_id"] is not None
+        assert data["task"]["record_view"]["payload"]["text"].startswith(
+            "Queue text for "
+        )
+        assert data["task"]["record_text"].startswith("Queue text for ")
         assert data["queue_empty"] is False
 
     def test_claim_api_empty_queue(self, client, reviewer) -> None:

@@ -1,0 +1,19 @@
+workspace_id: 46c20ae2-b260-4210-86fa-887e637baf5c
+workspace_name: Agent Sentiment Demo
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+  - dataset_id: review_texts
+    source_paths:
+      - data/reviews.jsonl
+    loader_plugin: molabel.loaders.jsonl
+    record_kind: text
+    canonical_id_strategy: source_record_id
+    indexing_mode: projection
+task_schemas:
+  - task_schema_id: sentiment_demo_v1
+    definition_path: workbench/config/task-schemas/sentiment-demo-v1.yaml
+export_targets:
+  - export_id: sentiment_demo_export
+    output_namespace: workbench/exports/sentiment-demo
+validation_gates: []

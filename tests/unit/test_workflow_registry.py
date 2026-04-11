@@ -60,6 +60,7 @@ class TestStepExecutorRegistry:
         assert len(types) == 21
         assert "data_ingest" in types
         assert "gate" in types
+        assert "agent_labeling" not in types
 
     def test_step_type_categories(self) -> None:
         assert STEP_TYPE_CATEGORIES["data_ingest"] == WorkflowStepCategory.data

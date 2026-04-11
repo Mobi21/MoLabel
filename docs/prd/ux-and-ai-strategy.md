@@ -1,587 +1,243 @@
-# Agentic Data Operations Workbench UX And AI Strategy
+# MoLabel UX And Agent Operations Strategy
 
-Date: 2026-03-22
-Status: Companion strategy note
+Date: 2026-03-27
+Status: Draft
 Related PRD: [`agentic-data-operations-workbench-prd.md`](./agentic-data-operations-workbench-prd.md)
 
-## 0. Architecture Update Note
+## 1. Purpose
 
-Since this strategy was written, the following major architectural decisions have been made:
+This document explains how MoLabel should feel after the shift to an agent-first, CLI-primary product.
 
-- The frontend has moved from HTMX plus Jinja2 to React 19 plus TypeScript with shadcn/ui components.
-- The app ships as a Tauri v2 native desktop application.
-- The workflow lifecycle is now fully composable (user-defined DAGs) rather than a fixed 12-step sequence.
-- An agent feedback loop has been added (prompt refinement from corrections plus active learning).
-- Data management has been elevated to a full data hub with snapshots and label mapping.
-- Multi-model comparison runs and provider auto-detection have been added.
+The key change is simple:
 
-See the ADRs in `docs/architecture/` and the updated PRD for full details. The UX recommendations below remain directionally valid but implementation references to HTMX should be read as React.
+- the CLI is the primary operating surface for agents,
+- the backend API is the execution contract behind it,
+- and the GUI is the manual control room and observability layer.
 
-## 1. Why This Note Exists
+MoLabel should no longer feel like a GUI app with an assistant bolted on.
+It should feel like a serious data-work system that both agents and humans can operate, with the GUI excelling at visibility and human judgment.
 
-The PRD now defines the product shape.
-This note focuses on how to make the product:
+## 2. Product Experience Model
 
-- easier to understand from start to finish,
-- more useful for non-expert operators,
-- stronger in an agent-heavy tooling ecosystem,
-- easier to switch across model providers and local runtimes,
-- and more modular across very different labeling projects.
+### 2.1 CLI-Primary For Agents
 
-## 2. Repo-Grounded Findings
+External agents should be able to:
 
-The current DePolarize workbench already proves several good instincts:
+- find the workspace,
+- inspect current project state,
+- read and write canonical artifacts safely,
+- run workflows,
+- inspect review and adjudication state,
+- observe quality signals,
+- and prepare exports and releases.
 
-- the overview page already tells the user what to do next in plain language,
-- the review surface already uses a stepper for triage, calibration, review, and export,
-- the app already has separate surfaces for review, adjudication, quality, release, jobs, and manifests,
-- and the data model already treats review events, AI suggestions, adjudications, jobs, validation runs, releases, and audit data as first-class objects.
+The UX requirement here is not visual polish.
+It is contract clarity:
 
-The current weakness is not a lack of screens.
-The weakness is that the product is still page-driven rather than process-driven.
-Users can see many surfaces, but the workbench does not yet fully own the mental model of:
+- stable commands,
+- stable JSON output,
+- stable event streams,
+- and explicit errors.
 
-- where they are,
-- what step they are in,
-- what is complete,
-- what remains,
-- what is blocked,
-- and what the best next action is.
+### 2.2 GUI As Control Room
 
-## 3. The Most Important Product Upgrade
+The GUI should be optimized for:
 
-The biggest upgrade is to make the workbench own the workflow narrative.
+- seeing the data,
+- seeing workflow progress,
+- seeing what the agent changed,
+- performing manual review,
+- adjudicating disagreement,
+- and stepping in when automation is wrong.
 
-The product should not feel like:
+The GUI is where humans understand the project, not where the core agent story begins.
 
-- files,
-- routes,
-- or feature tabs.
+### 2.3 Manual Completeness
 
-It should feel like:
+Users who do not want heavy AI involvement must still be able to do everything manually through the GUI.
 
-- a guided operational process.
+That includes:
 
-The user should always be able to answer five questions in under ten seconds:
+- importing and cleaning data,
+- defining task schemas,
+- labeling manually,
+- reviewing and adjudicating,
+- running quality checks,
+- and exporting final outputs.
 
-1. What project am I in?
-2. What phase am I in?
-3. What is the next highest-value action?
-4. What is blocked and why?
-5. What happens after I complete this step?
+## 3. No In-App Assistant As Primary UX
 
-## 4. The Right GUI Mental Model
+The in-app assistant is removed from the primary product story.
 
-The app should use three overlapping mental models:
+The GUI should not depend on:
 
-### 4.1 Workspace model
+- an assistant panel as the main guide,
+- conversational explanations as the primary workflow mechanism,
+- or a narrator model sitting between the user and the real project state.
 
-This answers:
+Where context or explanations are useful, the system should prefer:
+
+- explicit workflow status,
+- visible blockers,
+- structured run summaries,
+- and inspectable provenance.
+
+## 4. Recommended GUI Mental Model
+
+The GUI should use three overlapping mental models.
+
+### 4.1 Workspace Model
+
+Shows:
 
 - what data exists,
-- what plugins and task schemas are active,
-- what model and runtime profiles are active,
-- what jobs and validations are available,
-- and what the current project health looks like.
+- what schemas and workflows exist,
+- what providers and profiles are configured,
+- what artifacts are canonical,
+- and what the current project health is.
 
-### 4.2 Process model
+### 4.2 Process Model
 
-This answers:
+Shows:
 
-- what stage the work is in,
-- what stage is next,
-- and how work flows from intake to release.
+- what stage the project is in,
+- what is blocked,
+- what requires human action,
+- what the agent last did,
+- and what the next useful step is.
 
-This is the most important missing layer.
+### 4.3 Evidence Model
 
-### 4.3 Queue model
+Shows:
 
-This answers:
+- labels,
+- agent outputs,
+- human review events,
+- adjudication history,
+- confidence and quality signals,
+- and data provenance.
 
-- what needs human attention right now,
-- which items are pending,
-- which items are risky,
-- and who or what acted on them already.
+This third model becomes more important in an agent-first system because users need to judge the agent's work, not just complete form fields.
 
-## 5. Screen Model Recommendation
+## 5. Screen Strategy
 
-The current PRD is directionally right.
-I would sharpen it into the following top-level screens:
-
-- Home
-- Workflow
-- Data
-- Tasks
-- Agents
-- Review
-- Adjudication
-- Quality
-- Curation
-- Exports
-- Releases
-- Plugins
-- Mission Control
-- Settings
+The GUI screen model still works, but the emphasis changes.
 
 ### 5.1 Home
 
 Purpose:
-the single best answer to “what should I do now?”
+the fastest answer to:
 
-Must show:
-
-- project identity,
-- active workflow stage,
-- key counts,
-- current blockers,
-- pending human queues,
-- recent agent runs,
-- recent exports,
-- and a strong primary action.
+- what state is the project in,
+- what did the agent do recently,
+- what is blocked,
+- and what requires human attention now.
 
 ### 5.2 Workflow
 
 Purpose:
-the process map from start to finish.
+show the end-to-end lifecycle as an observable process map.
 
-This should be a dedicated screen, not just a status card.
+Must make it obvious:
 
-Must show:
-
-- the full lifecycle,
-- current stage,
-- completed stages,
-- blocked stages,
-- stage prerequisites,
-- stage outputs,
-- and stage owners.
-
-This is where non-expert users learn the process.
+- which steps were agent-run,
+- which are waiting on humans,
+- what failed,
+- and what artifacts or outputs each stage produced.
 
 ### 5.3 Data
 
 Purpose:
-explore datasets, subsets, records, schemas, and provenance.
+inspect messy source material, cleaned forms, schema projections, and lineage.
 
 ### 5.4 Tasks
 
 Purpose:
-configure task schemas, review flows, overlap rules, adjudication rules, and export mappings.
+define rubrics, task schemas, review policy, overlap rules, adjudication policy, and export mappings.
 
 ### 5.5 Agents
 
 Purpose:
-configure, run, monitor, and compare agent roles and outputs.
+inspect agent runs, compare models, see uncertainty, and understand failure patterns.
+
+This is not a place to chat with an assistant.
+It is a place to inspect real operational behavior.
 
 ### 5.6 Review
 
 Purpose:
-finish human work quickly and consistently.
+help humans finish review quickly and clearly.
 
 ### 5.7 Adjudication
 
 Purpose:
-resolve or preserve disagreement with context.
+resolve disagreements between:
+
+- multiple humans,
+- humans and agents,
+- or conflicting workflow outputs.
 
 ### 5.8 Quality
 
 Purpose:
-explain reliability, drift, disagreement, throughput, and human versus agent deltas.
+show whether the project is trustworthy enough to move forward.
 
-### 5.9 Curation
-
-Purpose:
-turn reviewed data into useful subsets, challenge sets, slices, and exports.
-
-### 5.10 Exports and Releases
+### 5.9 Exports And Releases
 
 Purpose:
-package outputs, validate them, and explain readiness.
+package outputs and make approval decisions with evidence.
 
-## 6. Workflow UX: How To Make The Process Understandable
+## 6. CLI UX Requirements
 
-The workflow screen should be the backbone of the app.
+The CLI is part of the product UX, not just a backend tool.
 
-Recommended lifecycle:
+It should optimize for agent operation by default:
 
-1. Attach or ingest data
-2. Normalize and index
-3. Define task schema
-4. Run agents
-5. Triage
-6. Human review
-7. Overlap review
-8. Adjudication
-9. Quality checks
-10. Curation
-11. Export packaging
-12. Release validation
+- `--json` as the default mental model,
+- NDJSON for streaming operations,
+- deterministic exit behavior,
+- strong manifest and help output,
+- safe artifact read, diff, and write flows,
+- and commands that map cleanly to project concepts instead of generic CRUD.
 
-Each stage card should show:
+## 7. Benchmark UX Requirements
 
-- purpose,
-- what inputs it needs,
-- what output it creates,
-- whether it is ready,
-- whether it is blocked,
-- estimated effort,
-- and one recommended next action.
+Benchmark projects should feel like real project work, not toy examples.
 
-Each stage should also support an “Explain this step” action.
+The UX must support seeing how the system behaves when:
 
-## 7. Queue Design Recommendations
+- source data is messy,
+- a rubric is layered or ambiguous,
+- multiple review passes are required,
+- a human is obviously wrong,
+- an agent is obviously wrong,
+- and adjudication must reconcile those failures.
 
-Queues should be central to the product.
-Users should not have to hunt for records.
+The GUI should make these cases legible.
+The CLI should make them automatable.
 
-### 7.1 Queue types
+## 8. Research Project Fit
 
-At minimum:
+This product direction is especially strong for research-style data work because those projects often require:
 
-- triage queue,
-- review queue,
-- overlap queue,
-- adjudication queue,
-- edge-case queue,
-- export-blocker queue,
-- and validation-failure queue.
+- messy source cleanup,
+- iterative schema refinement,
+- multiple rounds of labeling,
+- explicit review and adjudication,
+- provenance,
+- and exportable, auditable outputs.
 
-### 7.2 Queue behavior
+MoLabel should therefore optimize for:
 
-Every queue should show:
+- hard cases over toy happy paths,
+- traceability over hidden automation,
+- and benchmarkability over vague claims of “AI assistance.”
 
-- why an item is in the queue,
-- what action is expected,
-- what happens after completion,
-- what priority the item has,
-- and what context the user needs before acting.
+## 9. Success Criteria
 
-### 7.3 Queue ergonomics
+The UX strategy is working when:
 
-Queues should support:
-
-- bulk actions,
-- quick filters,
-- saved views,
-- resume where I left off,
-- skip with reason,
-- assign to me,
-- and jump to most urgent.
-
-### 7.4 Queue transparency
-
-Each queue item should expose:
-
-- source dataset,
-- task schema version,
-- agent suggestions present or absent,
-- prior reviews,
-- adjudication status,
-- export impact,
-- and any active blockers.
-
-## 8. Explainability Surfaces
-
-The app should explain both the data and the workflow.
-
-### 8.1 Record-level explainability
-
-For any record, the user should be able to see:
-
-- why this item is in the queue,
-- what the task is asking,
-- what labels or rubric fields mean,
-- what the agent suggested,
-- whether the agent output is safe to view in blind mode,
-- what prior humans did,
-- and what will happen after submission.
-
-### 8.2 Stage-level explainability
-
-For any workflow stage, the user should be able to see:
-
-- why this stage exists,
-- whether it is optional or required,
-- what will break if it is skipped,
-- and what artifacts it will produce.
-
-### 8.3 Export-level explainability
-
-For any export or release bundle, the user should be able to see:
-
-- which records are included,
-- why they were included,
-- which records were excluded,
-- what validation checks passed,
-- what checks failed,
-- and what still blocks release.
-
-## 9. The Supportive AI Assistant
-
-This is one of the strongest ideas.
-It should not be a generic chatbot bolted onto the side.
-
-It should be a workflow-aware guide.
-
-### 9.1 What it should do
-
-The assistant should help the user understand:
-
-- what this screen is for,
-- what their current task is,
-- what is blocked,
-- what they have left to do,
-- what the next best action is,
-- and how to interpret system output.
-
-### 9.2 What it should not do
-
-It should not:
-
-- replace human judgment silently,
-- auto-hide process complexity,
-- or obscure what files and outputs actually changed.
-
-### 9.3 Best assistant modes
-
-The assistant should have explicit modes:
-
-- Guide mode
-- Explain mode
-- Operator mode
-- Agent monitor mode
-- Troubleshooting mode
-
-Guide mode:
-helps the user through the process.
-
-Explain mode:
-explains labels, steps, metrics, and outputs.
-
-Operator mode:
-helps run jobs, queues, exports, and validations.
-
-Agent monitor mode:
-explains what agents are doing and whether they succeeded.
-
-Troubleshooting mode:
-helps diagnose failed jobs, missing plugins, and drift conflicts.
-
-### 9.4 Best assistant UI pattern
-
-The assistant should live in the right-side inspector and command bar, not as a floating chat toy.
-
-Recommended actions:
-
-- “What am I doing on this screen?”
-- “What should I do next?”
-- “Why is this blocked?”
-- “Explain this metric”
-- “Summarize changes since yesterday”
-- “Show me the items that need human review”
-- “Explain why this export failed”
-
-### 9.5 Best assistant data access
-
-The assistant should be grounded in:
-
-- workspace manifest,
-- active task schema,
-- active queue,
-- recent job runs,
-- validation reports,
-- and audit history.
-
-This is what makes it useful instead of generic.
-
-## 10. External Agent Integration Strategy
-
-The product should not try to become every agent runtime.
-It should become the best place to supervise, compare, and operationalize agents.
-
-### 10.1 What to build natively
-
-Build natively:
-
-- agent run registry,
-- agent output normalization,
-- agent status monitoring,
-- queue generation from agent outputs,
-- prompt and schema version tracking,
-- and review visibility controls.
-
-### 10.2 What to integrate rather than rebuild
-
-Integrate rather than rebuild:
-
-- coding-agent runtimes,
-- external planning agents,
-- generic MCP-connected tools,
-- and project-specific local automations.
-
-### 10.3 Best integration model
-
-The right integration model is an adapter layer.
-
-The workbench should treat external agents as worker providers with:
-
-- provider identity,
-- runtime type,
-- capabilities,
-- tool access profile,
-- input contract,
-- output contract,
-- and monitoring hooks.
-
-### 10.4 Good first integrations
-
-Good targets include:
-
-- Claude Code via MCP and project-level subagents
-- OpenHands as a local or Docker-based runtime
-- Aider as a repo-aware terminal assistant
-- OpenCode-style MCP-enabled local agents
-
-Why these matter:
-
-- modern AI-native users already expect local agent workflows,
-- they want their tool stack to stay composable,
-- and they do not want to abandon existing agent tools just to use the workbench.
-
-## 11. How The Supportive AI Should Work With External Agents
-
-The assistant should not directly “be” the coding agent.
-It should orchestrate and explain.
-
-Better model:
-
-- the workbench assistant is the narrator and supervisor,
-- external agents are workers,
-- humans remain decision-makers.
-
-That gives the product a clean mental model:
-
-- AI guide,
-- AI workers,
-- human authority.
-
-## 12. Three Product Features That Would Make This Feel Native To The New AI World
-
-### 12.1 Mission Control
-
-A live operations view for:
-
-- active agents,
-- queued work,
-- failed steps,
-- waiting-for-human decisions,
-- and release blockers.
-
-This should feel like mission control, not a log dump.
-
-### 12.2 Explain My Project
-
-A guided mode that can answer:
-
-- what this project is,
-- how this workflow works,
-- what the labels mean,
-- what is done,
-- and what remains.
-
-This is especially valuable for new contributors.
-
-### 12.3 Delegate This Step
-
-For certain safe steps, the UI should offer:
-
-- delegate normalization,
-- delegate deduplication,
-- delegate disagreement mining,
-- delegate export preflight summarization,
-- but not delegate final human truth decisions silently.
-
-## 13. How To Keep Modularity Strong Without Becoming Vague
-
-The product needs opinionated structure plus flexible plugins.
-
-### 13.1 Make workflows composable but template-guided
-
-The workflow structure should be composable per project but guided by strong templates.
-
-Projects vary in:
-
-- data type,
-- task schema,
-- review logic,
-- export logic,
-- validation logic,
-- and workflow shape.
-
-The product should ship opinionated templates that cover common patterns (quick agentic label, human-in-the-loop review, full quality pipeline, benchmark authority, agent comparison, iterative refinement) while allowing users to compose custom workflows from the full step type catalog. Templates provide the structure; the composable engine provides the flexibility. Projects should not vary in whether the product has a process at all — every project uses the workflow engine — but the specific steps, their order, and their branching logic are project-specific.
-
-See ADR-003 for the full composable workflow engine design.
-
-### 13.2 Let plugins customize the right layer
-
-Plugins should own:
-
-- record parsing,
-- record rendering,
-- task schema fields,
-- label or rubric semantics,
-- review form layout,
-- adjudication logic,
-- export serializer,
-- validation checks,
-- custom workflow step types,
-- and workflow templates.
-
-The core should own:
-
-- workflow engine and execution model,
-- navigation,
-- queue semantics,
-- agent run model,
-- audit model,
-- and writeback model.
-
-### 13.3 Use project templates
-
-Templates should exist for:
-
-- text labeling project,
-- chat review project,
-- pairwise preference project,
-- extraction project,
-- rubric-scoring project,
-- trajectory project,
-- and reference-app project.
-
-Templates will matter more than raw plugin flexibility for real usability.
-
-## 14. Biggest Recommendations
-
-If I had to prioritize the next upgrades, they would be:
-
-1. Add a dedicated Workflow screen that explains the entire lifecycle.
-2. Add a supportive AI guide grounded in workflow, queues, and validation state.
-3. Turn queues into the main human work surface.
-4. Add Mission Control for agent and job monitoring.
-5. Keep external agent providers integrated through adapters, not baked into the core.
-6. Add project templates so modularity feels usable, not abstract.
-7. Make every stage explain its purpose, inputs, outputs, blockers, and next action.
-
-## 15. Bottom Line
-
-The product becomes much better when it stops behaving like a stack of tools and starts behaving like:
-
-- a guided workflow system,
-- a queue-driven human-in-the-loop workbench,
-- and a supervisor for both human and agent work.
-
-That is the right shape for the new AI world:
-
-- agents do more work,
-- humans supervise and adjudicate,
-- and the GUI keeps the whole process understandable from intake to release.
+- agents can operate the system end to end through the CLI,
+- humans can understand what the agent did without guessing,
+- manual users can still complete the same work in the GUI,
+- and benchmark projects clearly expose where human or agent judgment breaks down.

@@ -1,0 +1,13 @@
+benchmark_id: scifact
+dataset_name: SciFact
+paper_url: https://aclanthology.org/2020.emnlp-main.609/
+dataset_url: https://github.com/allenai/scifact
+source_repository_url: https://github.com/allenai/scifact
+dataset_license: CC BY-NC 2.0
+repository_license: Apache-2.0
+redistribution_status: subset_allowed
+packaging_policy: vendorable_with_attribution_noncommercial
+raw_source_policy:
+  canonical: official SciFact dev split semantics
+  operator_primary: curated verdict-balanced slice with provenance lock
+  smoke: tiny regression slice only

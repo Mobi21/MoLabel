@@ -1,0 +1,19 @@
+workspace_id: 6a899382-7212-52d0-aa7e-b48571310d68
+workspace_name: TabFact Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: tabfact_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: tabfact_grounded_v1
+  definition_path: workbench/config/task-schemas/tabfact-grounded-v1.yaml
+export_targets:
+- export_id: tabfact_grounded_export
+  output_namespace: workbench/exports/tabfact
+validation_gates: []

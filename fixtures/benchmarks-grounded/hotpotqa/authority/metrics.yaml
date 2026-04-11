@@ -1,0 +1,93 @@
+benchmark_id: hotpotqa
+aggregation: weighted_mean
+primary_metric_id: joint_answer_support
+metrics:
+- metric_id: joint_answer_support
+  name: Joint Answer + Support F1
+  metric_type: joint_answer_support
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - qa_bundle
+  metric_options:
+    joint_mode: f1
+  weight: 1.0
+- metric_id: answer_exact_match
+  name: Answer Exact Match
+  metric_type: answer_exact_match
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - qa_bundle
+  weight: 0.0
+- metric_id: answer_token_f1
+  name: Answer Token F1
+  metric_type: answer_token_f1
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - qa_bundle
+  weight: 0.0
+- metric_id: supporting_fact_exact_match
+  name: Supporting Fact Exact Match
+  metric_type: supporting_fact_exact_match
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - qa_bundle
+  weight: 0.0
+- metric_id: supporting_fact_f1
+  name: Supporting Fact F1
+  metric_type: supporting_fact_f1
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - qa_bundle
+  weight: 0.0
+tax_definitions:
+- tax_id: model_tax
+  name: Model Tax
+  minuend_mode: model
+  minuend_variant: paper_direct
+  subtrahend_mode: model
+  subtrahend_variant: molabel_operated
+  notes: Gap between paper-direct and MoLabel-operated scoring.
+- tax_id: workflow_tax
+  name: Workflow Tax
+  minuend_mode: model
+  minuend_variant: molabel_operated
+  subtrahend_mode: workflow
+  subtrahend_variant: molabel_operated
+  notes: Gap introduced by workflow execution.
+- tax_id: operator_tax
+  name: Operator Tax
+  minuend_mode: workflow
+  minuend_variant: molabel_operated
+  subtrahend_mode: operator
+  subtrahend_variant: molabel_operated
+  notes: Gap introduced by the external CLI operator.

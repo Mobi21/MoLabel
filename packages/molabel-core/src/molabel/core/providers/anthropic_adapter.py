@@ -7,6 +7,7 @@ output enforcement.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -59,10 +60,12 @@ class AnthropicAdapter:
         *,
         auth_ref: str | None = "ANTHROPIC_API_KEY",
         default_model: str = "claude-sonnet-4-20250514",
+        base_url: str = _ANTHROPIC_BASE,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._auth_ref = auth_ref
         self._default_model = default_model
+        self._base_url = base_url.rstrip("/")
         self._http_client = http_client
 
     def _headers(self) -> dict[str, str]:
@@ -74,6 +77,17 @@ class AnthropicAdapter:
         if api_key:
             headers["x-api-key"] = api_key
         return headers
+
+    def _messages_url(self) -> str:
+        """Return the correct messages endpoint for Anthropic-compatible APIs.
+
+        Native Anthropic URLs already include ``/v1`` while MiniMax's
+        Anthropic-compatible base URL is documented as ``.../anthropic`` and
+        expects the SDK to append ``/v1/messages``.
+        """
+        if self._base_url.endswith("/v1"):
+            return f"{self._base_url}/messages"
+        return f"{self._base_url}/v1/messages"
 
     # -- ModelProviderPlugin protocol --
 
@@ -118,7 +132,7 @@ class AnthropicAdapter:
             owns_client = self._http_client is None
             try:
                 resp = await client.post(
-                    f"{_ANTHROPIC_BASE}/messages",
+                    self._messages_url(),
                     headers=self._headers(),
                     json={
                         "model": self._default_model,
@@ -247,28 +261,51 @@ class AnthropicAdapter:
         if extra:
             body.update(extra)
 
-        url = f"{_ANTHROPIC_BASE}/messages"
+        url = self._messages_url()
         start = time.monotonic()
 
         client = self._http_client or httpx.AsyncClient(timeout=120.0)
         owns_client = self._http_client is None
+        max_retries = 3
         try:
-            resp = await client.post(url, json=body, headers=self._headers())
-            if resp.status_code >= 400:
-                raise ProviderError(
-                    f"Anthropic API error: {resp.status_code} {resp.text}",
-                    status_code=resp.status_code,
-                    provider="anthropic",
-                    retriable=resp.status_code in {429, 500, 529},
+            for attempt in range(max_retries + 1):
+                try:
+                    resp = await client.post(url, json=body, headers=self._headers())
+                except httpx.HTTPError as exc:
+                    if attempt == max_retries:
+                        raise ProviderError(
+                            f"Anthropic HTTP error: {exc}",
+                            provider="anthropic",
+                            retriable=True,
+                        ) from exc
+                    logger.warning(
+                        "Anthropic HTTP error (attempt %d/%d): %s",
+                        attempt + 1,
+                        max_retries,
+                        exc,
+                    )
+                    await asyncio.sleep(2**attempt)
+                    continue
+                if resp.status_code < 400:
+                    break
+                retriable = resp.status_code in {429, 500, 529}
+                if not retriable or attempt == max_retries:
+                    raise ProviderError(
+                        f"Anthropic API error: {resp.status_code} {resp.text}",
+                        status_code=resp.status_code,
+                        provider="anthropic",
+                        retriable=retriable,
+                    )
+                logger.warning(
+                    "Retriable Anthropic error %d (attempt %d/%d), retrying in %ds",
+                    resp.status_code,
+                    attempt + 1,
+                    max_retries,
+                    2**attempt,
                 )
+                await asyncio.sleep(2**attempt)
             data = resp.json()
             return self._parse_response(data, start, output_schema is not None)
-        except httpx.HTTPError as exc:
-            raise ProviderError(
-                f"Anthropic HTTP error: {exc}",
-                provider="anthropic",
-                retriable=True,
-            ) from exc
         finally:
             if owns_client:
                 await client.aclose()
@@ -341,7 +378,7 @@ class AnthropicAdapter:
         if extra:
             body.update(extra)
 
-        url = f"{_ANTHROPIC_BASE}/messages"
+        url = self._messages_url()
         client = self._http_client or httpx.AsyncClient(timeout=120.0)
         owns_client = self._http_client is None
         tokens_so_far = 0

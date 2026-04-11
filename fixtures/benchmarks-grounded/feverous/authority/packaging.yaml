@@ -1,0 +1,13 @@
+benchmark_id: feverous
+dataset_name: FEVEROUS
+paper_url: https://aclanthology.org/2021.fever-1.1.pdf
+dataset_url: https://fever.ai/dataset/feverous.html
+source_repository_url: https://github.com/Raldir/FEVEROUS
+dataset_license: Creative Commons Attribution-ShareAlike 3.0 / Wikipedia license terms
+repository_license: Apache-2.0
+redistribution_status: subset_allowed
+packaging_policy: vendorable_with_provenance
+raw_source_policy:
+  canonical: preserve nested evidence sets and page/cell provenance
+  operator_primary: curated dev slice with all evidence types covered
+  smoke: tiny regression slice only

@@ -1,0 +1,23 @@
+benchmark_id: scifact
+baselines:
+  - baseline_id: paper_oracle
+    name: SciFact Subset Oracle
+    source: molabel_local
+    mode: model
+    variant: paper_direct
+    split_id: dev
+    metrics:
+      scifact_joint_score: 1.0
+    notes: Upper-bound reference that matches paper-direct joint gold exactly.
+  - baseline_id: always_nei_no_evidence
+    name: Always NEI Floor
+    source: molabel_local
+    mode: model
+    variant: paper_direct
+    split_id: dev
+    metrics: {}
+    notes: >
+      Predict NEI with empty evidence for every claim. Interpretable floor
+      baseline whose joint score equals the fraction of NEI records in the
+      slice. Metric values are recomputed from the committed slice by the
+      unit test.

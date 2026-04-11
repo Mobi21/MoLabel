@@ -1,0 +1,19 @@
+workspace_id: f68d0876-7171-588e-9d3b-0b1842b0e522
+workspace_name: BEIR Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: beir_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: beir_grounded_v1
+  definition_path: workbench/config/task-schemas/beir-grounded-v1.yaml
+export_targets:
+- export_id: beir_grounded_export
+  output_namespace: workbench/exports/beir
+validation_gates: []

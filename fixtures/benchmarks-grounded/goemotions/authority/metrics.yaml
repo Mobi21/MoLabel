@@ -1,0 +1,93 @@
+benchmark_id: goemotions
+aggregation: weighted_mean
+primary_metric_id: emotion_set_f1
+metrics:
+  - metric_id: emotion_set_f1
+    name: Emotion Set F1
+    metric_type: set_f1
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+      - molabel_operated
+    fields:
+      - emotion_labels
+    weight: 1.0
+    notes: >
+      Micro-style set-F1 over predicted vs gold emotion sets. Acts as a
+      truthful proxy for the paper's micro-F1 since the existing scorer does
+      not yet compute a paper-faithful micro-F1 across binarized labels.
+  - metric_id: emotion_jaccard
+    name: Emotion Jaccard
+    metric_type: jaccard
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+      - molabel_operated
+    fields:
+      - emotion_labels
+    weight: 0.5
+  - metric_id: emotion_set_precision
+    name: Emotion Set Precision
+    metric_type: set_precision
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+      - molabel_operated
+    fields:
+      - emotion_labels
+    weight: 0.0
+    notes: Diagnostic precision.
+  - metric_id: emotion_set_recall
+    name: Emotion Set Recall
+    metric_type: set_recall
+    modes:
+      - model
+      - workflow
+      - operator
+    variants:
+      - paper_direct
+      - molabel_operated
+    fields:
+      - emotion_labels
+    weight: 0.0
+    notes: Diagnostic recall.
+  - metric_id: emotion_exact_match
+    name: Emotion Exact Match
+    metric_type: exact_match
+    modes:
+      - workflow
+      - operator
+    variants:
+      - molabel_operated
+    fields:
+      - emotion_labels
+    weight: 0.5
+    notes: Exact-set match on the normalized MoLabel label view.
+tax_definitions:
+  - tax_id: model_tax
+    name: Model Tax
+    minuend_mode: model
+    minuend_variant: paper_direct
+    subtrahend_mode: model
+    subtrahend_variant: molabel_operated
+  - tax_id: workflow_tax
+    name: Workflow Tax
+    minuend_mode: model
+    minuend_variant: molabel_operated
+    subtrahend_mode: workflow
+    subtrahend_variant: molabel_operated
+  - tax_id: operator_tax
+    name: Operator Tax
+    minuend_mode: workflow
+    minuend_variant: molabel_operated
+    subtrahend_mode: operator
+    subtrahend_variant: molabel_operated

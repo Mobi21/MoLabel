@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+CANONICAL_STEP_TYPES = frozenset(step_type.value for step_type in WorkflowStepType)
+"""Canonical step types exposed by public APIs and metadata surfaces."""
+
 # Canonical mapping of step types to their category
 STEP_TYPE_CATEGORIES: dict[str, WorkflowStepCategory] = {
     WorkflowStepType.data_ingest: WorkflowStepCategory.data,
@@ -25,6 +28,7 @@ STEP_TYPE_CATEGORIES: dict[str, WorkflowStepCategory] = {
     WorkflowStepType.data_sample: WorkflowStepCategory.data,
     WorkflowStepType.data_deduplicate: WorkflowStepCategory.data,
     WorkflowStepType.agent_run: WorkflowStepCategory.agent,
+    "agent_labeling": WorkflowStepCategory.agent,
     WorkflowStepType.agent_compare: WorkflowStepCategory.agent,
     WorkflowStepType.human_review: WorkflowStepCategory.human,
     WorkflowStepType.human_triage: WorkflowStepCategory.human,
@@ -106,8 +110,17 @@ class StepExecutorRegistry:
         return step_type in self._executors
 
     def registered_types(self) -> list[str]:
-        """Return all registered step type strings."""
-        return sorted(self._executors.keys())
+        """Return canonical registered step type strings.
+
+        Compatibility aliases may still be present internally so older workflow
+        definitions continue to execute, but they are intentionally hidden from
+        metadata surfaces that should reflect the public WorkflowStepType enum.
+        """
+        return sorted(
+            step_type
+            for step_type in self._executors
+            if step_type in CANONICAL_STEP_TYPES
+        )
 
     def get_category(self, step_type: str) -> WorkflowStepCategory | None:
         """Return the category for a step type, or None if unknown."""

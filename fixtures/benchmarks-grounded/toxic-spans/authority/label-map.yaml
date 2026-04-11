@@ -1,0 +1,14 @@
+benchmark_id: toxic-spans
+record_id_field: record_id
+dataset_label_fields:
+- toxic_spans
+target_label_fields:
+- spans
+field_mappings:
+- dataset_field: toxic_spans
+  target_field: spans
+  mapping:
+    structure: char_grounded_span_annotation
+  lossy: false
+  notes: Toxic rationales remain a span-native artifact with character offsets into
+    the source text.

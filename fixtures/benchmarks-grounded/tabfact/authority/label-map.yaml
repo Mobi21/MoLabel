@@ -1,0 +1,22 @@
+benchmark_id: tabfact
+record_id_field: record_id
+dataset_label_fields:
+- statement_label
+- evidence_cells
+target_label_fields:
+- decision
+- evidence_bundle
+field_mappings:
+- dataset_field: statement_label
+  target_field: decision
+  mapping:
+    entailed: entailed
+    refuted: refuted
+  lossy: false
+  notes: Paper-direct verdicts preserve TabFact semantics.
+- dataset_field: evidence_cells
+  target_field: evidence_bundle
+  mapping:
+    structure: table_cell_evidence_groups
+  lossy: false
+  notes: MoLabel-operated scoring adds grouped table-cell grounding.

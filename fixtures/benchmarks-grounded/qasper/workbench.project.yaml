@@ -1,0 +1,19 @@
+workspace_id: e62cf3d9-3a35-5d8c-8543-988ae67c3fe9
+workspace_name: QASPER Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: qasper_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: qasper_grounded_v1
+  definition_path: workbench/config/task-schemas/qasper-grounded-v1.yaml
+export_targets:
+- export_id: qasper_grounded_export
+  output_namespace: workbench/exports/qasper
+validation_gates: []

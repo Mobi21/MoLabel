@@ -1,0 +1,41 @@
+benchmark_id: feverous
+record_id_field: id
+dataset_label_fields:
+  - label
+  - evidence
+  - challenge
+target_label_fields:
+  - verdict
+  - evidence_sets
+  - evidence_atoms
+  - challenge
+field_mappings:
+  - dataset_field: label
+    target_field: verdict
+    mapping:
+      SUPPORTS: supports
+      REFUTES: refutes
+      "NOT ENOUGH INFO": nei
+    notes: Official FEVEROUS verdict normalization.
+  - dataset_field: evidence
+    target_field: evidence_sets
+    mapping:
+      structure: list_of_alternative_evidence_sets
+      content: nested_content_ids
+    lossy: false
+    notes: Preserves the paper-direct evidence-set structure.
+  - dataset_field: evidence
+    target_field: evidence_atoms
+    mapping:
+      operation: flatten
+      deduplicate: true
+    lossy: true
+    notes: Flattens nested paper evidence sets for MoLabel-operated scoring.
+  - dataset_field: challenge
+    target_field: challenge
+    mapping:
+      entity_disambiguation: entity_disambiguation
+      multi_hop_reasoning: multi_hop_reasoning
+      other: other
+      combining_tables_and_text: combining_tables_and_text
+    notes: Challenge families are preserved for diagnostics only.

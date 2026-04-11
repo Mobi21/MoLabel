@@ -37,7 +37,7 @@ def main() -> None:
     env = {**os.environ}
 
     # SE-012: respect MOLABEL_HOST / MOLABEL_PORT for network binding.
-    host = env.get("MOLABEL_HOST", "0.0.0.0")
+    host = env.get("MOLABEL_HOST", "127.0.0.1")
     port = env.get("MOLABEL_PORT", "8000")
 
     print(f"[molabel-dev] Project root: {project_root}")

@@ -267,6 +267,24 @@ class StructuredOutputEnforcer:
                     f"allowed values {enum_values}"
                 )
 
+            # Validate array items when an items schema is provided
+            if expected_type == "array" and isinstance(value, list):
+                items_schema = prop_schema.get("items")
+                if items_schema:
+                    item_type = items_schema.get("type")
+                    item_enum = items_schema.get("enum")
+                    for idx, item in enumerate(value):
+                        if item_type and not self._check_type(item, item_type):
+                            errors.append(
+                                f"Field '{field}[{idx}]': expected item type "
+                                f"'{item_type}', got '{type(item).__name__}'"
+                            )
+                        if item_enum is not None and item not in item_enum:
+                            errors.append(
+                                f"Field '{field}[{idx}]': value '{item}' not in "
+                                f"allowed values {item_enum}"
+                            )
+
         return errors
 
     def _check_type(self, value: Any, expected: str) -> bool:

@@ -120,6 +120,9 @@ class BlindReviewTaskResponse(BaseModel):
     updated_at: str
     workspace_id: str
     dataset_id: str
+    record_external_id: str | None = None
+    record_view: dict[str, Any] | None = None
+    record_text: str | None = None
     agent_output: AgentOutputResponse | None = None
     blind_review_policy: str | None = None
 
@@ -157,7 +160,7 @@ class SubmitResponse(BaseModel):
     """Response for a submit operation."""
 
     submitted_task: ReviewTaskResponse
-    next_task: ReviewTaskResponse | None = None
+    next_task: BlindReviewTaskResponse | None = None
     queue_empty: bool = False
     message: str = "submitted"
 
@@ -166,7 +169,7 @@ class SkipResponse(BaseModel):
     """Response for a skip operation."""
 
     skipped_task: ReviewTaskResponse
-    next_task: ReviewTaskResponse | None = None
+    next_task: BlindReviewTaskResponse | None = None
     queue_empty: bool = False
     message: str = "skipped"
 
@@ -394,7 +397,8 @@ async def submit_review_endpoint(
         if next_task is None:
             queue_empty = True
         else:
-            next_task_resp = ReviewTaskResponse(**next_task)
+            next_task = apply_blind_review_policy(engine, next_task)
+            next_task_resp = BlindReviewTaskResponse(**next_task)
 
     return SubmitResponse(
         submitted_task=submitted_task,
@@ -439,7 +443,8 @@ async def skip_task_endpoint(
     if next_task is None:
         queue_empty = True
     else:
-        next_task_resp = ReviewTaskResponse(**next_task)
+        next_task = apply_blind_review_policy(engine, next_task)
+        next_task_resp = BlindReviewTaskResponse(**next_task)
 
     return SkipResponse(
         skipped_task=skipped_task,

@@ -1,0 +1,19 @@
+workspace_id: 0a4f0de8-1d46-4a1d-9736-a4d3d11d9011
+workspace_name: Messy Support Ops Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+  - dataset_id: support_tickets_raw
+    source_paths:
+      - data/raw/support_tickets.csv
+    loader_plugin: molabel.loaders.csv
+    record_kind: text
+    canonical_id_strategy: source_record_id
+    indexing_mode: projection
+task_schemas:
+  - task_schema_id: support_triage_v1
+    definition_path: workbench/config/task-schemas/support-triage-v1.yaml
+export_targets:
+  - export_id: support_triage_export
+    output_namespace: workbench/exports/support-triage
+validation_gates: []

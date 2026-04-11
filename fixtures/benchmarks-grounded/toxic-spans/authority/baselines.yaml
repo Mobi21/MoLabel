@@ -1,0 +1,19 @@
+benchmark_id: toxic-spans
+baselines:
+- baseline_id: oracle
+  name: Toxic Spans Oracle
+  source: molabel_local
+  mode: model
+  variant: paper_direct
+  split_id: dev
+  metrics:
+    span_overlap_f1: 1.0
+  notes: Exact replay of the paper-direct gold.
+- baseline_id: shifted_floor
+  name: Shifted Span Floor
+  source: molabel_local
+  mode: model
+  variant: molabel_operated
+  split_id: dev
+  metrics: {}
+  notes: Predicts boundary-shifted spans to expose exact-vs-overlap reporting.

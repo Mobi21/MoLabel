@@ -1,0 +1,22 @@
+benchmark_id: hotpotqa
+paper_title: 'HotpotQA: A Dataset for Diverse, Explainable Multi-hop Question Answering'
+paper_url: https://aclanthology.org/D18-1259/
+citation: Yang et al. (2018)
+publication_year: 2018
+dataset_name: HotpotQA
+dataset_url: https://aclanthology.org/D18-1259/
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Multi-hop QA with answer text and supporting facts.
+original_task_definition: Answer each question and cite the supporting sentences needed
+  for the multi-hop reasoning chain.
+original_metrics:
+- answer_em
+- answer_f1
+- supporting_fact_em
+- supporting_fact_f1
+- joint_em
+- joint_f1
+notes:
+- The committed slice uses representative synthetic examples matched to the benchmark
+  task contract.

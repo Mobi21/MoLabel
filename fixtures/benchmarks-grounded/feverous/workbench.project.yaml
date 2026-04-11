@@ -1,0 +1,19 @@
+workspace_id: d05130de-2380-40c4-85ce-72d34d772eb1
+workspace_name: FEVEROUS Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+  - dataset_id: feverous_dev_slice
+    source_paths:
+      - workbench/benchmarks/splits/dev.jsonl
+    loader_plugin: molabel.loaders.jsonl
+    record_kind: claim
+    canonical_id_strategy: source_record_id
+    indexing_mode: projection
+task_schemas:
+  - task_schema_id: feverous_verification_v1
+    definition_path: workbench/config/task-schemas/feverous-verification-v1.yaml
+export_targets:
+  - export_id: feverous_verification_export
+    output_namespace: workbench/benchmarks/runs
+validation_gates: []

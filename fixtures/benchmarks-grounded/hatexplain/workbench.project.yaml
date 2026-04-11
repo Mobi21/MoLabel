@@ -1,0 +1,20 @@
+workspace_id: 6bcd5b3e-4f4d-48c0-b6fd-3efedc1f8d74
+workspace_name: HateXplain Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+  - dataset_id: hatexplain_raw
+    source_paths:
+      - data/raw/dataset.jsonl
+    loader_plugin: molabel.loaders.jsonl
+    record_kind: document
+    canonical_id_strategy: source_record_id
+    indexing_mode: projection
+task_schemas:
+  - dataset_id: hatexplain_raw
+    task_schema_id: hatexplain_v1
+    definition_path: workbench/config/task-schemas/hatexplain-v1.yaml
+export_targets:
+  - export_id: hatexplain_export
+    output_namespace: workbench/exports/hatexplain
+validation_gates: []

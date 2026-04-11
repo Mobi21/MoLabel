@@ -1,0 +1,77 @@
+benchmark_id: evidence-inference
+aggregation: weighted_mean
+primary_metric_id: joint_effect_evidence
+metrics:
+- metric_id: joint_effect_evidence
+  name: Joint Effect + Evidence
+  metric_type: joint_evidence_decision
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - evidence_bundle
+  weight: 1.0
+- metric_id: decision_accuracy
+  name: Decision Accuracy
+  metric_type: accuracy
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - molabel_operated
+  fields:
+  - decision
+  weight: 0.0
+- metric_id: evidence_group_f1
+  name: Evidence Group F1
+  metric_type: evidence_group_f1
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - evidence_bundle
+  weight: 0.0
+- metric_id: evidence_group_exact_match
+  name: Evidence Group Exact Match
+  metric_type: evidence_group_exact_match
+  modes:
+  - model
+  - workflow
+  - operator
+  variants:
+  - paper_direct
+  - molabel_operated
+  fields:
+  - evidence_bundle
+  weight: 0.0
+tax_definitions:
+- tax_id: model_tax
+  name: Model Tax
+  minuend_mode: model
+  minuend_variant: paper_direct
+  subtrahend_mode: model
+  subtrahend_variant: molabel_operated
+  notes: Gap between paper-direct and MoLabel-operated scoring.
+- tax_id: workflow_tax
+  name: Workflow Tax
+  minuend_mode: model
+  minuend_variant: molabel_operated
+  subtrahend_mode: workflow
+  subtrahend_variant: molabel_operated
+  notes: Gap introduced by workflow execution.
+- tax_id: operator_tax
+  name: Operator Tax
+  minuend_mode: workflow
+  minuend_variant: molabel_operated
+  subtrahend_mode: operator
+  subtrahend_variant: molabel_operated
+  notes: Gap introduced by the external CLI operator.

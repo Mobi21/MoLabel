@@ -1,0 +1,12 @@
+benchmark_id: totto
+paper_title: 'ToTTo: A Controlled Table-To-Text Generation Dataset'
+paper_url: https://aclanthology.org/2020.emnlp-main.89/
+citation: Parikh et al. (2020)
+publication_year: 2020
+dataset_name: ToTTo
+dataset_url: https://aclanthology.org/2020.emnlp-main.89/
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Table-grounded sentence generation with claim-level cell anchors.
+original_task_definition: Generate a sentence supported by highlighted table cells
+  only.

@@ -1,0 +1,52 @@
+benchmark_id: hatexplain
+goal: >
+  Evaluate Codex as an external MoLabel operator on a grounded HateXplain
+  project using only the public CLI and installed skill, with MiniMax 2.7 as the current
+  labeling engine.
+current_labeling_engine: MiniMax 2.7
+authority_pack: true
+reference_workspace_root: ../workbench
+benchmark_profiles:
+  - canonical
+  - operator-primary
+  - smoke
+aggregation: weighted_mean
+label_quality_weight: 0.7
+checklist_weight: 0.3
+blocking_check_ids:
+  - uses_public_cli_and_skill_only
+  - configures_minimax_2_7_profile
+  - preserves_artifact_integrity
+checks:
+  - check_id: uses_public_cli_and_skill_only
+    phase: setup
+    description: Uses only documented MoLabel CLI surfaces with the installed benchmark skill.
+    weight: 1.0
+  - check_id: configures_minimax_2_7_profile
+    phase: setup
+    description: Registers MiniMax 2.7 through the Anthropic-compatible adapter path.
+    weight: 1.0
+  - check_id: uses_real_minimax_proposals
+    phase: run
+    description: Sends real labeling requests through the MiniMax 2.7 model profile.
+    weight: 1.0
+  - check_id: bootstraps_workspace_and_dataset
+    phase: setup
+    description: Detects the workspace, creates the dataset, and imports the split safely.
+    weight: 1.0
+  - check_id: preserves_valid_labels
+    phase: run
+    description: Preserves valid labels without inventing, dropping, or corrupting them.
+    weight: 1.0
+  - check_id: writes_benchmark_run_artifacts
+    phase: scoring
+    description: Writes summary and report artifacts under workbench/benchmarks/runs.
+    weight: 1.0
+  - check_id: writes_truthful_benchmark_run_artifacts
+    phase: scoring
+    description: Writes summary and report artifacts that match persisted benchmark facts.
+    weight: 1.0
+  - check_id: preserves_artifact_integrity
+    phase: scoring
+    description: Leaves benchmark metadata and gold artifacts schema-valid after the run.
+    weight: 1.0

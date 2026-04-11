@@ -413,6 +413,14 @@ class TestAnthropicAdapter:
         adapter = AnthropicAdapter()
         assert adapter.supports_structured_output() is True
 
+    def test_base_url_override(self) -> None:
+        adapter = AnthropicAdapter(base_url="https://api.minimax.chat/v1/")
+        assert adapter._base_url == "https://api.minimax.chat/v1"
+
+    def test_messages_url_supports_minimax_anthropic_base(self) -> None:
+        adapter = AnthropicAdapter(base_url="https://api.minimax.io/anthropic")
+        assert adapter._messages_url() == "https://api.minimax.io/anthropic/v1/messages"
+
     def test_supports_logprobs(self) -> None:
         adapter = AnthropicAdapter()
         assert adapter.supports_logprobs() is False

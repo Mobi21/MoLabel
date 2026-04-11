@@ -12,13 +12,41 @@ build/
 
 # Local secrets
 .env
+.env.*
+!.env.example
 .superpowers/
+.claude/
+.codex/
+.agents/
+.cursor/
+.roo/
+.aider*
 
 # Test logs (generated, not committed)
 tests/e2e/logs/
 
+# Benchmark reports (generated)
+reports/
+
 # Dev runtime state
 workbench/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Personal planning / local agent workspaces
+/Documentation/
+/plans/
+/planning/
+/notes/
+/scratch/
+/tmp/
+/temp/
+/agents/
+/agent/
+/skills/
+/docs/superpowers/
 
 # Rust/Tauri
 target/

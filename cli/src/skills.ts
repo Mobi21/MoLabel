@@ -22,11 +22,37 @@ export async function installSkillBundle(
   const files: string[] = []
   await copyDirectory(sharedDir, join(targetDir, 'shared'), files)
   await copyDirectory(flavorDir, targetDir, files)
+  await copyStandaloneSkills(sourceRoot, targetRoot, files)
 
   return {
     targetDir,
     flavor,
     files,
+  }
+}
+
+async function copyStandaloneSkills(
+  sourceRoot: string,
+  targetRoot: string,
+  files: string[],
+): Promise<void> {
+  const entries = await readdir(sourceRoot, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue
+    }
+    if (
+      entry.name === 'shared' ||
+      entry.name === 'codex' ||
+      entry.name === 'claude-code'
+    ) {
+      continue
+    }
+    await copyDirectory(
+      join(sourceRoot, entry.name),
+      resolve(targetRoot, entry.name),
+      files,
+    )
   }
 }
 

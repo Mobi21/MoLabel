@@ -1,0 +1,24 @@
+benchmark_id: clinc150
+paper_title: An Evaluation Dataset for Intent Classification and Out-of-Scope Prediction
+paper_url: https://aclanthology.org/D19-1131/
+citation: >
+  Larson et al., An Evaluation Dataset for Intent Classification and
+  Out-of-Scope Prediction, EMNLP-IJCNLP 2019.
+publication_year: 2019
+dataset_name: CLINC150
+dataset_url: https://github.com/clinc/oos-eval
+source_repository_url: https://github.com/clinc/oos-eval
+dataset_license: CC BY 3.0
+repository_license: CC BY 3.0
+redistribution_status: subset_allowed
+task_summary: Single-intent classification with explicit out-of-scope detection.
+original_task_definition: >
+  Predict the intent label for each utterance and identify out-of-scope
+  queries using the canonical CLINC/OOS label space.
+original_metrics:
+  - intent accuracy
+  - out-of-scope recall
+notes:
+  - Full dataset structure is 150 in-scope intents plus out-of-scope queries.
+  - Official splits are 100 train, 20 validation, and 30 test examples per in-scope intent.
+  - This fixture ships only a small curated subset for repeatable benchmark runs.

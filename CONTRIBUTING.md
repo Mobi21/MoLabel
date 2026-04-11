@@ -8,9 +8,13 @@
 ## Setup
 
 ```bash
-git clone https://github.com/your-org/MoLabel.git
+git clone https://github.com/Mobi21/MoLabel.git
 cd MoLabel
 uv sync
+
+cd frontend && npm install
+cd ../cli && npm install && npm run build
+cd ..
 ```
 
 This installs all workspace packages in development mode.
@@ -20,8 +24,19 @@ This installs all workspace packages in development mode.
 ### Run the workbench
 
 ```bash
-uv run molabel  # coming soon
+uv run molabel-dev
 ```
+
+Backend-only CLI development:
+
+```bash
+uv run python -m uvicorn molabel.app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Current status:
+
+- CLI and backend are the main development surfaces today.
+- The frontend is in the repo but is not ready for general use yet.
 
 ### Run tests
 
@@ -29,6 +44,9 @@ uv run molabel  # coming soon
 uv run pytest                     # all tests
 uv run pytest tests/unit/         # unit tests
 uv run pytest tests/integration/  # integration tests
+
+cd frontend && npm run test
+cd cli && npm test
 ```
 
 ### Lint and format
@@ -46,6 +64,12 @@ MoLabel is a uv workspace monorepo with four packages:
 - **molabel-app** (`packages/molabel-app/`) — FastAPI web application
 - **molabel-plugins** (`packages/molabel-plugins/`) — Built-in task type plugins
 - **molabel-depolarize** (`packages/molabel-depolarize/`) — DePolarize reference implementation
+
+Additional top-level apps:
+
+- **cli** (`cli/`) — public `molabel` CLI and bundled agent skills
+- **frontend** (`frontend/`) — work-in-progress control-room UI
+- **src-tauri** (`src-tauri/`) — work-in-progress desktop shell
 
 See [AGENTS.md](AGENTS.md) for module boundary rules and conventions.
 

@@ -20,6 +20,7 @@ def app():
     engine = get_engine(":memory:")
     create_all_tables(engine)
     application.state.engine = engine
+    application.state.app_secret = "test-secret-for-workspace-tests"
     return application
 
 
@@ -77,14 +78,14 @@ async def test_get_workspace_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_create_workspace_requires_auth(client):
-    """API-005: POST /workspaces requires a session cookie."""
+async def test_create_workspace_no_auth_required(client):
+    """API-005: POST /workspaces is auth-free (bootstrap entry point)."""
     resp = await client.post(
         "/api/v1/workspaces",
         json={"path": "/tmp/test-workspace", "workspace_name": "Test"},
     )
-    # Without a session cookie, we expect 401
-    assert resp.status_code == 401
+    # Workspace creation is the bootstrap entry point — no auth required
+    assert resp.status_code == 201
 
 
 # ---------------------------------------------------------------------------

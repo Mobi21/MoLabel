@@ -1,0 +1,20 @@
+benchmark_id: beir
+paper_title: 'BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information
+  Retrieval Models'
+paper_url: https://arxiv.org/abs/2104.08663
+citation: Thakur et al. (2021)
+publication_year: 2021
+dataset_name: BEIR
+dataset_url: https://arxiv.org/abs/2104.08663
+dataset_license: See upstream benchmark terms; committed slice is synthetic and provenance-tracked.
+redistribution_status: review_required
+task_summary: Document retrieval with ranked outputs and qrels.
+original_task_definition: Retrieve a ranked list of documents for each query against
+  a fixed corpus snapshot and score with ranking metrics.
+original_metrics:
+- nDCG@10
+- Recall@100
+- MAP
+notes:
+- The committed slice uses representative synthetic examples matched to the benchmark
+  task contract.

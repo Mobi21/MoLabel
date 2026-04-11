@@ -1,19 +1,17 @@
 workspace_id: fixture-chat-review
 workspace_name: Chat Review Fixture
 core_version: "0.1"
-enabled_plugins:
-  - molabel.plugins.chat_review
+enabled_plugins: []
 datasets:
   - dataset_id: sample_conversations
     source_paths:
       - data/conversations.jsonl
-    loader_plugin: molabel.plugins.chat_review
+    loader_plugin: molabel.loaders.jsonl
     record_kind: conversation_window
     canonical_id_strategy: source_record_id
     indexing_mode: projection
 task_schemas:
   - task_schema_id: chat_quality_review_v1
-    task_type_plugin: molabel.plugins.chat_review
     definition_path: config/chat_quality_review_v1.yaml
 export_targets:
   - export_id: chat_review_export

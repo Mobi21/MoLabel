@@ -1,0 +1,59 @@
+benchmark_id: clinc150
+scenario_id: clinc150
+track: grounded
+name: CLINC150 Grounded Intent Benchmark
+description: >
+  Redistributable CLINC150 subset sampled from the official CLINC/OOS release.
+  The benchmark keeps the intent classification and out-of-scope decision
+  structure from the paper while remaining small enough for repeatable
+  CLI-driven runs.
+authority_pack: true
+reference_workspace_root: ../workbench
+current_labeling_engine: MiniMax 2.7
+benchmark_profiles:
+  - canonical
+  - operator-primary
+  - smoke
+raw_format: jsonl
+source_path: workbench/benchmarks/splits/test.jsonl
+loader_plugin: molabel.loaders.jsonl
+record_id_field: record_id
+task_schema_path: workbench/config/task-schemas/clinc150-grounded-v1.yaml
+workflow_path: workbench/workflows/clinc150-grounded.yaml
+paper_metadata_path: workbench/benchmarks/paper.yaml
+label_map_path: workbench/benchmarks/label-map.yaml
+metrics_path: workbench/benchmarks/metrics.yaml
+baselines_path: workbench/benchmarks/baselines.yaml
+operator_path: workbench/benchmarks/operator.yaml
+gold_labels_path: workbench/benchmarks/gold/molabel-operated/test.jsonl
+paper_gold_path: workbench/benchmarks/gold/paper-direct/test.jsonl
+molabel_gold_path: workbench/benchmarks/gold/molabel-operated/test.jsonl
+split_paths:
+  - workbench/benchmarks/splits/train.jsonl
+  - workbench/benchmarks/splits/val.jsonl
+  - workbench/benchmarks/splits/test.jsonl
+human_label_paths:
+  - workbench/benchmarks/human-labels/reviewer-mira.jsonl
+review_paths:
+  - workbench/benchmarks/reviews/reviewer-otto.jsonl
+evaluation_modes:
+  - model
+  - workflow
+  - operator
+scoring_variants:
+  - paper_direct
+  - molabel_operated
+default_model_profile:
+  provider_type: anthropic
+  provider_name: MiniMax
+  model_identifier: minimax-2.7
+  sdk_stack: anthropic_sdk
+  agent_role: proposer
+evaluation_fields:
+  - intent_label
+  - is_out_of_scope
+requires_dataset_download: false
+redistribution_notes:
+  - The committed fixture is a small subset from the official CLINC/OOS release.
+  - The upstream repository license is CC BY 3.0.
+expected_intentional_errors: 2

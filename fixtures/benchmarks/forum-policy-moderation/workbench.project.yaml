@@ -1,0 +1,19 @@
+workspace_id: 8f1fd8bd-1439-4d09-bf9e-c4671412ad42
+workspace_name: Forum Policy Moderation Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+  - dataset_id: forum_threads_raw
+    source_paths:
+      - data/raw/*.md
+    loader_plugin: molabel.loaders.markdown
+    record_kind: text
+    canonical_id_strategy: source_record_id
+    indexing_mode: projection
+task_schemas:
+  - task_schema_id: forum_policy_v1
+    definition_path: workbench/config/task-schemas/forum-policy-v1.yaml
+export_targets:
+  - export_id: forum_policy_export
+    output_namespace: workbench/exports/forum-policy
+validation_gates: []

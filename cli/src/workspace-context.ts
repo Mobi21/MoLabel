@@ -1,7 +1,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 
-import YAML from 'yaml'
+import { parse as parseYaml } from 'yaml'
 
 import type { ArtifactResolution, WorkspaceDetection } from './types.js'
 
@@ -31,7 +31,7 @@ export async function detectWorkspace(
     const manifestPath = join(current, MANIFEST_FILENAME)
     try {
       const raw = await readFile(manifestPath, 'utf8')
-      const parsed = YAML.parse(raw) as { workspace_name?: string } | null
+      const parsed = parseYaml(raw) as { workspace_name?: string } | null
       return {
         found: true,
         rootDir: current,

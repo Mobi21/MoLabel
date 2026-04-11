@@ -1,0 +1,19 @@
+workspace_id: f0b6ca82-e67d-5583-99b3-f3ba5d52883f
+workspace_name: CUAD Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: cuad_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: cuad_grounded_v1
+  definition_path: workbench/config/task-schemas/cuad-grounded-v1.yaml
+export_targets:
+- export_id: cuad_grounded_export
+  output_namespace: workbench/exports/cuad
+validation_gates: []

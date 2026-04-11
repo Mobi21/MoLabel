@@ -1,0 +1,20 @@
+workspace_id: d11e0c88-069d-45d2-9f0d-1479c47c8d8c
+workspace_name: Claims Audit Extraction Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+  - dataset_id: claims_packets_raw
+    source_paths:
+      - data/raw/claims_packets.jsonl
+    loader_plugin: molabel.loaders.jsonl
+    record_kind: document
+    canonical_id_strategy: source_record_id
+    indexing_mode: projection
+task_schemas:
+  - dataset_id: claims_packets_raw
+    task_schema_id: claims_audit_v1
+    definition_path: workbench/config/task-schemas/claims-audit-v1.yaml
+export_targets:
+  - export_id: claims_audit_export
+    output_namespace: workbench/exports/claims-audit
+validation_gates: []

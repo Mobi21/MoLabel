@@ -1,0 +1,19 @@
+benchmark_id: docvqa
+baselines:
+- baseline_id: oracle
+  name: DocVQA Oracle
+  source: molabel_local
+  mode: model
+  variant: paper_direct
+  split_id: dev
+  metrics:
+    anls: 1.0
+  notes: Exact replay of the paper-direct gold.
+- baseline_id: wrong_answer_floor
+  name: Wrong Answer Floor
+  source: molabel_local
+  mode: model
+  variant: molabel_operated
+  split_id: dev
+  metrics: {}
+  notes: Uses wrong answers and drops document supports.

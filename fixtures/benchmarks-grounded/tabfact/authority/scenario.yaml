@@ -1,0 +1,59 @@
+benchmark_id: tabfact
+scenario_id: tabfact
+track: grounded
+name: TabFact Grounded Benchmark
+description: Table-grounded fact verification with verdict and evidence-cell reporting.
+authority_pack: true
+reference_workspace_root: ../workbench
+current_labeling_engine: MiniMax 2.7
+benchmark_profiles:
+- canonical
+- operator-primary
+- smoke
+raw_format: jsonl
+source_path: workbench/benchmarks/splits/dev.jsonl
+loader_plugin: molabel.loaders.jsonl
+record_id_field: record_id
+task_schema_path: workbench/config/task-schemas/tabfact-grounded-v1.yaml
+workflow_path: workbench/workflows/tabfact-grounded.yaml
+paper_metadata_path: workbench/benchmarks/paper.yaml
+label_map_path: workbench/benchmarks/label-map.yaml
+metrics_path: workbench/benchmarks/metrics.yaml
+baselines_path: workbench/benchmarks/baselines.yaml
+operator_path: workbench/benchmarks/operator.yaml
+gold_labels_path: workbench/benchmarks/gold/molabel-operated/dev.jsonl
+paper_gold_path: workbench/benchmarks/gold/paper-direct/dev.jsonl
+molabel_gold_path: workbench/benchmarks/gold/molabel-operated/dev.jsonl
+split_paths:
+- workbench/benchmarks/splits/dev.jsonl
+human_label_paths:
+- workbench/benchmarks/human-labels/reviewer-human.jsonl
+review_paths:
+- workbench/benchmarks/reviews/reviewer-expert.jsonl
+evaluation_modes:
+- model
+- workflow
+- operator
+scoring_variants:
+- paper_direct
+- molabel_operated
+default_model_profile:
+  provider_type: anthropic
+  provider_name: MiniMax
+  model_identifier: minimax-2.7
+  sdk_stack: anthropic_sdk
+  agent_role: proposer
+evaluation_fields:
+- decision
+- evidence_bundle
+requires_dataset_download: false
+redistribution_notes:
+- The committed slice is synthetic and provenance-tracked rather than a verbatim upstream
+  redistribution.
+- Larger packaging of upstream benchmark data remains a licensing and provenance review
+  item.
+subset_policy:
+  source_split: dev
+  selection_strategy: paper-faithful_curated_slice
+  subset_size: 4
+expected_intentional_errors: 2

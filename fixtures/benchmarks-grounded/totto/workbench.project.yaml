@@ -1,0 +1,19 @@
+workspace_id: d5f87176-2d9c-56bb-a7dc-a706c60f8024
+workspace_name: ToTTo Grounded Benchmark
+core_version: 0.1.0
+enabled_plugins: []
+datasets:
+- dataset_id: totto_subset
+  source_paths:
+  - workbench/benchmarks/splits/*.jsonl
+  loader_plugin: molabel.loaders.jsonl
+  record_kind: text
+  canonical_id_strategy: source_record_id
+  indexing_mode: projection
+task_schemas:
+- task_schema_id: totto_grounded_v1
+  definition_path: workbench/config/task-schemas/totto-grounded-v1.yaml
+export_targets:
+- export_id: totto_grounded_export
+  output_namespace: workbench/exports/totto
+validation_gates: []

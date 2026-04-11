@@ -14,7 +14,12 @@ import json
 import uuid
 
 import pytest
-from conftest import ReviewerData, TaskData, WorkspaceData, insert_reviewer
+from conftest import (
+    ReviewerData,
+    TaskData,
+    WorkspaceData,
+    insert_reviewer,
+)
 from sqlalchemy import text
 
 from molabel.app.services.claims import (
@@ -88,6 +93,29 @@ def _create_tasks_with_schema(
         for _ in range(count):
             task_id = uuid.uuid4()
             record_id = uuid.uuid4()
+            conn.execute(
+                text(
+                    "INSERT INTO records "
+                    "("
+                    "id, external_id, stable_fields, payload, "
+                    "workspace_id, dataset_id"
+                    ") "
+                    "VALUES ("
+                    ":id, :external_id, :stable_fields, :payload, "
+                    ":workspace_id, :dataset_id"
+                    ")"
+                ),
+                {
+                    "id": str(record_id),
+                    "external_id": f"blind-record-{task_id}",
+                    "stable_fields": json.dumps(
+                        {"record_id": f"blind-record-{task_id}"}
+                    ),
+                    "payload": json.dumps({"text": f"Example text for {task_id}"}),
+                    "workspace_id": str(workspace.id),
+                    "dataset_id": str(dataset_id),
+                },
+            )
             conn.execute(
                 text(
                     "INSERT INTO review_tasks "
@@ -177,6 +205,10 @@ class TestBlindReviewPolicyHide:
         result = apply_blind_review_policy(engine, claimed)
         assert result["agent_output"] is None
         assert result["blind_review_policy"] == "hide_agent_outputs_by_default"
+        assert result["record_external_id"] is not None
+        assert result["record_view"] is not None
+        assert result["record_view"]["payload"]["text"].startswith("Example text for ")
+        assert result["record_text"].startswith("Example text for ")
 
     def test_agent_output_shown_after_reveal(self, engine, reviewer, workspace) -> None:
         """Agent output is included when ai_revealed=True despite hide policy."""
@@ -212,6 +244,9 @@ class TestBlindReviewPolicyHide:
         assert result["agent_output"] is not None
         assert result["agent_output"]["labels"] == {"sentiment": "negative"}
         assert result["blind_review_policy"] == "hide_agent_outputs_by_default"
+        assert result["record_external_id"] is not None
+        assert result["record_view"] is not None
+        assert result["record_text"].startswith("Example text for ")
 
     def test_no_agent_output_exists(self, engine, reviewer, workspace) -> None:
         """When no agent output exists, agent_output is None regardless of policy."""
@@ -353,3 +388,46 @@ class TestBlindReviewPolicyFallback:
         # Falls back to hide
         assert result["agent_output"] is None
         assert result["blind_review_policy"] == "hide_agent_outputs_by_default"
+
+    def test_record_view_scrubs_truth_bearing_fields(
+        self, engine, reviewer, workspace
+    ) -> None:
+        """Reviewer-visible record context must not expose source/gold labels."""
+        schema_id = _create_task_schema(
+            engine,
+            workspace,
+            blind_review_policy="hide_agent_outputs_by_default",
+        )
+        tasks = _create_tasks_with_schema(engine, workspace, schema_id)
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    """
+                    UPDATE records
+                    SET payload = :payload
+                    WHERE id = :record_id
+                    """
+                ),
+                {
+                    "record_id": str(tasks[0].record_id),
+                    "payload": json.dumps(
+                        {
+                            "text": "Safe review text",
+                            "source_label": "positive",
+                            "nested": {"ground_truth": "negative"},
+                        }
+                    ),
+                },
+            )
+            conn.commit()
+
+        claimed = claim_next(engine, QUEUE_ID, reviewer.id)
+        assert claimed is not None
+
+        result = apply_blind_review_policy(engine, claimed)
+        assert result["record_text"] == "Safe review text"
+        assert result["record_view"] is not None
+        payload = result["record_view"]["payload"]
+        assert payload["text"] == "Safe review text"
+        assert "source_label" not in payload
+        assert "ground_truth" not in payload["nested"]

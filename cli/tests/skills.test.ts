@@ -12,13 +12,30 @@ describe('skills', () => {
     const packageRoot = await mkdtemp(join(tmpdir(), 'molabel-cli-package-'))
     await mkdir(join(packageRoot, 'skills', 'codex'), { recursive: true })
     await mkdir(join(packageRoot, 'skills', 'shared'), { recursive: true })
+    await mkdir(
+      join(packageRoot, 'skills', 'molabel-grounded-benchmark-operator'),
+      { recursive: true },
+    )
     await writeFile(join(packageRoot, 'skills', 'codex', 'SKILL.md'), '# codex\n', 'utf8')
     await writeFile(join(packageRoot, 'skills', 'shared', 'AGENTS.md'), '# shared\n', 'utf8')
+    await writeFile(
+      join(
+        packageRoot,
+        'skills',
+        'molabel-grounded-benchmark-operator',
+        'SKILL.md',
+      ),
+      '# grounded\n',
+      'utf8',
+    )
 
     const targetRoot = await mkdtemp(join(tmpdir(), 'molabel-cli-target-'))
     const result = await installSkillBundle(packageRoot, targetRoot, 'codex')
 
     expect(result.targetDir).toContain('molabel-cli')
     expect(result.files.length).toBeGreaterThan(0)
+    expect(result.files).toContain(
+      join(targetRoot, 'molabel-grounded-benchmark-operator', 'SKILL.md'),
+    )
   })
 })

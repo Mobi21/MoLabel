@@ -141,6 +141,10 @@ class PluginRegistry:
         """Return metadata for *plugin_id*, or ``None`` if not found."""
         return self._metadata.get(plugin_id)
 
+    def list_plugin_ids(self) -> list[str]:
+        """Return the canonical plugin IDs registered in metadata."""
+        return list(self._metadata)
+
     # ------------------------------------------------------------------
     # Error tracking  (PL-004)
     # ------------------------------------------------------------------

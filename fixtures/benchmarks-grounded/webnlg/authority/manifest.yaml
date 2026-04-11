@@ -1,0 +1,18 @@
+benchmark_id: webnlg
+layout: authority
+benchmark_profiles:
+- canonical
+- operator-primary
+- smoke
+canonical_profile_id: canonical
+operator_primary_profile_id: operator-primary
+smoke_profile_id: smoke
+paper_path: paper.yaml
+scenario_path: scenario.yaml
+label_map_path: label-map.yaml
+metrics_path: metrics.yaml
+baselines_path: baselines.yaml
+reference_workspace_path: ../workbench
+notes:
+- Canonical authority pack for the grounded WebNLG slice.
+- The current workbench tree remains as transitional reference material.

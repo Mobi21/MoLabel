@@ -27,14 +27,14 @@ uv run molabel-dev         # starts FastAPI + frontend dev server together
 
 ## Package Structure
 
-This is a uv workspace monorepo. Python packages live under `packages/`, with a React frontend and Tauri desktop shell alongside.
+This is a uv workspace monorepo. Python packages live under `packages/`, with a work-in-progress frontend and desktop shell alongside.
 
 - `packages/molabel-core/` — core library (Python)
 - `packages/molabel-app/` — FastAPI backend (Python)
 - `packages/molabel-plugins/` — built-in plugins (Python)
 - `packages/molabel-depolarize/` — DePolarize reference app (Python)
-- `frontend/` — React frontend (TypeScript)
-- `src-tauri/` — Tauri desktop shell (Rust)
+- `frontend/` — work-in-progress React UI (TypeScript)
+- `src-tauri/` — work-in-progress Tauri desktop shell (Rust)
 
 ## Key References
 

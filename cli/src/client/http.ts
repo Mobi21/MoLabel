@@ -47,6 +47,19 @@ export class ApiClient {
     return (await response.json()) as T
   }
 
+  public async patchJson<T>(path: string, body: unknown): Promise<T> {
+    const response = await this.request(path, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return (await response.json()) as T
+  }
+
+  public async delete(path: string): Promise<void> {
+    await this.request(path, { method: 'DELETE' })
+  }
+
   public async postText(path: string, body: unknown): Promise<string> {
     const response = await this.request(path, {
       method: 'POST',

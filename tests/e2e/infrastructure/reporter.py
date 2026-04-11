@@ -59,6 +59,7 @@ class E2EReporter:
             "failed": sum(1 for c in self.contexts if c.errors),
             "total_duration_ms": sum(c.elapsed_ms() for c in self.contexts),
             "total_api_calls": sum(len(c.api_calls) for c in self.contexts),
+            "total_cli_commands": sum(len(c.cli_commands) for c in self.contexts),
             "total_llm_calls": sum(c.llm_calls for c in self.contexts),
             "total_real_llm_calls": sum(c.real_llm_calls for c in self.contexts),
             "by_tier": {
@@ -67,6 +68,7 @@ class E2EReporter:
                     "passed": sum(1 for c in ctxs if not c.errors),
                     "failed": sum(1 for c in ctxs if c.errors),
                     "duration_ms": sum(c.elapsed_ms() for c in ctxs),
+                    "cli_commands": sum(len(c.cli_commands) for c in ctxs),
                 }
                 for tier, ctxs in sorted(by_tier.items())
             },
@@ -93,20 +95,21 @@ class E2EReporter:
             f"**Passed**: {report['passed']} | **Failed**: {report['failed']}",
             f"**Duration**: {report['total_duration_ms'] / 1000:.1f}s | "
             f"**API calls**: {report['total_api_calls']} | "
+            f"**CLI commands**: {report['total_cli_commands']} | "
             f"**LLM calls**: {report['total_llm_calls']} "
             f"({report['total_real_llm_calls']} real)",
             "",
             "## By Tier",
             "",
-            "| Tier | Tests | Passed | Failed | Duration |",
-            "|------|-------|--------|--------|----------|",
+            "| Tier | Tests | Passed | Failed | Duration | CLI Commands |",
+            "|------|-------|--------|--------|----------|--------------|",
         ]
         for tier, data in report["by_tier"].items():
             tier_name = _TIER_NAMES.get(int(tier), "")
             lines.append(
                 f"| {tier}. {tier_name} | {data['total']} | "
                 f"{data['passed']} | {data['failed']} | "
-                f"{data['duration_ms'] / 1000:.1f}s |"
+                f"{data['duration_ms'] / 1000:.1f}s | {data['cli_commands']} |"
             )
 
         failed_tests = [t for t in report["tests"] if t["errors"] > 0]

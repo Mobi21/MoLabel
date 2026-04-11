@@ -227,7 +227,7 @@ MoLabel assumes a trusted local network. The threat model is:
 
 ### Mitigations
 
-1. **Network binding**: the app binds to `0.0.0.0` by default (accessible from any machine on the local network) but can be configured to bind to `127.0.0.1` (localhost only) via `MOLABEL_HOST=127.0.0.1` environment variable. Localhost binding prevents all network access and is appropriate for single-user setups.
+1. **Network binding**: the app binds to `127.0.0.1` by default (localhost only) and only exposes itself to the local network when `MOLABEL_HOST=0.0.0.0` is set intentionally. Localhost binding prevents all network access and is appropriate for single-user setups.
 
 2. **Profile permanence**: reviewer profiles cannot be deleted. This ensures that the audit trail always has a valid reference for every review event, agent run, and adjudication decision. Profiles can be deactivated by setting `is_active` to false.
 

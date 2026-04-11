@@ -1,0 +1,27 @@
+benchmark_id: hatexplain
+paper_title: "HateXplain: A Benchmark Dataset for Explainable Hate Speech Detection"
+paper_url: https://arxiv.org/abs/2012.10289
+citation: >
+  Mathew et al., HateXplain: A Benchmark Dataset for Explainable Hate Speech
+  Detection, AAAI 2021.
+publication_year: 2021
+dataset_name: HateXplain
+dataset_url: https://github.com/hate-alert/HateXplain
+source_repository_url: https://github.com/hate-alert/HateXplain
+dataset_license: license ambiguity under review
+repository_license: MIT
+redistribution_status: review_required
+task_summary: >
+  Three-class hate-speech classification with target communities and token-level
+  rationale annotations.
+original_task_definition: >
+  Predict one of normal, offensive, or hatespeech and align the prediction with
+  annotator-supported target communities and rationales.
+original_metrics:
+  - classification F1
+  - plausibility
+  - faithfulness
+notes:
+  - The official data lives in Data/dataset.json and post_id_divisions.json.
+  - This fixture ships a curated subset from the official test split.
+  - Social-media text is checked in only as a small benchmark slice.

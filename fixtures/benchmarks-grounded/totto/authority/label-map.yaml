@@ -1,0 +1,14 @@
+benchmark_id: totto
+record_id_field: record_id
+dataset_label_fields:
+- highlighted_cells
+- reference_claims
+target_label_fields:
+- generation
+field_mappings:
+- dataset_field: reference_claims
+  target_field: generation
+  mapping:
+    structure: grounded_generation
+  lossy: false
+  notes: ToTTo claims remain grounded to explicit highlighted table cells.

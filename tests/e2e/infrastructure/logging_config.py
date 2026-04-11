@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -33,6 +33,10 @@ class JSONFormatter(logging.Formatter):
             "duration_ms": getattr(record, "duration_ms", None),
             "api_call": getattr(record, "api_call", None),
             "status_code": getattr(record, "status_code", None),
+            "cli_command": getattr(record, "cli_command", None),
+            "exit_code": getattr(record, "exit_code", None),
+            "stdout_preview": getattr(record, "stdout_preview", None),
+            "stderr_preview": getattr(record, "stderr_preview", None),
             "error": getattr(record, "error", None),
         }
         # Strip None values to keep log lines compact
@@ -88,6 +92,19 @@ class APICallLog:
 
 
 @dataclass
+class CliCommandLog:
+    """Record of a single CLI transcript entry."""
+
+    argv: list[str]
+    cwd: str | None
+    exit_code: int
+    duration_ms: float
+    stdout: str
+    stderr: str
+    command: str | None = None
+
+
+@dataclass
 class CheckpointLog:
     """Record of a single test checkpoint (assertion phase)."""
 
@@ -114,6 +131,7 @@ class TestContext:
     started_at: float = field(default_factory=time.monotonic)
     api_calls: list[APICallLog] = field(default_factory=list)
     checkpoints: list[CheckpointLog] = field(default_factory=list)
+    cli_commands: list[CliCommandLog] = field(default_factory=list)
     llm_calls: int = 0
     llm_tokens_in: int = 0
     llm_tokens_out: int = 0
@@ -149,6 +167,29 @@ class TestContext:
             )
         )
 
+    def log_cli_command(
+        self,
+        argv: list[str],
+        *,
+        cwd: str | None,
+        exit_code: int,
+        duration_ms: float,
+        stdout: str,
+        stderr: str,
+        command: str | None = None,
+    ) -> None:
+        self.cli_commands.append(
+            CliCommandLog(
+                argv=list(argv),
+                cwd=cwd,
+                exit_code=exit_code,
+                duration_ms=duration_ms,
+                stdout=stdout,
+                stderr=stderr,
+                command=command,
+            )
+        )
+
     def elapsed_ms(self) -> float:
         return (time.monotonic() - self.started_at) * 1000
 
@@ -159,6 +200,7 @@ class TestContext:
             "name": self.name,
             "total_duration_ms": round(self.elapsed_ms(), 1),
             "api_calls": len(self.api_calls),
+            "cli_commands": len(self.cli_commands),
             "checkpoints_passed": sum(1 for c in self.checkpoints if c.passed),
             "checkpoints_failed": sum(1 for c in self.checkpoints if not c.passed),
             "llm_calls": self.llm_calls,
@@ -166,3 +208,19 @@ class TestContext:
             "errors": len(self.errors),
             "warnings": len(self.warnings),
         }
+
+
+def serialize_test_context(ctx: TestContext) -> dict[str, Any]:
+    """Render the full per-test context into a JSON-serializable structure."""
+    return {
+        "summary": ctx.summary(),
+        "api_calls": [asdict(call) for call in ctx.api_calls],
+        "cli_commands": [asdict(command) for command in ctx.cli_commands],
+        "checkpoints": [asdict(checkpoint) for checkpoint in ctx.checkpoints],
+        "llm_calls": ctx.llm_calls,
+        "llm_tokens_in": ctx.llm_tokens_in,
+        "llm_tokens_out": ctx.llm_tokens_out,
+        "real_llm_calls": ctx.real_llm_calls,
+        "errors": list(ctx.errors),
+        "warnings": list(ctx.warnings),
+    }

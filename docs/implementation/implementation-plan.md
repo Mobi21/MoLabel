@@ -1,5 +1,12 @@
 # MoLabel Implementation Plan
 
+Note: As of 2026-03-27, the canonical product direction is agent-first and CLI-primary. This document remains useful as a delivery record, but new work should be reprioritized behind:
+
+1. CLI completeness and additive `/api/v1/cli/*` operator coverage.
+2. Bundled agent skills and machine-readable command contracts.
+3. Benchmark-grade sample projects and CLI-driven evaluation.
+4. GUI refinement as manual control room, review surface, and observability layer.
+
 Fully sequenced plan organized into phases with parallel tracks. Every checklist item appears in exactly one step.
 
 ---
