@@ -54,6 +54,10 @@ export interface WorkflowTemplateManifest {
   name: string
   description: string
   file: string
+  version: string
+  task_family: string
+  capabilities: string[]
+  validated_by_benchmarks: string[]
 }
 
 export interface WorkflowTemplateDocument {

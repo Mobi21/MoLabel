@@ -13,26 +13,26 @@
 
 /** JSON Schema field type for form rendering. */
 export type SchemaFieldType =
-  | "string"
-  | "number"
-  | "integer"
-  | "boolean"
-  | "array"
-  | "object"
+  | 'string'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'array'
+  | 'object'
 
 /** UI widget hint for form field rendering. */
 export type FieldWidget =
-  | "text"
-  | "textarea"
-  | "select"
-  | "radio"
-  | "checkbox"
-  | "slider"
-  | "number"
-  | "date"
-  | "json"
-  | "hidden"
-  | "multi-select"
+  | 'text'
+  | 'textarea'
+  | 'select'
+  | 'radio'
+  | 'checkbox'
+  | 'slider'
+  | 'number'
+  | 'date'
+  | 'json'
+  | 'hidden'
+  | 'multi-select'
 
 /** A single property in a JSON schema form definition. */
 export interface SchemaProperty {
@@ -50,13 +50,13 @@ export interface SchemaProperty {
   properties?: Record<string, SchemaProperty>
   required?: readonly string[]
   /** UI rendering hint, not part of JSON Schema standard. */
-  "x-widget"?: FieldWidget
+  'x-widget'?: FieldWidget
   /** Display order hint. */
-  "x-order"?: number
+  'x-order'?: number
   /** Whether the field is read-only. */
-  "x-readonly"?: boolean
+  'x-readonly'?: boolean
   /** Placeholder text for input fields. */
-  "x-placeholder"?: string
+  'x-placeholder'?: string
 }
 
 /**
@@ -64,7 +64,7 @@ export interface SchemaProperty {
  * The core renders this generically using SchemaFormRenderer.
  */
 export interface FormSchema {
-  type: "object"
+  type: 'object'
   title?: string
   description?: string
   properties: Record<string, SchemaProperty>
@@ -77,13 +77,13 @@ export interface FormSchema {
 
 /** Render type for table columns. */
 export type ColumnRenderType =
-  | "text"
-  | "number"
-  | "badge"
-  | "progress"
-  | "date"
-  | "json"
-  | "boolean"
+  | 'text'
+  | 'number'
+  | 'badge'
+  | 'progress'
+  | 'date'
+  | 'json'
+  | 'boolean'
 
 /** Column definition declared by plugins for data explorer table views. */
 export interface ColumnDefinition {
@@ -107,11 +107,11 @@ export interface ColumnDefinition {
 
 /** Section type within a layout. */
 export type LayoutSectionType =
-  | "fields"
-  | "json"
-  | "text"
-  | "markdown"
-  | "custom"
+  | 'fields'
+  | 'json'
+  | 'text'
+  | 'markdown'
+  | 'custom'
 
 /** A single section within a detail or review layout. */
 export interface LayoutSection {
@@ -188,7 +188,7 @@ export interface PluginRecordRendererProps {
   record: PluginRecord
   taskSchema: PluginTaskSchema
   /** Layout mode: "review" for review screen, "detail" for inspector. */
-  mode: "review" | "detail"
+  mode: 'review' | 'detail'
 }
 
 /**
@@ -240,11 +240,11 @@ export interface PluginDashboardPanelProps {
 
 /** Component slot identifiers for plugin UI bundles. */
 export type PluginComponentSlot =
-  | "record_renderer"
-  | "review_form"
-  | "detail_panel"
-  | "dashboard_panel"
-  | "custom_screen"
+  | 'record_renderer'
+  | 'review_form'
+  | 'detail_panel'
+  | 'dashboard_panel'
+  | 'custom_screen'
 
 /**
  * Metadata for a dynamically loaded plugin component bundle.

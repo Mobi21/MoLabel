@@ -22,7 +22,7 @@ Reference workspace:
 - `workbench/config/task-schemas/...`
 - `workbench/workflows/...`
 
-The current MoLabel labeling engine for live benchmark runs is `MiniMax 2.7`
+The current MoLabel labeling engine for live benchmark runs is `MiniMax 2.7 highspeed`
 through the Anthropic-compatible adapter path.
 
 The benchmark is organized around three evaluation modes:

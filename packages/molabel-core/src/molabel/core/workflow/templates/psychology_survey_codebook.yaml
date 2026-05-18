@@ -1,0 +1,125 @@
+name: "Psychology Survey Codebook"
+version: 1
+description: >
+  End-to-end psychology and qualitative research workflow for messy free-text
+  survey or interview responses with a versioned codebook, calibration,
+  assisted coding, review, adjudication, export, and release certification.
+
+metadata:
+  domain: psychology_research
+  canonical_model: MiniMax-M2.7-highspeed
+  codebook_ref: workbench/codebooks/psychology-survey-codebook.yaml
+  ethics:
+    pii_policy: redact_before_model_use
+    audit_requirement: reviewer_and_model_provenance
+
+steps:
+  - id: ingest_responses
+    type: data_ingest
+    config:
+      source: "workbench/data/raw/psychology-survey-responses.csv"
+      record_id_field: "participant_response_id"
+      text_fields:
+        - response_text
+      metadata_fields:
+        - study_id
+        - participant_group
+        - measure
+
+  - id: normalize_segments
+    type: data_normalize
+    depends_on: [ingest_responses]
+    config:
+      schema_ref: "workbench/config/task-schemas/psychology-survey-code.yaml"
+      segment_strategy: sentence_or_response
+      preserve_offsets: true
+      pii_redaction: required
+
+  - id: calibrate_codebook
+    type: human_calibration
+    depends_on: [normalize_segments]
+    config:
+      codebook_ref: "workbench/codebooks/psychology-survey-codebook.yaml"
+      sample_strategy: stratified
+      minimum_reviewers: 2
+      target_agreement: 0.8
+
+  - id: propose_codes
+    type: agent_run
+    depends_on: [calibrate_codebook]
+    config:
+      task_schema_id: psychology-survey-code
+      prompt_ref: psychology-survey-code-prompt
+      codebook_ref: "workbench/codebooks/psychology-survey-codebook.yaml"
+      model: MiniMax-M2.7-highspeed
+      provider_type: anthropic
+      provider_name: MiniMax
+      base_url: https://api.minimax.io/anthropic
+      agent_role: code_suggester
+      require_evidence_spans: true
+
+  - id: review_codes
+    type: human_review
+    depends_on: [propose_codes]
+    config:
+      sample_strategy: all
+      blinded_ai_labels: true
+      require_evidence_spans: true
+      require_memo_for_edits: true
+      breakpoint: true
+
+  - id: agreement_check
+    type: agreement_analysis
+    depends_on: [review_codes]
+    config:
+      metrics:
+        - cohen_kappa
+        - percent_agreement
+      group_by:
+        - code
+        - reviewer
+      minimum_kappa: 0.7
+
+  - id: adjudicate_disagreements
+    type: human_adjudication
+    depends_on: [agreement_check]
+    config:
+      queue_strategy: disagreements_and_low_confidence
+      require_final_rationale: true
+      update_codebook_examples: propose_only
+
+  - id: quality_gate
+    type: quality_check
+    depends_on: [adjudicate_disagreements]
+    config:
+      required_checks:
+        - pii_redaction_complete
+        - no_empty_required_codes
+        - evidence_span_validity
+        - minimum_agreement_reached
+        - reviewer_completion
+
+  - id: export_research_package
+    type: export
+    depends_on: [quality_gate]
+    config:
+      formats:
+        - csv
+        - jsonl
+      include:
+        - coded_responses
+        - evidence_spans
+        - codebook_version
+        - reviewer_agreement
+        - audit_trace
+        - reproducibility_report
+      destination: "workbench/exports/psychology-survey-codebook"
+
+  - id: certify_release
+    type: release_validation
+    depends_on: [export_research_package]
+    config:
+      benchmark_run_ids:
+        - psychology-survey-codebook
+      certification_threshold: 1.0
+      proof_manifest_required: true

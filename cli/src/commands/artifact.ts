@@ -19,8 +19,13 @@ import {
   safeReadText,
 } from './context.js'
 
-export function registerArtifactCommands(program: Command, runtime: CliRuntimeOptions): void {
-  const artifact = program.command('artifact').description('Artifact operations')
+export function registerArtifactCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
+  const artifact = program
+    .command('artifact')
+    .description('Artifact operations')
   artifact
     .command('read <kind> <selector>')
     .description('Read a canonical artifact')
@@ -71,6 +76,59 @@ export function registerArtifactCommands(program: Command, runtime: CliRuntimeOp
         commandOptions.contentFile,
         commandOptions.contentText,
         commandOptions.expectedHash,
+      )
+    })
+  artifact
+    .command('propose <kind> <selector>')
+    .description('Create a durable semantic diff proposal')
+    .option('--candidate-file <path>')
+    .option('--candidate-text <text>')
+    .option('--expected-hash <hash>')
+    .option('--title <title>')
+    .option('--rationale <rationale>')
+    .option('--run-id <runId>')
+    .action(async function (this: Command, kind: string, selector: string) {
+      const commandOptions = this.opts<{
+        candidateFile?: string
+        candidateText?: string
+        expectedHash?: string
+        title?: string
+        rationale?: string
+        runId?: string
+      }>()
+      await runArtifactPropose(
+        getRuntimeOptions(program, runtime),
+        kind,
+        selector,
+        commandOptions.candidateFile,
+        commandOptions.candidateText,
+        commandOptions.expectedHash,
+        commandOptions.title,
+        commandOptions.rationale,
+        commandOptions.runId,
+      )
+    })
+  artifact
+    .command('trace <artifactId>')
+    .description('Trace a durable artifact proposal or local artifact id')
+    .action(async (artifactId: string) => {
+      await runArtifactTrace(getRuntimeOptions(program, runtime), artifactId)
+    })
+  artifact
+    .command('decide <proposal-id>')
+    .description('Accept or reject a durable semantic diff proposal')
+    .requiredOption('--decision <decision>', 'accept or reject')
+    .option('--notes <notes>')
+    .action(async function (this: Command, proposalId: string) {
+      const commandOptions = this.opts<{
+        decision: string
+        notes?: string
+      }>()
+      await runArtifactDecide(
+        getRuntimeOptions(program, runtime),
+        proposalId,
+        commandOptions.decision,
+        commandOptions.notes,
       )
     })
 }
@@ -150,7 +208,8 @@ async function runArtifactDiff(
     file: candidateFile ? resolve(candidateFile) : undefined,
     text: candidateText,
     allowStdin: true,
-    errorMessage: 'artifact diff requires --candidate-file, --candidate-text, or piped stdin',
+    errorMessage:
+      'artifact diff requires --candidate-file, --candidate-text, or piped stdin',
   })
 
   const client = await buildClient(options)
@@ -196,7 +255,8 @@ async function runArtifactWrite(
     file: contentFile ? resolve(contentFile) : undefined,
     text: contentText,
     allowStdin: true,
-    errorMessage: 'artifact write requires --content-file, --content-text, or piped stdin',
+    errorMessage:
+      'artifact write requires --content-file, --content-text, or piped stdin',
   })
 
   const client = await buildClient(options)
@@ -235,4 +295,113 @@ async function runArtifactWrite(
     },
     outputMode(options),
   )
+}
+
+async function runArtifactPropose(
+  options: CliRuntimeOptions,
+  kind: string,
+  selector: string,
+  candidateFile?: string,
+  candidateText?: string,
+  expectedHash?: string,
+  title?: string,
+  rationale?: string,
+  runId?: string,
+): Promise<void> {
+  const workspace = await detectWorkspaceRoot(options.workspaceRoot)
+  if (!workspace.rootDir) {
+    throw new Error('No MoLabel workspace detected')
+  }
+  const candidate = await readInputText({
+    file: candidateFile ? resolve(candidateFile) : undefined,
+    text: candidateText,
+    allowStdin: true,
+    errorMessage:
+      'artifact propose requires --candidate-file, --candidate-text, or piped stdin',
+  })
+  const client = await buildClient(options)
+  if (!client) {
+    throw new Error('artifact propose requires a running MoLabel API')
+  }
+  const response = await safePostJson<Record<string, unknown>>(
+    client,
+    '/api/v1/cli/artifacts/proposals',
+    {
+      kind: normalizeArtifactKindForApi(kind),
+      selector: normalizeArtifactSelector(selector),
+      content: candidate,
+      expected_hash: expectedHash,
+      workspace_root: workspace.rootDir,
+      title,
+      rationale,
+      run_id: runId,
+    },
+  )
+  if (!response) {
+    throw new Error('artifact proposal was not created')
+  }
+  await emit(response, outputMode(options))
+}
+
+async function runArtifactTrace(
+  options: CliRuntimeOptions,
+  artifactId: string,
+): Promise<void> {
+  const workspace = await detectWorkspaceRoot(options.workspaceRoot)
+  if (!workspace.rootDir) {
+    throw new Error('No MoLabel workspace detected')
+  }
+  const client = await buildClient(options)
+  if (client) {
+    const params = new URLSearchParams({ workspace_root: workspace.rootDir })
+    const response = await client.getJson<Record<string, unknown>>(
+      `/api/v1/cli/artifacts/proposals/${encodeURIComponent(artifactId)}/trace?${params.toString()}`,
+    )
+    await emit(response, outputMode(options))
+    return
+  }
+  const proposalPath = resolve(
+    workspace.rootDir,
+    'workbench',
+    'proposals',
+    'artifacts',
+    `${artifactId}.json`,
+  )
+  const proposal = await safeReadText(proposalPath)
+  if (!proposal) {
+    throw new Error(`Artifact trace not found: ${artifactId}`)
+  }
+  await emit(JSON.parse(proposal) as Record<string, unknown>, outputMode(options))
+}
+
+async function runArtifactDecide(
+  options: CliRuntimeOptions,
+  proposalId: string,
+  decision: string,
+  notes?: string,
+): Promise<void> {
+  if (decision !== 'accept' && decision !== 'reject') {
+    throw new Error('artifact decide --decision must be accept or reject')
+  }
+  const workspace = await detectWorkspaceRoot(options.workspaceRoot)
+  if (!workspace.rootDir) {
+    throw new Error('No MoLabel workspace detected')
+  }
+  const client = await buildClient(options)
+  if (!client) {
+    throw new Error('artifact decide requires a running MoLabel API')
+  }
+  const response = await safePostJson<Record<string, unknown>>(
+    client,
+    `/api/v1/cli/artifacts/proposals/${proposalId}/decision`,
+    {
+      decision,
+      workspace_root: workspace.rootDir,
+      notes,
+    },
+  )
+  if (!response) {
+    throw new Error('artifact proposal decision was not recorded')
+  }
+  await emit(response, outputMode(options))
 }

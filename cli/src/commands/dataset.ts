@@ -16,7 +16,10 @@ import {
 
 type JsonObject = Record<string, unknown>
 
-export function registerDatasetCommands(program: Command, runtime: CliRuntimeOptions): void {
+export function registerDatasetCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
   const dataset = program.command('dataset').description('Dataset operations')
 
   dataset
@@ -63,7 +66,10 @@ export function registerDatasetCommands(program: Command, runtime: CliRuntimeOpt
         tagsJson?: string
         workspaceId?: string
       }>()
-      await runDatasetCreate(getRuntimeOptions(program, runtime), commandOptions)
+      await runDatasetCreate(
+        getRuntimeOptions(program, runtime),
+        commandOptions,
+      )
     })
 
   dataset
@@ -80,7 +86,11 @@ export function registerDatasetCommands(program: Command, runtime: CliRuntimeOpt
         optionsJson?: string
         sourceUri?: string
       }>()
-      await runDatasetImport(getRuntimeOptions(program, runtime), datasetId, commandOptions)
+      await runDatasetImport(
+        getRuntimeOptions(program, runtime),
+        datasetId,
+        commandOptions,
+      )
     })
 
   dataset
@@ -94,7 +104,11 @@ export function registerDatasetCommands(program: Command, runtime: CliRuntimeOpt
     .command('record <dataset-id> <record-id>')
     .description('Get a record in a dataset')
     .action(async (datasetId: string, recordId: string) => {
-      await runDatasetRecord(getRuntimeOptions(program, runtime), datasetId, recordId)
+      await runDatasetRecord(
+        getRuntimeOptions(program, runtime),
+        datasetId,
+        recordId,
+      )
     })
 
   dataset
@@ -104,7 +118,9 @@ export function registerDatasetCommands(program: Command, runtime: CliRuntimeOpt
       await runDatasetAnalytics(getRuntimeOptions(program, runtime), datasetId)
     })
 
-  const snapshots = dataset.command('snapshots').description('Dataset snapshots')
+  const snapshots = dataset
+    .command('snapshots')
+    .description('Dataset snapshots')
   snapshots
     .command('list <dataset-id>')
     .description('List snapshots for a dataset')
@@ -135,7 +151,11 @@ export function registerDatasetCommands(program: Command, runtime: CliRuntimeOpt
     .command('diff <dataset-id> <snapshot-id>')
     .description('Compare a snapshot to another snapshot')
     .option('--compare-to <snapshot-id>')
-    .action(async function (this: Command, datasetId: string, snapshotId: string) {
+    .action(async function (
+      this: Command,
+      datasetId: string,
+      snapshotId: string,
+    ) {
       const commandOptions = this.opts<{ compareTo?: string }>()
       await runSnapshotDiff(
         getRuntimeOptions(program, runtime),
@@ -152,7 +172,10 @@ async function runDatasetList(options: CliRuntimeOptions): Promise<void> {
   await emit(response, outputMode(options))
 }
 
-async function runDatasetGet(options: CliRuntimeOptions, datasetId: string): Promise<void> {
+async function runDatasetGet(
+  options: CliRuntimeOptions,
+  datasetId: string,
+): Promise<void> {
   const client = await requireClient(options, 'dataset get')
   const response = await client.getJson(`/api/v1/datasets/${datasetId}`)
   await emit(response, outputMode(options))
@@ -178,15 +201,21 @@ async function runDatasetCreate(
   const client = await requireClient(options, 'dataset create')
   let body: JsonObject
   if (commandOptions.file) {
-    body = await readJsonFile<JsonObject>(commandOptions.file)
+    body = await readJsonFile(commandOptions.file)
   } else {
     body = {
       dataset_name: commandOptions.name,
       dataset_slug: commandOptions.slug,
-      workspace_id: await resolveWorkspaceId(options, commandOptions.workspaceId),
+      workspace_id: await resolveWorkspaceId(
+        options,
+        commandOptions.workspaceId,
+      ),
       source_type: commandOptions.sourceType,
       description: commandOptions.description,
-      source_config: parseJsonOption(commandOptions.sourceConfigJson, 'source-config-json'),
+      source_config: parseJsonOption(
+        commandOptions.sourceConfigJson,
+        'source-config-json',
+      ),
       loader_plugin: commandOptions.loaderPlugin,
       record_kind: commandOptions.recordKind,
       canonical_id_strategy: commandOptions.canonicalIdStrategy,
@@ -199,10 +228,16 @@ async function runDatasetCreate(
     requireField(body, 'dataset_name', 'dataset create')
     requireField(body, 'source_type', 'dataset create')
     if (!body.workspace_id) {
-      body.workspace_id = await resolveWorkspaceId(options, commandOptions.workspaceId)
+      body.workspace_id = await resolveWorkspaceId(
+        options,
+        commandOptions.workspaceId,
+      )
     }
   } else if (!body.workspace_id) {
-    body.workspace_id = await resolveWorkspaceId(options, commandOptions.workspaceId)
+    body.workspace_id = await resolveWorkspaceId(
+      options,
+      commandOptions.workspaceId,
+    )
   }
 
   const response = await client.postJson('/api/v1/datasets', body)
@@ -222,7 +257,7 @@ async function runDatasetImport(
   const client = await requireClient(options, 'dataset import')
   let body: JsonObject
   if (commandOptions.file) {
-    body = await readJsonFile<JsonObject>(commandOptions.file)
+    body = await readJsonFile(commandOptions.file)
   } else {
     body = {
       source_uri: commandOptions.sourceUri,
@@ -233,7 +268,10 @@ async function runDatasetImport(
   if (!commandOptions.file) {
     requireField(body, 'source_uri', 'dataset import')
   }
-  const response = await client.postJson(`/api/v1/datasets/${datasetId}/import`, body)
+  const response = await client.postJson(
+    `/api/v1/datasets/${datasetId}/import`,
+    body,
+  )
   await emit(response, outputMode(options))
 }
 
@@ -263,7 +301,9 @@ async function runDatasetAnalytics(
   datasetId: string,
 ): Promise<void> {
   const client = await requireClient(options, 'dataset analytics')
-  const response = await client.getJson(`/api/v1/datasets/${datasetId}/analytics`)
+  const response = await client.getJson(
+    `/api/v1/datasets/${datasetId}/analytics`,
+  )
   await emit(response, outputMode(options))
 }
 
@@ -272,7 +312,9 @@ async function runSnapshotList(
   datasetId: string,
 ): Promise<void> {
   const client = await requireClient(options, 'dataset snapshots list')
-  const response = await client.getJson(`/api/v1/datasets/${datasetId}/snapshots`)
+  const response = await client.getJson(
+    `/api/v1/datasets/${datasetId}/snapshots`,
+  )
   await emit(response, outputMode(options))
 }
 
@@ -289,7 +331,7 @@ async function runSnapshotCreate(
   const client = await requireClient(options, 'dataset snapshots create')
   let body: JsonObject
   if (commandOptions.file) {
-    body = await readJsonFile<JsonObject>(commandOptions.file)
+    body = await readJsonFile(commandOptions.file)
   } else {
     body = {
       name: commandOptions.name,
@@ -300,7 +342,10 @@ async function runSnapshotCreate(
   if (!commandOptions.file) {
     requireField(body, 'name', 'dataset snapshots create')
   }
-  const response = await client.postJson(`/api/v1/datasets/${datasetId}/snapshots`, body)
+  const response = await client.postJson(
+    `/api/v1/datasets/${datasetId}/snapshots`,
+    body,
+  )
   await emit(response, outputMode(options))
 }
 
@@ -332,44 +377,59 @@ async function resolveWorkspaceId(
 
   const workspace = await detectWorkspaceRoot(options.workspaceRoot)
   if (!workspace.manifestPath) {
-    throw new Error('workspace_id is required when no workspace manifest is available')
+    throw new Error(
+      'workspace_id is required when no workspace manifest is available',
+    )
   }
 
   const manifest = await readFile(workspace.manifestPath, 'utf8')
   const parsed = parseYaml(manifest) as { workspace_id?: string } | null
   const workspaceId = parsed?.workspace_id
   if (!workspaceId) {
-    throw new Error('workspace_id is required; pass --workspace-id or bootstrap a workspace')
+    throw new Error(
+      'workspace_id is required; pass --workspace-id or bootstrap a workspace',
+    )
   }
-  return String(workspaceId)
+  return workspaceId
 }
 
-async function readJsonFile<T extends JsonObject>(path: string): Promise<T> {
+async function readJsonFile(path: string): Promise<JsonObject> {
   const raw = await readInputText({
     file: resolve(path),
     text: undefined,
     errorMessage: `Unable to read JSON file: ${path}`,
   })
   try {
-    return JSON.parse(raw) as T
+    return JSON.parse(raw) as JsonObject
   } catch (error) {
     throw new Error(`Invalid JSON in ${path}: ${(error as Error).message}`)
   }
 }
 
-function parseJsonOption<T>(value: string | undefined, flagName: string): T | undefined {
+function parseJsonOption(value: string | undefined, flagName: string): unknown {
   if (!value) {
     return undefined
   }
   try {
-    return JSON.parse(value) as T
+    return JSON.parse(value) as unknown
   } catch (error) {
-    throw new Error(`Invalid JSON for --${flagName}: ${(error as Error).message}`)
+    throw new Error(
+      `Invalid JSON for --${flagName}: ${(error as Error).message}`,
+    )
   }
 }
 
-function requireField(body: JsonObject, key: string, commandName: string): void {
-  if (!(key in body) || body[key] === undefined || body[key] === null || body[key] === '') {
+function requireField(
+  body: JsonObject,
+  key: string,
+  commandName: string,
+): void {
+  if (
+    !(key in body) ||
+    body[key] === undefined ||
+    body[key] === null ||
+    body[key] === ''
+  ) {
     throw new Error(`${commandName} requires ${key}`)
   }
 }

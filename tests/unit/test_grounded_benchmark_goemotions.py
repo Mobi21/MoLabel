@@ -119,7 +119,8 @@ def test_goemotions_grounded_fixture_contract() -> None:
     }
     assert {tax.tax_id for tax in bundle.metrics.tax_definitions} == {
         "model_tax",
-        "workflow_tax",
+        "autorun_tax",
+        "review_tax",
         "operator_tax",
     }
 

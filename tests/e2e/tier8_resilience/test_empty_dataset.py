@@ -27,7 +27,11 @@ async def test_empty_dataset(client, ctx):
     # ── Checkpoint 1: Setup empty dataset ────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-empty-dataset-test", "workspace_name": "Empty Dataset Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-empty-dataset-test",
+                "workspace_name": "Empty Dataset Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

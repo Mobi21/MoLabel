@@ -22,6 +22,10 @@ from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
 from molabel.core.agents.queue_binding import serialize_agent_output_ids
+from molabel.core.providers.model_defaults import (
+    MINIMAX_M27_HIGHSPEED,
+    is_minimax_model,
+)
 from molabel.core.types import (
     BlindReviewPolicy,
     ProviderType,
@@ -36,6 +40,44 @@ from molabel.core.workflow.parser import StepDefinition, WorkflowDefinitionParse
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
+
+
+def _option_description_lines(field: dict[str, Any]) -> list[str]:
+    descriptions = field.get("option_descriptions")
+    options = field.get("options")
+    if not isinstance(descriptions, dict) or not isinstance(options, list):
+        return []
+
+    lines: list[str] = []
+    for option in options:
+        text = descriptions.get(str(option))
+        if text:
+            lines.append(f"  - `{option}`: {text}")
+    return lines
+
+
+def _format_label_field_for_prompt(field: dict[str, Any]) -> str:
+    desc = f"- `{field['name']}` ({field.get('field_type', 'string')})"
+    if field.get("required", True):
+        desc += ", required"
+    if field.get("description"):
+        desc += f": {field['description']}"
+    if field.get("options"):
+        desc += f"\n  Valid values: {field['options']}"
+    option_lines = _option_description_lines(field)
+    if option_lines:
+        desc += "\n  Option rubric:\n" + "\n".join(option_lines)
+    return desc
+
+
+def _json_schema_field_description(field: dict[str, Any]) -> str:
+    description = str(field.get("description") or "")
+    option_lines = _option_description_lines(field)
+    if option_lines:
+        rubric = "Option rubric:\n" + "\n".join(option_lines)
+        return f"{description}\n\n{rubric}" if description else rubric
+    return description
+
 
 # ---------------------------------------------------------------------------
 # Response / request models
@@ -534,7 +576,8 @@ def _resolve_dataset(
     *,
     workspace_id: str,
     source: str,
-) -> tuple[str, str | None]:
+    config: dict[str, Any] | None = None,
+) -> tuple[str, str | None, dict[str, Any]]:
     rows = conn.execute(
         text(
             "SELECT id, record_kind, source_config FROM datasets "
@@ -551,10 +594,19 @@ def _resolve_dataset(
             if isinstance(raw_paths, list):
                 paths = [str(Path(str(path)).as_posix()) for path in raw_paths]
         if source_norm in paths:
-            return str(row[0]), str(row[1]) if row[1] else None
+            return (
+                str(row[0]),
+                str(row[1]) if row[1] else None,
+                source_config if isinstance(source_config, dict) else {},
+            )
 
     dataset_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
+    source_config: dict[str, Any] = {"paths": [source_norm]}
+    if isinstance(config, dict):
+        record_id_field = config.get("record_id_field")
+        if isinstance(record_id_field, str) and record_id_field.strip():
+            source_config["record_id_field"] = record_id_field.strip()
     conn.execute(
         text(
             "INSERT INTO datasets "
@@ -570,12 +622,12 @@ def _resolve_dataset(
             "id": dataset_id,
             "name": Path(source_norm).stem,
             "slug": Path(source_norm).stem,
-            "source_config": _json_dumps({"paths": [source_norm]}),
+            "source_config": _json_dumps(source_config),
             "now": now,
             "wid": workspace_id,
         },
     )
-    return dataset_id, None
+    return dataset_id, None, source_config
 
 
 def _extract_record_text(payload: dict[str, Any] | None) -> str:
@@ -586,6 +638,81 @@ def _extract_record_text(payload: dict[str, Any] | None) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return json.dumps(payload, sort_keys=True)
+
+
+_PROMPT_LEAK_FIELDS = frozenset(
+    {
+        "label",
+        "source_label",
+        "gold_label",
+        "gold_labels",
+        "ground_truth",
+        "ground_truth_label",
+        "ground_truth_labels",
+    }
+)
+
+
+def _sanitize_record_payload_for_prompt(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Drop obvious truth-bearing fields from proposer-visible record payloads."""
+    if not isinstance(payload, dict):
+        return None
+    return {
+        key: value
+        for key, value in payload.items()
+        if key.lower() not in _PROMPT_LEAK_FIELDS
+    }
+
+
+def _build_record_prompt_content(
+    *,
+    record_identifier: str,
+    payload: dict[str, Any] | None,
+) -> str:
+    """Build a stable user prompt that preserves structured record context."""
+    sanitized_payload = _sanitize_record_payload_for_prompt(payload)
+    parts = [f"Record ID: {record_identifier}"]
+    record_text = _extract_record_text(sanitized_payload)
+    if record_text:
+        parts.append(f"Reviewer-facing text:\n{record_text}")
+    if sanitized_payload:
+        rendered_payload = json.dumps(
+            sanitized_payload,
+            indent=2,
+            ensure_ascii=True,
+            sort_keys=True,
+        )
+        parts.append(f"Raw record JSON:\n{rendered_payload}")
+    return "\n\n".join(parts)
+
+
+def _extract_external_record_id(
+    payload: dict[str, Any],
+    *,
+    record_id_field: str | None,
+    default_id: str,
+) -> str:
+    candidate_fields: list[str] = []
+    if record_id_field:
+        candidate_fields.append(record_id_field)
+    candidate_fields.extend(["id", "record_id", "external_id"])
+
+    seen: set[str] = set()
+    for field_name in candidate_fields:
+        normalized_name = str(field_name).strip()
+        if not normalized_name or normalized_name in seen:
+            continue
+        seen.add(normalized_name)
+        value = payload.get(normalized_name)
+        if value is None:
+            continue
+        value_str = str(value).strip()
+        if value_str:
+            return value_str
+
+    return default_id
 
 
 def _infer_sentiment_labels(text_value: str) -> dict[str, str]:
@@ -648,11 +775,80 @@ def _resolve_task_schema(
     )
 
 
+def _normalize_provider_type(value: Any) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _infer_profile_defaults(
+    *,
+    model_identifier: str,
+    provider_type: str | None,
+    provider_name: str | None,
+    auth_ref: str | None,
+    base_url: str | None,
+) -> tuple[str, str | None, str | None, str | None]:
+    import os
+
+    normalized_model = model_identifier.strip().lower()
+    inferred_provider_type = _normalize_provider_type(provider_type)
+    inferred_provider_name = provider_name
+    inferred_auth_ref = auth_ref
+    inferred_base_url = base_url
+
+    if inferred_provider_type is None:
+        if normalized_model.startswith("claude-") or is_minimax_model(model_identifier):
+            inferred_provider_type = ProviderType.anthropic.value
+        elif normalized_model.startswith(("gpt-", "o1", "o3", "o4")):
+            inferred_provider_type = ProviderType.openai_compatible.value
+
+    if inferred_provider_type == ProviderType.anthropic.value:
+        if not inferred_provider_name:
+            inferred_provider_name = (
+                MINIMAX_M27_HIGHSPEED.provider_name
+                if is_minimax_model(model_identifier)
+                else "Anthropic"
+            )
+        if not inferred_auth_ref:
+            if is_minimax_model(model_identifier):
+                inferred_auth_ref = (
+                    MINIMAX_M27_HIGHSPEED.fallback_auth_ref
+                    if MINIMAX_M27_HIGHSPEED.fallback_auth_ref
+                    and os.environ.get(MINIMAX_M27_HIGHSPEED.fallback_auth_ref)
+                    else MINIMAX_M27_HIGHSPEED.primary_auth_ref
+                )
+            else:
+                inferred_auth_ref = "ANTHROPIC_API_KEY"
+        if not inferred_base_url and is_minimax_model(model_identifier):
+            inferred_base_url = os.environ.get(
+                "MINIMAX_BASE_URL",
+                MINIMAX_M27_HIGHSPEED.base_url,
+            )
+    elif inferred_provider_type == ProviderType.openai_compatible.value:
+        if not inferred_provider_name:
+            inferred_provider_name = "OpenAI Compatible"
+        if not inferred_auth_ref:
+            inferred_auth_ref = "OPENAI_API_KEY"
+
+    return (
+        inferred_provider_type or ProviderType.custom.value,
+        inferred_provider_name,
+        inferred_auth_ref,
+        inferred_base_url,
+    )
+
+
 def _ensure_model_profile(
     conn: Any,
     *,
     workspace_id: str,
     model_identifier: str,
+    provider_type: str | None = None,
+    provider_name: str | None = None,
+    auth_ref: str | None = None,
+    base_url: str | None = None,
 ) -> str:
     row = conn.execute(
         text(
@@ -701,6 +897,21 @@ def _ensure_model_profile(
     profile_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     slug = model_identifier.lower().replace(" ", "-")
+    (
+        resolved_provider_type,
+        resolved_provider_name,
+        resolved_auth_ref,
+        resolved_base_url,
+    ) = _infer_profile_defaults(
+        model_identifier=model_identifier,
+        provider_type=provider_type,
+        provider_name=provider_name,
+        auth_ref=auth_ref,
+        base_url=base_url,
+    )
+    routing_metadata = {}
+    if resolved_base_url:
+        routing_metadata["base_url"] = resolved_base_url
     conn.execute(
         text(
             """
@@ -713,7 +924,8 @@ def _ensure_model_profile(
             )
             VALUES (
                 :id, :slug, :provider_type, :provider_name, :model_identifier,
-                'builtin', NULL, 1, 0, NULL, :capability_tags, NULL, NULL, NULL, 1,
+                :transport, :auth_ref, 1, 0, NULL, :capability_tags,
+                :routing_metadata, NULL, NULL, 1,
                 :now, :now, :wid
             )
             """
@@ -721,10 +933,23 @@ def _ensure_model_profile(
         {
             "id": profile_id,
             "slug": slug,
-            "provider_type": ProviderType.custom.value,
-            "provider_name": "builtin-heuristic",
+            "provider_type": resolved_provider_type,
+            "provider_name": resolved_provider_name or "builtin-heuristic",
             "model_identifier": model_identifier,
-            "capability_tags": _json_dumps(["heuristic", "workflow-demo"]),
+            "transport": (
+                "https"
+                if resolved_provider_type != ProviderType.custom.value
+                else "builtin"
+            ),
+            "auth_ref": resolved_auth_ref,
+            "capability_tags": _json_dumps(
+                ["workflow-auto-profile"]
+                if resolved_provider_type != ProviderType.custom.value
+                else ["heuristic", "workflow-demo"]
+            ),
+            "routing_metadata": (
+                _json_dumps(routing_metadata) if routing_metadata else None
+            ),
             "now": now,
             "wid": workspace_id,
         },
@@ -752,11 +977,24 @@ class _WorkflowDataLoader:
         if not source_path.is_file():
             raise FileNotFoundError(f"Data source not found: {source}")
 
-        dataset_id, default_record_kind = _resolve_dataset(
+        dataset_id, default_record_kind, source_config = _resolve_dataset(
             self._conn,
             workspace_id=self._workspace_id,
             source=source,
+            config=_config,
         )
+        record_id_field = None
+        if isinstance(source_config, dict):
+            raw_record_id_field = source_config.get("record_id_field")
+            if isinstance(raw_record_id_field, str) and raw_record_id_field.strip():
+                record_id_field = raw_record_id_field.strip()
+        if record_id_field is None:
+            fallback_record_id_field = _config.get("record_id_field")
+            if (
+                isinstance(fallback_record_id_field, str)
+                and fallback_record_id_field.strip()
+            ):
+                record_id_field = fallback_record_id_field.strip()
         existing_rows = self._conn.execute(
             text("SELECT id, external_id FROM records WHERE dataset_id = :dataset_id"),
             {"dataset_id": dataset_id},
@@ -772,11 +1010,10 @@ class _WorkflowDataLoader:
             if not line.strip():
                 continue
             payload = json.loads(line)
-            external_id = str(
-                payload.get("id")
-                or payload.get("record_id")
-                or payload.get("external_id")
-                or f"{source_path.stem}-{index + 1}"
+            external_id = _extract_external_record_id(
+                payload,
+                record_id_field=record_id_field,
+                default_id=f"{source_path.stem}-{index + 1}",
             )
             record_id = existing_by_external.get(external_id)
             content_hash = hashlib.sha256(
@@ -1016,6 +1253,22 @@ class _LlmAgentRunner:
         task_schema_selector = config.get("task_schema_id")
         prompt_ref = config.get("prompt_ref")
         agent_role = str(kwargs.get("agent_role") or "proposer")
+        provider_type = _normalize_provider_type(config.get("provider_type"))
+        provider_name = (
+            str(config["provider_name"]).strip()
+            if config.get("provider_name") is not None
+            else None
+        )
+        auth_ref = (
+            str(config["auth_ref"]).strip()
+            if config.get("auth_ref") is not None
+            else None
+        )
+        base_url = (
+            str(config["base_url"]).strip()
+            if config.get("base_url") is not None
+            else None
+        )
         now = datetime.now(UTC).isoformat()
 
         if not record_ids:
@@ -1050,6 +1303,10 @@ class _LlmAgentRunner:
             self._conn,
             workspace_id=self._workspace_id,
             model_identifier=model_identifier,
+            provider_type=provider_type,
+            provider_name=provider_name,
+            auth_ref=auth_ref,
+            base_url=base_url,
         )
 
         # Load full model profile for provider instantiation
@@ -1281,39 +1538,65 @@ class _LlmAgentRunner:
         from molabel.core.types import LabelFieldDefinition, Message
 
         record_row = self._conn.execute(
-            text("SELECT payload FROM records WHERE id = :record_id LIMIT 1"),
+            text(
+                "SELECT external_id, payload FROM records WHERE id = :record_id LIMIT 1"
+            ),
             {"record_id": record_id},
         ).first()
-        payload = _json_loads(record_row[0]) if record_row else {}
-        record_text = _extract_record_text(payload)
+        payload = _json_loads(record_row[1]) if record_row else {}
+        record_identifier = (
+            str(record_row[0]).strip()
+            if record_row is not None and record_row[0]
+            else record_id
+        )
 
         # Build messages with task schema context
         system_parts = [system_instructions]
         if task_rubric:
             system_parts.append(f"\n\nTask rubric:\n{task_rubric}")
 
-        # Include label field definitions so the model knows what to produce
+        # Include label field definitions so the model knows what to produce.
         field_descriptions: list[str] = []
         for f in label_fields:
-            desc = f"- `{f['name']}` ({f.get('field_type', 'string')})"
-            if f.get("required", True):
-                desc += ", required"
-            if f.get("description"):
-                desc += f": {f['description']}"
-            if f.get("options"):
-                desc += f"\n  Valid values: {f['options']}"
-            field_descriptions.append(desc)
+            field_descriptions.append(_format_label_field_for_prompt(f))
         if field_descriptions:
             system_parts.append(
                 "\n\nYou must return a JSON object with these fields:\n"
                 + "\n".join(field_descriptions)
                 + "\n\nSelect labels ONLY from the valid values listed above."
             )
+        field_names = {str(field.get("name")) for field in label_fields}
+        if "evidence_atoms" in field_names:
+            system_parts.append(
+                "\n\nEvidence field contract:\n"
+                "- `evidence_atoms` must be a JSON array of stable evidence atom "
+                "IDs copied exactly from the raw record JSON.\n"
+                "- Never paraphrase evidence into natural-language summaries.\n"
+                "- Use exact identifiers such as "
+                "`doc_1001_sentence_2`, `Page_sentence_0`, or "
+                "`Page_cell_0_1_1` when those appear in the raw record.\n"
+                "- When a record carries grouped evidence candidates, flatten "
+                "them into one array of exact atom IDs.\n"
+                "- If the verdict is `nei`, return an empty evidence array "
+                "unless the task rubric says otherwise."
+            )
+        if "rationale_token_mask" in field_names:
+            system_parts.append(
+                "\n\nRationale field contract:\n"
+                "- `rationale_token_mask` must be a JSON array of 0/1 integers.\n"
+                "- Its length must exactly match the token sequence in the raw "
+                "record.\n"
+                "- Do not return token strings, character spans, or prose "
+                "explanations in place of the mask."
+            )
 
         system_msg = Message(role="system", content="".join(system_parts))
         user_msg = Message(
             role="user",
-            content=f"Classify the following text:\n\n{record_text}",
+            content=_build_record_prompt_content(
+                record_identifier=record_identifier,
+                payload=payload,
+            ),
         )
 
         # Run in a thread to avoid "asyncio.run() cannot be called from
@@ -1345,6 +1628,7 @@ class _LlmAgentRunner:
                 field_type=f["field_type"],
                 required=f.get("required", True),
                 options=f.get("options"),
+                option_descriptions=f.get("option_descriptions"),
                 description=f.get("description", ""),
             )
             for f in label_fields
@@ -1440,6 +1724,23 @@ class _LlmAgentRunner:
                     "type": "array",
                     "items": items_schema,
                 }
+            elif ftype == "json" and name == "evidence_atoms":
+                # Grounded evidence benchmarks rely on stable atom IDs surviving
+                # the proposer -> workflow_autorun hop as a JSON array.
+                prop = {
+                    "type": "array",
+                    "items": {"type": "string"},
+                }
+            elif ftype == "json" and name == "rationale_token_mask":
+                prop = {
+                    "type": "array",
+                    "items": {"type": "integer", "enum": [0, 1]},
+                }
+            elif ftype == "json":
+                prop = {
+                    "type": "object",
+                    "additionalProperties": True,
+                }
             else:
                 prop = {
                     "type": type_map.get(ftype, "string"),
@@ -1447,8 +1748,9 @@ class _LlmAgentRunner:
                 if field.get("options"):
                     prop["enum"] = field["options"]
 
-            if field.get("description"):
-                prop["description"] = field["description"]
+            field_description = _json_schema_field_description(field)
+            if field_description:
+                prop["description"] = field_description
             properties[name] = prop
             if field.get("required", True):
                 required.append(name)
@@ -1776,7 +2078,8 @@ def _select_agent_runner(
                 row = conn.execute(
                     text(
                         "SELECT provider_type FROM model_profiles "
-                        "WHERE model_identifier = :model OR model_profile_slug = :model "
+                        "WHERE model_identifier = :model "
+                        "OR model_profile_slug = :model "
                         "ORDER BY created_at DESC LIMIT 1"
                     ),
                     {"model": model_identifier},
@@ -1784,6 +2087,40 @@ def _select_agent_runner(
             if row is not None:
                 return str(row[0])
 
+        return None
+
+    def _resolve_provider_hint(step_config: dict[str, Any]) -> str | None:
+        hinted_provider_type = _normalize_provider_type(
+            step_config.get("provider_type")
+        )
+        if hinted_provider_type:
+            return hinted_provider_type
+
+        model_identifier = (
+            str(step_config.get("model")).strip() if step_config.get("model") else ""
+        )
+        (
+            inferred_provider_type,
+            _provider_name,
+            _auth_ref,
+            _base_url,
+        ) = _infer_profile_defaults(
+            model_identifier=model_identifier,
+            provider_type=None,
+            provider_name=None,
+            auth_ref=(
+                str(step_config.get("auth_ref")).strip()
+                if step_config.get("auth_ref")
+                else None
+            ),
+            base_url=(
+                str(step_config.get("base_url")).strip()
+                if step_config.get("base_url")
+                else None
+            ),
+        )
+        if inferred_provider_type != ProviderType.custom.value:
+            return inferred_provider_type
         return None
 
     for step in definition.steps:
@@ -1851,6 +2188,15 @@ def _select_agent_runner(
                     provider_type,
                 )
                 return _LlmAgentRunner(conn, workspace_id=workspace_id)
+        provider_hint = _resolve_provider_hint(step.config)
+        if provider_hint is not None and provider_hint != ProviderType.custom:
+            logger.info(
+                "Using LLM agent runner from step config hint for model '%s' "
+                "(provider=%s)",
+                model_identifier,
+                provider_hint,
+            )
+            return _LlmAgentRunner(conn, workspace_id=workspace_id)
         else:
             logger.warning(
                 "Runner selection: no model profile found for model='%s' "

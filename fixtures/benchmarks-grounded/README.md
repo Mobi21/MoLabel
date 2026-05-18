@@ -11,7 +11,7 @@ For the canonical docs, use:
 
 Current engine note:
 
-- The current labeling engine used by MoLabel benchmark runs is `MiniMax 2.7`
+- The current labeling engine used by MoLabel benchmark runs is `MiniMax 2.7 highspeed`
   through the Anthropic-compatible adapter path.
 
 Grounded is different from `fixtures/benchmarks/`.

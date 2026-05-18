@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -323,10 +324,11 @@ class TestReleaseList:
 class TestReleaseCreate:
     @pytest.mark.asyncio
     async def test_returns_201(self, auth_client):
+        workspace_id = _ws(auth_client)
         resp = await auth_client.post(
             "/api/v1/releases",
             json={
-                "workspace_id": _ws(auth_client),
+                "workspace_id": workspace_id,
                 "name": "v1.0",
                 "version": "1.0.0",
                 "export_ids": [],
@@ -337,6 +339,85 @@ class TestReleaseCreate:
         assert body["status"] == "draft"
         assert body["name"] == "v1.0"
         assert body["version"] == "1.0.0"
+        assert body["proof_manifest"]["schema"] == "molabel.release.proof_manifest"
+        audit_resp = await auth_client.get(
+            "/api/v1/audit",
+            params={"workspace_id": workspace_id, "event_type": "release_created"},
+        )
+        assert audit_resp.status_code == 200
+        assert audit_resp.json()["items"][0]["object_id"] == body["release_id"]
+
+    @pytest.mark.asyncio
+    async def test_computes_benchmark_certification_gate(
+        self, auth_client, _db, tmp_path
+    ):
+        workspace_id = _ws(auth_client)
+        with _db.connect() as conn:
+            conn.execute(
+                text("UPDATE workspaces SET root_path = :root WHERE id = :id"),
+                {"root": str(tmp_path), "id": workspace_id},
+            )
+            conn.commit()
+        run_dir = tmp_path / "workbench" / "benchmarks" / "runs" / "cert-run"
+        run_dir.mkdir(parents=True)
+        (run_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "benchmark_id": "psychology-survey-coding",
+                    "run_id": "cert-run",
+                    "mode": "operator",
+                    "variant": "molabel_operated",
+                    "stage": "operator_reviewed",
+                    "record_count": 16,
+                    "overall_score": 1.0,
+                    "metrics": [
+                        {"metric_id": "operator_checklist", "value": 1.0}
+                    ],
+                    "diagnostics": {"blocking_failures": []},
+                }
+            ),
+            encoding="utf-8",
+        )
+        resp = await auth_client.post(
+            "/api/v1/releases",
+            json={
+                "workspace_id": workspace_id,
+                "name": "Certified release",
+                "version": "certified",
+                "export_ids": [],
+                "benchmark_run_ids": ["cert-run"],
+                "certification_threshold": 1.0,
+            },
+        )
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["validation_report"]["status"] == "passed"
+        gate = body["validation_report"]["gates"][0]
+        assert gate["gate_id"] == "benchmark:cert-run"
+        assert gate["actual_value"] == 1.0
+        assert body["proof_manifest"]["benchmark_run_ids"] == ["cert-run"]
+
+    @pytest.mark.asyncio
+    async def test_blocks_approval_when_certification_missing(self, auth_client):
+        workspace_id = _ws(auth_client)
+        create_resp = await auth_client.post(
+            "/api/v1/releases",
+            json={
+                "workspace_id": workspace_id,
+                "name": "Uncertified release",
+                "version": "uncertified",
+                "export_ids": [],
+                "benchmark_run_ids": ["missing-run"],
+            },
+        )
+        assert create_resp.status_code == 201
+        body = create_resp.json()
+        assert body["validation_report"]["status"] == "failed"
+        approve_resp = await auth_client.post(
+            f"/api/v1/releases/{body['release_id']}/approve",
+            json={"approved": True},
+        )
+        assert approve_resp.status_code == 409
 
 
 class TestReleaseDetail:
@@ -344,6 +425,38 @@ class TestReleaseDetail:
     async def test_returns_404_for_missing(self, auth_client):
         resp = await auth_client.get(f"/api/v1/releases/{uuid.uuid4()}")
         assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_reconstructs_proof_manifest_from_file(self, auth_client, _db):
+        workspace_id = _ws(auth_client)
+        create_resp = await auth_client.post(
+            "/api/v1/releases",
+            json={
+                "workspace_id": workspace_id,
+                "name": "Reopenable release",
+                "version": "reopenable",
+                "export_ids": [],
+            },
+        )
+        assert create_resp.status_code == 201
+        created = create_resp.json()
+        with _db.connect() as conn:
+            conn.execute(
+                text(
+                    "UPDATE releases SET release_metadata = :metadata "
+                    "WHERE id = :id"
+                ),
+                {"metadata": "{}", "id": created["release_id"]},
+            )
+            conn.commit()
+
+        detail_resp = await auth_client.get(
+            f"/api/v1/releases/{created['release_id']}"
+        )
+        assert detail_resp.status_code == 200
+        body = detail_resp.json()
+        assert body["proof_manifest"]["release_id"] == created["release_id"]
+        assert body["validation_report"]["status"] == "passed"
 
 
 class TestReleaseApprove:

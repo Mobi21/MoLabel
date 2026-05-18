@@ -113,9 +113,7 @@ async def test_adjudication_detect_build_resolve(
     resolution_types = ["resolve", "preserve_disagreement", "downgrade", "exclude"]
     for i, resolution in enumerate(resolution_types):
         # Will get 404 if out of range, which is acceptable
-        item_id = (
-            queue_items[i]["id"] if i < len(queue_items) else str(uuid.uuid4())
-        )
+        item_id = queue_items[i]["id"] if i < len(queue_items) else str(uuid.uuid4())
 
         with checkpoint(ctx, f"resolve_{resolution}"):
             payload: dict = {

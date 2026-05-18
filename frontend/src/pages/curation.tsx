@@ -54,16 +54,22 @@ const existingSubsets = [
   {
     id: 'sub-001',
     name: 'High-Confidence Vehicle Detection',
-    description: 'Vehicle detection labels with confidence above 0.85 across all urban datasets',
+    description:
+      'Vehicle detection labels with confidence above 0.85 across all urban datasets',
     recordCount: 18_200,
     filterCount: 3,
-    filters: ['confidence > 0.85', 'task = vehicle-detection', 'status = reviewed'],
+    filters: [
+      'confidence > 0.85',
+      'task = vehicle-detection',
+      'status = reviewed',
+    ],
     createdAt: '2026-03-24T10:00:00Z',
   },
   {
     id: 'sub-002',
     name: 'Disagreement Cases',
-    description: 'Records where reviewers disagree on the correct label assignment',
+    description:
+      'Records where reviewers disagree on the correct label assignment',
     recordCount: 186,
     filterCount: 1,
     filters: ['flag = disagreement'],
@@ -72,7 +78,8 @@ const existingSubsets = [
   {
     id: 'sub-003',
     name: 'Export Candidates',
-    description: 'All records that have passed quality checks and are ready for export',
+    description:
+      'All records that have passed quality checks and are ready for export',
     recordCount: 38_920,
     filterCount: 1,
     filters: ['status = export-ready'],
@@ -94,7 +101,8 @@ const challengeSets = [
   {
     id: 'cs-002',
     name: 'Construction Zone Ambiguities',
-    description: 'Ambiguous construction signage and barrier cases under active review',
+    description:
+      'Ambiguous construction signage and barrier cases under active review',
     recordCount: 28,
     purpose: 'review',
     status: 'active' as const,
@@ -104,15 +112,19 @@ const challengeSets = [
 // ── Section 1: Subset Builder ────────────────────────────────────────────────
 
 function SubsetBuilder() {
-  const [subsetName, setSubsetName] = useState('Edge Cases \u2014 Low Confidence')
-  const [sourceDataset, setSourceDataset] = useState<string>('')
-  const [confidenceRange, setConfidenceRange] = useState<[number, number]>([0, 0.6])
+  const [subsetName, setSubsetName] = useState(
+    'Edge Cases \u2014 Low Confidence',
+  )
+  const [sourceDataset, setSourceDataset] = useState('')
+  const [confidenceRange, setConfidenceRange] = useState(
+    [0, 0.6] as [number, number],
+  )
   const [labelStatuses, setLabelStatuses] = useState({
     labeled: true,
     reviewed: false,
     exportReady: false,
   })
-  const [selectedTags, setSelectedTags] = useState<string[]>(['edge-case'])
+  const [selectedTags, setSelectedTags] = useState(['edge-case'])
   const [recordFlags, setRecordFlags] = useState({
     disagreement: true,
     drift: false,
@@ -133,7 +145,9 @@ function SubsetBuilder() {
           <CardTitle className="text-base">Subset Builder</CardTitle>
         </div>
         <CardDescription>
-          Create a filtered data subset for targeted labeling or export. Configure the filters below to narrow down records by confidence, status, tags, and flags.
+          Create a filtered data subset for targeted labeling or export.
+          Configure the filters below to narrow down records by confidence,
+          status, tags, and flags.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -145,7 +159,9 @@ function SubsetBuilder() {
           <Input
             id="subset-name"
             value={subsetName}
-            onChange={(e) => setSubsetName(e.target.value)}
+            onChange={(e) => {
+              setSubsetName(e.target.value)
+            }}
             placeholder="Enter subset name..."
           />
         </div>
@@ -180,10 +196,13 @@ function SubsetBuilder() {
             <div className="flex items-center justify-between">
               <div>
                 <Label className="text-xs">Confidence Range</Label>
-                <p className="text-[11px] text-muted-foreground">Filter records by their predicted confidence score</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Filter records by their predicted confidence score
+                </p>
               </div>
               <span className="text-xs font-medium tabular-nums text-muted-foreground">
-                {confidenceRange[0].toFixed(1)} &mdash; {confidenceRange[1].toFixed(1)}
+                {confidenceRange[0].toFixed(1)} &mdash;{' '}
+                {confidenceRange[1].toFixed(1)}
               </span>
             </div>
             <div className="space-y-2">
@@ -191,8 +210,8 @@ function SubsetBuilder() {
                 <div
                   className="absolute h-full rounded-full bg-primary"
                   style={{
-                    left: `${confidenceRange[0] * 100}%`,
-                    right: `${100 - confidenceRange[1] * 100}%`,
+                    left: `${String(confidenceRange[0] * 100)}%`,
+                    right: `${String(100 - confidenceRange[1] * 100)}%`,
                   }}
                 />
               </div>
@@ -205,9 +224,12 @@ function SubsetBuilder() {
                     max={1}
                     step={0.1}
                     value={confidenceRange[0]}
-                    onChange={(e) =>
-                      setConfidenceRange([Number(e.target.value), confidenceRange[1]])
-                    }
+                    onChange={(e) => {
+                      setConfidenceRange([
+                        Number(e.target.value),
+                        confidenceRange[1],
+                      ])
+                    }}
                     className="h-7 w-20 text-xs tabular-nums"
                   />
                 </div>
@@ -219,9 +241,12 @@ function SubsetBuilder() {
                     max={1}
                     step={0.1}
                     value={confidenceRange[1]}
-                    onChange={(e) =>
-                      setConfidenceRange([confidenceRange[0], Number(e.target.value)])
-                    }
+                    onChange={(e) => {
+                      setConfidenceRange([
+                        confidenceRange[0],
+                        Number(e.target.value),
+                      ])
+                    }}
                     className="h-7 w-20 text-xs tabular-nums"
                   />
                 </div>
@@ -232,15 +257,20 @@ function SubsetBuilder() {
           {/* Label Status */}
           <div className="space-y-2.5">
             <Label className="text-xs">Label Status</Label>
-            <p className="text-[11px] text-muted-foreground">Include records with these statuses</p>
+            <p className="text-[11px] text-muted-foreground">
+              Include records with these statuses
+            </p>
             <div className="flex flex-wrap gap-4">
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="status-labeled"
                   checked={labelStatuses.labeled}
-                  onCheckedChange={(checked) =>
-                    setLabelStatuses((s) => ({ ...s, labeled: checked === true }))
-                  }
+                  onCheckedChange={(checked) => {
+                    setLabelStatuses((s) => ({
+                      ...s,
+                      labeled: checked === true,
+                    }))
+                  }}
                 />
                 <label htmlFor="status-labeled" className="text-xs">
                   Labeled
@@ -250,9 +280,12 @@ function SubsetBuilder() {
                 <Checkbox
                   id="status-reviewed"
                   checked={labelStatuses.reviewed}
-                  onCheckedChange={(checked) =>
-                    setLabelStatuses((s) => ({ ...s, reviewed: checked === true }))
-                  }
+                  onCheckedChange={(checked) => {
+                    setLabelStatuses((s) => ({
+                      ...s,
+                      reviewed: checked === true,
+                    }))
+                  }}
                 />
                 <label htmlFor="status-reviewed" className="text-xs">
                   Reviewed
@@ -262,9 +295,12 @@ function SubsetBuilder() {
                 <Checkbox
                   id="status-export-ready"
                   checked={labelStatuses.exportReady}
-                  onCheckedChange={(checked) =>
-                    setLabelStatuses((s) => ({ ...s, exportReady: checked === true }))
-                  }
+                  onCheckedChange={(checked) => {
+                    setLabelStatuses((s) => ({
+                      ...s,
+                      exportReady: checked === true,
+                    }))
+                  }}
                 />
                 <label htmlFor="status-export-ready" className="text-xs">
                   Export-ready
@@ -276,7 +312,9 @@ function SubsetBuilder() {
           {/* Tags Multi-select */}
           <div className="space-y-2.5">
             <Label className="text-xs">Tags</Label>
-            <p className="text-[11px] text-muted-foreground">Filter by record tags (click to toggle)</p>
+            <p className="text-[11px] text-muted-foreground">
+              Filter by record tags (click to toggle)
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {availableTags.map((tag) => {
                 const isSelected = selectedTags.includes(tag)
@@ -284,7 +322,9 @@ function SubsetBuilder() {
                   <button
                     key={tag}
                     type="button"
-                    onClick={() => toggleTag(tag)}
+                    onClick={() => {
+                      toggleTag(tag)
+                    }}
                     className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
                       isSelected
                         ? 'border-primary/30 bg-primary/10 text-primary'
@@ -302,15 +342,20 @@ function SubsetBuilder() {
           {/* Record Flags */}
           <div className="space-y-2.5">
             <Label className="text-xs">Record Flags</Label>
-            <p className="text-[11px] text-muted-foreground">Include records with specific quality flags</p>
+            <p className="text-[11px] text-muted-foreground">
+              Include records with specific quality flags
+            </p>
             <div className="flex flex-wrap gap-4">
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="flag-disagreement"
                   checked={recordFlags.disagreement}
-                  onCheckedChange={(checked) =>
-                    setRecordFlags((f) => ({ ...f, disagreement: checked === true }))
-                  }
+                  onCheckedChange={(checked) => {
+                    setRecordFlags((f) => ({
+                      ...f,
+                      disagreement: checked === true,
+                    }))
+                  }}
                 />
                 <label htmlFor="flag-disagreement" className="text-xs">
                   Disagreement
@@ -320,9 +365,9 @@ function SubsetBuilder() {
                 <Checkbox
                   id="flag-drift"
                   checked={recordFlags.drift}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked) => {
                     setRecordFlags((f) => ({ ...f, drift: checked === true }))
-                  }
+                  }}
                 />
                 <label htmlFor="flag-drift" className="text-xs">
                   Drift
@@ -332,9 +377,12 @@ function SubsetBuilder() {
                 <Checkbox
                   id="flag-missing"
                   checked={recordFlags.missingLabels}
-                  onCheckedChange={(checked) =>
-                    setRecordFlags((f) => ({ ...f, missingLabels: checked === true }))
-                  }
+                  onCheckedChange={(checked) => {
+                    setRecordFlags((f) => ({
+                      ...f,
+                      missingLabels: checked === true,
+                    }))
+                  }}
                 />
                 <label htmlFor="flag-missing" className="text-xs">
                   Missing Labels
@@ -367,11 +415,7 @@ function SubsetBuilder() {
 
 // ── Section 2: Existing Subsets ──────────────────────────────────────────────
 
-function SubsetCard({
-  subset,
-}: {
-  subset: (typeof existingSubsets)[number]
-}) {
+function SubsetCard({ subset }: { subset: (typeof existingSubsets)[number] }) {
   return (
     <Card className="group transition-all hover:border-primary/40 hover:shadow-md">
       <CardHeader className="pb-3">
@@ -411,11 +455,19 @@ function SubsetCard({
             {relativeTime(subset.createdAt)}
           </span>
           <div className="flex gap-1.5">
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+            >
               <Eye className="h-3 w-3" />
               View
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+            >
               <Download className="h-3 w-3" />
               Export
             </Button>
@@ -455,8 +507,18 @@ function ChallengeSetCard({
 }) {
   const statusColor =
     challengeSet.status === 'active'
-      ? { dot: 'bg-emerald-500', bg: 'bg-emerald-500/10', text: 'text-emerald-600', border: 'border-emerald-500/20' }
-      : { dot: 'bg-zinc-400', bg: 'bg-zinc-500/10', text: 'text-zinc-600', border: 'border-zinc-500/20' }
+      ? {
+          dot: 'bg-emerald-500',
+          bg: 'bg-emerald-500/10',
+          text: 'text-emerald-600',
+          border: 'border-emerald-500/20',
+        }
+      : {
+          dot: 'bg-zinc-400',
+          bg: 'bg-zinc-500/10',
+          text: 'text-zinc-600',
+          border: 'border-zinc-500/20',
+        }
 
   return (
     <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:border-primary/30">
@@ -471,7 +533,9 @@ function ChallengeSetCard({
             {challengeSet.status === 'active' ? 'Active Review' : 'Archived'}
           </Badge>
         </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">{challengeSet.description}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {challengeSet.description}
+        </p>
       </div>
       <div className="ml-4 shrink-0">
         <Badge variant="secondary" className="tabular-nums">
@@ -491,7 +555,8 @@ function ChallengeSets() {
           <CardTitle className="text-base">Challenge Sets</CardTitle>
         </div>
         <CardDescription className="text-xs">
-          Create challenge sets from edge cases, disagreements, and low-confidence items
+          Create challenge sets from edge cases, disagreements, and
+          low-confidence items
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -524,7 +589,8 @@ export function CurationPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Curation</h1>
             <p className="text-sm text-muted-foreground">
-              Curate and filter datasets for targeted labeling and model training.
+              Curate and filter datasets for targeted labeling and model
+              training.
             </p>
           </div>
         </div>

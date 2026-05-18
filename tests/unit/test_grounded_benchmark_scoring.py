@@ -21,6 +21,7 @@ from molabel.core.quality.grounded_benchmarks import (
     GroundedPaperMetadata,
     GroundedTaxDefinition,
     build_operator_diagnostics,
+    compute_named_stage_lifts,
     compute_stage_deltas,
     compute_stage_stability,
     compute_tax_breakdown,
@@ -55,7 +56,7 @@ def _build_bundle(tmp_path: Path) -> GroundedBenchmarkBundle:
         default_model_profile={
             "provider_type": "anthropic",
             "provider_name": "MiniMax",
-            "model_identifier": "minimax-2.7",
+            "model_identifier": "MiniMax-M2.7-highspeed",
             "sdk_stack": "anthropic_sdk",
             "agent_role": "proposer",
         },
@@ -126,8 +127,8 @@ def _build_bundle(tmp_path: Path) -> GroundedBenchmarkBundle:
                 subtrahend_stage="molabel_model",
             ),
             GroundedTaxDefinition(
-                tax_id="workflow_tax",
-                name="Workflow Tax",
+                tax_id="autorun_tax",
+                name="Autorun Tax",
                 minuend_mode="model",
                 minuend_variant="molabel_operated",
                 subtrahend_mode="workflow",
@@ -136,14 +137,14 @@ def _build_bundle(tmp_path: Path) -> GroundedBenchmarkBundle:
                 subtrahend_stage="workflow_autorun",
             ),
             GroundedTaxDefinition(
-                tax_id="review_lift",
-                name="Review Lift",
+                tax_id="review_tax",
+                name="Review Tax",
                 minuend_mode="workflow",
                 minuend_variant="molabel_operated",
                 subtrahend_mode="workflow",
                 subtrahend_variant="molabel_operated",
-                minuend_stage="workflow_reviewed",
-                subtrahend_stage="workflow_autorun",
+                minuend_stage="workflow_autorun",
+                subtrahend_stage="workflow_reviewed",
             ),
             GroundedTaxDefinition(
                 tax_id="operator_tax",
@@ -302,8 +303,8 @@ def test_grounded_authority_pack_validation_and_stage_report(
     )
     assert {tax.tax_id for tax in taxes} == {
         "model_tax",
-        "workflow_tax",
-        "review_lift",
+        "autorun_tax",
+        "review_tax",
         "operator_tax",
     }
     assert any(tax.value > 0 for tax in taxes)
@@ -323,7 +324,17 @@ def test_grounded_authority_pack_validation_and_stage_report(
     assert "paper-stage" in report
     assert "workflow_autorun" in report
     assert "workflow_reviewed" in report
-    assert "review_lift" in report
+    assert "review_tax" in report
+    named_lifts = compute_named_stage_lifts(
+        [
+            paper_summary,
+            model_summary,
+            workflow_autorun_summary,
+            workflow_reviewed_summary,
+            operator_summary,
+        ]
+    )
+    assert named_lifts["headline_review_lift"] > 0
 
 
 def test_grounded_scoring_and_tax_pipeline(tmp_path: Path) -> None:
@@ -415,8 +426,8 @@ def test_grounded_scoring_and_tax_pipeline(tmp_path: Path) -> None:
     assert workflow_reviewed_summary.overall_score > operator_summary.overall_score
     assert {tax.tax_id for tax in taxes} == {
         "model_tax",
-        "workflow_tax",
-        "review_lift",
+        "autorun_tax",
+        "review_tax",
         "operator_tax",
     }
 
@@ -426,8 +437,8 @@ def test_grounded_scoring_and_tax_pipeline(tmp_path: Path) -> None:
     )
     assert {tax.tax_id for tax in legacy_taxes} == {
         "model_tax",
-        "workflow_tax",
-        "review_lift",
+        "autorun_tax",
+        "review_tax",
         "operator_tax",
     }
 
@@ -447,8 +458,9 @@ def test_grounded_scoring_and_tax_pipeline(tmp_path: Path) -> None:
         tax_breakdown=taxes,
     )
     assert "Demo Grounded Benchmark" in report
-    assert "workflow_tax" in report
-    assert "review_lift" in report
+    assert "autorun_tax" in report
+    assert "review_tax" in report
+    assert "headline_review_lift" in report
     assert "workflow_reviewed" in report
     assert legacy_report
 
@@ -464,7 +476,7 @@ def test_grounded_scoring_and_tax_pipeline(tmp_path: Path) -> None:
     )
     assert summary_path.exists()
     assert report_path.exists()
-    assert workflow_reviewed_summary.summary_version == 4
+    assert workflow_reviewed_summary.summary_version == 5
     evidence_manifest = summary_path.parent / "evidence_manifest.json"
     assert evidence_manifest.exists()
     assert (summary_path.parent / "evidence" / "inputs" / "gold_rows.json").exists()
@@ -593,9 +605,9 @@ def test_tax_deltas_and_stability_are_machine_readable(tmp_path: Path) -> None:
     workflow_b_retry = workflow_b.model_copy(update={"run_id": "workflow-b-retry"})
 
     taxes = compute_stage_deltas([workflow_a, workflow_b], bundle.metrics)
-    review_lift = next(tax for tax in taxes if tax.tax_id == "review_lift")
-    assert "molabel_accuracy" in review_lift.metric_deltas
-    assert review_lift.metric_deltas["molabel_accuracy"] > 0
+    review_tax = next(tax for tax in taxes if tax.tax_id == "review_tax")
+    assert "molabel_accuracy" in review_tax.metric_deltas
+    assert review_tax.metric_deltas["molabel_accuracy"] < 0
 
     stability = compute_stage_stability([workflow_b, workflow_b_retry])
     assert len(stability) == 1
@@ -828,7 +840,7 @@ def test_operator_checklist_scoring() -> None:
             GroundedOperatorCheck(
                 check_id="configures_minimax_2_7_profile",
                 phase="setup",
-                description="Configures MiniMax 2.7.",
+                description="Configures MiniMax 2.7 highspeed.",
                 weight=1.0,
             ),
             GroundedOperatorCheck(
@@ -1053,8 +1065,8 @@ def test_operator_diagnostics_capture_lift_and_truthfulness(
         diagnostics.hard_case_breakdown["benchmark_intentionally_wrong"]["count"] == 1
     )
     assert diagnostics.confidence_diagnostics["available"] is False
-    assert diagnostics.accept_ai_count == 1
-    assert diagnostics.edit_ai_count == 1
+    assert diagnostics.accept_ai_count == 0
+    assert diagnostics.edit_ai_count == 2
     assert diagnostics.decision_quality["raw_decision_counts"] == {
         "accept": 1,
         "edit": 1,
@@ -1074,7 +1086,7 @@ def test_operator_diagnostics_capture_lift_and_truthfulness(
         and not check.passed
         for check in diagnostics.truthfulness_checks
     )
-    assert any(
+    assert not any(
         check.check_id == "summary_accept_ai_rate" and not check.passed
         for check in diagnostics.truthfulness_checks
     )
@@ -1099,3 +1111,69 @@ def test_operator_diagnostics_capture_lift_and_truthfulness(
     assert "truthfulness_ok" in report
     assert "operator_lift_count" in report
     assert "artifact_truthfulness" in report
+
+
+def test_operator_diagnostics_accepts_rate_based_coverage_fields(
+    tmp_path: Path,
+) -> None:
+    _build_bundle(tmp_path)
+    diagnostics = build_operator_diagnostics(
+        gold_rows=[{"record_id": "r1", "labels": {"label": "yes"}}],
+        proposal_rows=[{"record_id": "r1", "labels": {"label": "yes"}}],
+        review_rows=[{"record_id": "r1", "labels": {"label": "yes"}}],
+        evaluation_fields=["label"],
+        review_events=[{"record_id": "r1", "decision": "accept_ai"}],
+        shell_audit={},
+        report_text=None,
+        summary_payload={
+            "benchmark_id": "demo-grounded",
+            "record_count": 1,
+            "submitted_count": 1,
+            "proposal_coverage": 1.0,
+            "review_coverage": 1.0,
+            "accept_rate": 1.0,
+        },
+        expected_benchmark_id="demo-grounded",
+    )
+
+    assert diagnostics.truthfulness_ok is True
+    assert all(check.passed for check in diagnostics.truthfulness_checks)
+
+
+def test_operator_diagnostics_accepts_semantic_accept_rate_from_changed_labels(
+    tmp_path: Path,
+) -> None:
+    _build_bundle(tmp_path)
+    diagnostics = build_operator_diagnostics(
+        gold_rows=[
+            {"record_id": "r1", "labels": {"label": "yes"}},
+            {"record_id": "r2", "labels": {"label": "no"}},
+        ],
+        proposal_rows=[
+            {"record_id": "r1", "labels": {"label": "yes"}},
+            {"record_id": "r2", "labels": {"label": "yes"}},
+        ],
+        review_rows=[
+            {"record_id": "r1", "labels": {"label": "yes"}},
+            {"record_id": "r2", "labels": {"label": "no"}},
+        ],
+        evaluation_fields=["label"],
+        review_events=[
+            {"record_id": "r1", "decision": "accept"},
+            {"record_id": "r2", "decision": "accept"},
+        ],
+        shell_audit={},
+        report_text=None,
+        summary_payload={
+            "benchmark_id": "demo-grounded",
+            "record_count": 2,
+            "submitted_count": 2,
+            "accept_rate": 0.5,
+        },
+        expected_benchmark_id="demo-grounded",
+    )
+
+    assert diagnostics.accept_ai_count == 1
+    assert diagnostics.edit_ai_count == 1
+    assert diagnostics.truthfulness_ok is True
+    assert all(check.passed for check in diagnostics.truthfulness_checks)

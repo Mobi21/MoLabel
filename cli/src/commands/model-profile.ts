@@ -16,8 +16,13 @@ interface ModelProfileListOptions {
   providerType?: string
 }
 
-export function registerModelProfileCommands(program: Command, runtime: CliRuntimeOptions): void {
-  const modelProfile = program.command('model-profile').description('Model profile operations')
+export function registerModelProfileCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
+  const modelProfile = program
+    .command('model-profile')
+    .description('Model profile operations')
 
   modelProfile
     .command('list')
@@ -36,7 +41,10 @@ export function registerModelProfileCommands(program: Command, runtime: CliRunti
     .option('--file <path>', 'JSON body file')
     .option('--body-text <json>', 'JSON body text')
     .action(async function (this: Command) {
-      await runModelProfileCreate(getRuntimeOptions(program, runtime), this.opts<JsonBodyOptions>())
+      await runModelProfileCreate(
+        getRuntimeOptions(program, runtime),
+        this.opts<JsonBodyOptions>(),
+      )
     })
 
   modelProfile
@@ -63,7 +71,10 @@ export function registerModelProfileCommands(program: Command, runtime: CliRunti
     .command('delete <profileId>')
     .description('Delete a model profile')
     .action(async (profileId: string) => {
-      await runModelProfileDelete(getRuntimeOptions(program, runtime), profileId)
+      await runModelProfileDelete(
+        getRuntimeOptions(program, runtime),
+        profileId,
+      )
     })
 
   modelProfile
@@ -84,9 +95,7 @@ async function runModelProfileList(
     search.set('provider_type', query.providerType.trim())
   }
   const suffix = search.size > 0 ? `?${search.toString()}` : ''
-  const response = await client.getJson<Record<string, unknown>[]>(
-    `/api/v1/model-profiles${suffix}`,
-  )
+  const response = await client.getJson(`/api/v1/model-profiles${suffix}`)
   await emit(response, outputMode(options))
 }
 
@@ -99,13 +108,16 @@ async function runModelProfileCreate(
     bodyOptions,
     'model-profile create requires --file, --body-text, or piped stdin',
   )
-  const response = await client.postJson<Record<string, unknown>>('/api/v1/model-profiles', body)
+  const response = await client.postJson('/api/v1/model-profiles', body)
   await emit(response, outputMode(options))
 }
 
-async function runModelProfileGet(options: CliRuntimeOptions, profileId: string): Promise<void> {
+async function runModelProfileGet(
+  options: CliRuntimeOptions,
+  profileId: string,
+): Promise<void> {
   const client = await requireClient(options)
-  const response = await client.getJson<Record<string, unknown>>(`/api/v1/model-profiles/${profileId}`)
+  const response = await client.getJson(`/api/v1/model-profiles/${profileId}`)
   await emit(response, outputMode(options))
 }
 
@@ -119,7 +131,7 @@ async function runModelProfileUpdate(
     bodyOptions,
     'model-profile update requires --file, --body-text, or piped stdin',
   )
-  const response = await client.patchJson<Record<string, unknown>>(
+  const response = await client.patchJson(
     `/api/v1/model-profiles/${profileId}`,
     body,
   )
@@ -135,9 +147,12 @@ async function runModelProfileDelete(
   await emit({ ok: true, deleted: profileId }, outputMode(options))
 }
 
-async function runModelProfileTest(options: CliRuntimeOptions, profileId: string): Promise<void> {
+async function runModelProfileTest(
+  options: CliRuntimeOptions,
+  profileId: string,
+): Promise<void> {
   const client = await requireClient(options)
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     `/api/v1/model-profiles/${profileId}/test`,
     {},
   )

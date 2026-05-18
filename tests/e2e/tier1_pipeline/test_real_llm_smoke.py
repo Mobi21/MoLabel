@@ -1,6 +1,6 @@
 """T1-01-REAL: Real LLM smoke test for text classification.
 
-Same pipeline as T1-01 but runs 5 records with a real MiniMax 2.7 call
+Same pipeline as T1-01 but runs 5 records with a real MiniMax 2.7 highspeed call
 (no cassette).  Skipped automatically unless the ``real_llm`` marker is
 selected and MINIMAX_API_KEY is set.
 
@@ -22,6 +22,40 @@ from tests.e2e.infrastructure.factories import (
 )
 from tests.e2e.infrastructure.parallel import INDEPENDENT
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+MINIMAX_BASE_URL = os.environ.get(
+    "MINIMAX_BASE_URL",
+    "https://api.minimax.io/anthropic",
+)
+
+
+def _load_dotenv_if_present() -> None:
+    dotenv_path = os.path.join(REPO_ROOT, ".env")
+    if not os.path.exists(dotenv_path):
+        return
+
+    with open(dotenv_path, encoding="utf-8") as dotenv_file:
+        for raw_line in dotenv_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export ") :].strip()
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip("'").strip('"'))
+
+
+def _resolve_minimax_auth_ref() -> str | None:
+    _load_dotenv_if_present()
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "ANTHROPIC_API_KEY"
+    if os.environ.get("MINIMAX_API_KEY"):
+        os.environ.setdefault("ANTHROPIC_API_KEY", os.environ["MINIMAX_API_KEY"])
+        return "ANTHROPIC_API_KEY"
+    return None
+
 
 @INDEPENDENT
 @pytest.mark.asyncio
@@ -33,11 +67,14 @@ async def test_real_llm_smoke_text_classification(
     client,
     ctx,
 ) -> None:
-    """T1-01-REAL: Smoke test with real MiniMax 2.7 on 5 product reviews."""
+    """T1-01-REAL: Smoke test with real MiniMax 2.7 highspeed on 5 product reviews."""
 
-    minimax_api_key = os.environ.get("MINIMAX_API_KEY")
-    if not minimax_api_key:
-        pytest.skip("MINIMAX_API_KEY not set — skipping real LLM smoke test")
+    auth_ref = _resolve_minimax_auth_ref()
+    if not auth_ref:
+        pytest.skip(
+            "ANTHROPIC_API_KEY or MINIMAX_API_KEY not set — "
+            "skipping real LLM smoke test"
+        )
 
     # ── Checkpoint 1: Workspace + Reviewer ───────────────────────────────
     with checkpoint(ctx, "workspace_setup"):
@@ -107,8 +144,9 @@ async def test_real_llm_smoke_text_classification(
                 "model_profile_slug": "minimax-2-7-smoke",
                 "provider_type": "anthropic",
                 "provider_name": "MiniMax",
-                "model_identifier": "minimax-2.7",
-                "base_url": "https://api.minimax.chat/v1",
+                "model_identifier": "MiniMax-M2.7-highspeed",
+                "auth_ref": auth_ref,
+                "base_url": MINIMAX_BASE_URL,
                 "cost_per_input_token": 0.000001,
                 "cost_per_output_token": 0.000003,
             },

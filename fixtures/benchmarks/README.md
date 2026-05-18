@@ -1,7 +1,7 @@
 # Benchmark Fixtures
 
 These fixtures are designed for live `molabel` CLI runs where Codex acts as the
-operator and `minimax-2.7` is the labeling model under test via the
+operator and `MiniMax-M2.7-highspeed` is the labeling model under test via the
 Anthropic-compatible SDK path.
 
 Each benchmark workspace includes:

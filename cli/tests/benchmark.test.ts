@@ -22,11 +22,15 @@ async function rm(path: string): Promise<void> {
   await rm(path, { recursive: true, force: true })
 }
 
-async function captureCliJson(argv: string[]): Promise<{ exitCode: number; json: unknown }> {
+async function captureCliJson(
+  argv: string[],
+): Promise<{ exitCode: number; json: unknown }> {
   const chunks: string[] = []
   const originalWrite = process.stdout.write.bind(process.stdout)
   process.stdout.write = ((chunk: string | Uint8Array) => {
-    chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'))
+    chunks.push(
+      typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'),
+    )
     return true
   }) as typeof process.stdout.write
 
@@ -42,7 +46,12 @@ async function captureCliJson(argv: string[]): Promise<{ exitCode: number; json:
   }
 }
 
-async function createPack(): Promise<{ root: string; runA: string; runB: string; copied: string }> {
+async function createPack(): Promise<{
+  root: string
+  runA: string
+  runB: string
+  copied: string
+}> {
   const root = await mkdtemp(join(tmpdir(), 'molabel-benchmark-cli-'))
   tempDirs.push(root)
   const authority = join(root, 'authority')
@@ -129,7 +138,7 @@ async function createPack(): Promise<{ root: string; runA: string; runB: string;
         'default_model_profile:',
         '  provider_type: anthropic',
         '  provider_name: MiniMax',
-        '  model_identifier: minimax-2.7',
+        '  model_identifier: MiniMax-M2.7-highspeed',
         '  sdk_stack: anthropic_sdk',
         '  agent_role: proposer',
         'profiles:',
@@ -197,7 +206,7 @@ async function createPack(): Promise<{ root: string; runA: string; runB: string;
       [
         'benchmark_id: demo-grounded',
         'goal: Demo operator goal',
-        'current_labeling_engine: MiniMax 2.7',
+        'current_labeling_engine: MiniMax 2.7 highspeed',
         'label_quality_weight: 0.7',
         'checklist_weight: 0.3',
         'blocking_check_ids:',
@@ -209,7 +218,10 @@ async function createPack(): Promise<{ root: string; runA: string; runB: string;
         '',
       ].join('\n'),
     ),
-    writeFile(join(sourceRaw, 'test.jsonl'), '{"record_id":"r1","text":"alpha"}\n'),
+    writeFile(
+      join(sourceRaw, 'test.jsonl'),
+      '{"record_id":"r1","text":"alpha"}\n',
+    ),
     writeFile(
       join(root, 'authority', 'gold', 'paper-direct', 'test.jsonl'),
       '{"record_id":"r1","labels":{"label":"positive"}}\n',
@@ -266,9 +278,17 @@ async function createPack(): Promise<{ root: string; runA: string; runB: string;
 describe('benchmark cli', () => {
   it('inspects a benchmark pack', async () => {
     const pack = await createPack()
-    const result = await captureCliJson(['node', 'molabel', 'benchmark', 'inspect', pack.root])
+    const result = await captureCliJson([
+      'node',
+      'molabel',
+      'benchmark',
+      'inspect',
+      pack.root,
+    ])
     expect(result.exitCode).toBe(0)
-    const payload = result.json as { benchmark: { benchmark_id: string; layout: string } }
+    const payload = result.json as {
+      benchmark: { benchmark_id: string; layout: string }
+    }
     expect(payload.benchmark.benchmark_id).toBe('demo-grounded')
     expect(payload.benchmark.layout).toBe('authority')
   })
@@ -283,14 +303,48 @@ describe('benchmark cli', () => {
       pack.root,
     ])
     expect(success.exitCode).toBe(0)
-    expect((success.json as { ok: boolean }).ok).toBe(true)
+    const successPayload = success.json as {
+      ok: boolean
+      warnings: string[]
+    }
+    expect(successPayload.ok).toBe(true)
+    expect(successPayload.warnings).toContain(
+      'No reference-workspace/ found; this is acceptable but limits baseline debugging.',
+    )
 
-    const invalidRoot = await mkdtemp(join(tmpdir(), 'molabel-benchmark-invalid-'))
+    const strict = await captureCliJson([
+      'node',
+      'molabel',
+      'benchmark',
+      'verify-pack',
+      pack.root,
+      '--strict',
+    ])
+    expect(strict.exitCode).toBe(1)
+    const strictPayload = strict.json as {
+      ok: boolean
+      errors: string[]
+      warnings: string[]
+    }
+    expect(strictPayload.ok).toBe(false)
+    expect(strictPayload.errors).toContain(
+      'No reference-workspace/ found; this is acceptable but limits baseline debugging.',
+    )
+    expect(strictPayload.warnings).toEqual([])
+
+    const invalidRoot = await mkdtemp(
+      join(tmpdir(), 'molabel-benchmark-invalid-'),
+    )
     tempDirs.push(invalidRoot)
     await mkdir(join(invalidRoot, 'authority'), { recursive: true })
     await writeFile(
       join(invalidRoot, 'authority', 'scenario.yaml'),
-      ['benchmark_id: invalid', 'name: Invalid Benchmark', 'track: grounded', ''].join('\n'),
+      [
+        'benchmark_id: invalid',
+        'name: Invalid Benchmark',
+        'track: grounded',
+        '',
+      ].join('\n'),
     )
     const failure = await captureCliJson([
       'node',
@@ -317,14 +371,25 @@ describe('benchmark cli', () => {
       pack.copied,
     ])
     expect(result.exitCode).toBe(0)
-    const payload = result.json as { copied: boolean; files: Array<{ path: string }> }
+    const payload = result.json as {
+      copied: boolean
+      files: Array<{ path: string }>
+    }
     expect(payload.copied).toBe(true)
     expect(payload.files.map((file) => file.path)).toContain('test.jsonl')
   })
 
   it('scores, reports, and compares runs', async () => {
     const pack = await createPack()
-    const score = await captureCliJson(['node', 'molabel', 'benchmark', 'score', pack.root, '--run', pack.runA])
+    const score = await captureCliJson([
+      'node',
+      'molabel',
+      'benchmark',
+      'score',
+      pack.root,
+      '--run',
+      pack.runA,
+    ])
     expect(score.exitCode).toBe(0)
     const scorePayload = score.json as {
       summary: {
@@ -332,7 +397,11 @@ describe('benchmark cli', () => {
         stage: string
         overall_score: number
         primary_metric_value: number
-        baseline_comparisons: Array<{ baseline_id: string; delta: number; relation: string }>
+        baseline_comparisons: Array<{
+          baseline_id: string
+          delta: number
+          relation: string
+        }>
       }
     }
     expect(scorePayload.summary.run_id).toBe('run-a')
@@ -386,9 +455,9 @@ describe('benchmark cli', () => {
     }
     expect(comparePayload.comparison.compatible).toBe(true)
     expect(comparePayload.comparison.overall_score_delta).toBe(0.15)
-    expect(comparePayload.comparison.metric_deltas.map((metric) => metric.metric_id)).toContain(
-      'accuracy',
-    )
+    expect(
+      comparePayload.comparison.metric_deltas.map((metric) => metric.metric_id),
+    ).toContain('accuracy')
     expect(comparePayload.comparison.warnings).toEqual([])
   })
 
@@ -442,7 +511,9 @@ describe('benchmark cli', () => {
   })
 
   it('rejects packs with an undeclared primary metric', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'molabel-benchmark-invalid-primary-'))
+    const root = await mkdtemp(
+      join(tmpdir(), 'molabel-benchmark-invalid-primary-'),
+    )
     tempDirs.push(root)
     const authority = join(root, 'authority')
     await mkdir(authority, { recursive: true })
@@ -466,7 +537,7 @@ describe('benchmark cli', () => {
           'default_model_profile:',
           '  provider_type: anthropic',
           '  provider_name: MiniMax',
-          '  model_identifier: minimax-2.7',
+          '  model_identifier: MiniMax-M2.7-highspeed',
           '  sdk_stack: anthropic_sdk',
           '',
         ].join('\n'),
@@ -514,7 +585,10 @@ describe('benchmark cli', () => {
           '',
         ].join('\n'),
       ),
-      writeFile(join(authority, 'baselines.yaml'), ['benchmark_id: invalid-primary', 'baselines: []', ''].join('\n')),
+      writeFile(
+        join(authority, 'baselines.yaml'),
+        ['benchmark_id: invalid-primary', 'baselines: []', ''].join('\n'),
+      ),
       writeFile(
         join(authority, 'operator.yaml'),
         [

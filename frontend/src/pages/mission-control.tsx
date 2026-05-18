@@ -426,7 +426,10 @@ function ActiveAlerts() {
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           <CardTitle className="text-sm">Active Alerts</CardTitle>
-          <Badge variant="destructive" className="ml-auto h-5 px-1.5 text-[10px]">
+          <Badge
+            variant="destructive"
+            className="ml-auto h-5 px-1.5 text-[10px]"
+          >
             {alerts.length}
           </Badge>
         </div>
@@ -492,7 +495,10 @@ function ReleaseBlockers() {
         <div className="flex items-center gap-2">
           <Shield className="h-4 w-4 text-muted-foreground" />
           <CardTitle className="text-sm">Release Blockers</CardTitle>
-          <Badge variant="destructive" className="ml-auto h-5 px-1.5 text-[10px]">
+          <Badge
+            variant="destructive"
+            className="ml-auto h-5 px-1.5 text-[10px]"
+          >
             {blockers.length}
           </Badge>
         </div>

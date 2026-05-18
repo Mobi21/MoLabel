@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -123,6 +124,11 @@ def _normalize_review_decision(
     return ReviewDecision(decision)
 
 
+_STABLE_EVIDENCE_ATOM_RE = re.compile(
+    r".+_(?:sentence_\d+|cell_\d+_\d+_\d+|header_cell_\d+_\d+_\d+)$"
+)
+
+
 def _parse_json_object(raw: Any) -> dict[str, Any] | None:
     """Best-effort parse for JSON object columns."""
     if isinstance(raw, str):
@@ -155,6 +161,15 @@ def _extract_record_text(payload: dict[str, Any] | None) -> str | None:
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
+    for key in ("post_tokens", "tokens"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            cleaned_tokens = [
+                str(token).strip() for token in value if str(token).strip()
+            ]
+            joined = " ".join(cleaned_tokens)
+            if joined:
+                return joined
     rendered = json.dumps(payload, sort_keys=True, ensure_ascii=True)
     return rendered if rendered != "{}" else None
 
@@ -196,28 +211,8 @@ def _normalize_submission_labels(
     if not labels:
         return labels
 
-    try:
-        row = conn.execute(
-            text(
-                "SELECT label_fields FROM task_schemas "
-                "WHERE id = :task_schema_id LIMIT 1"
-            ),
-            {"task_schema_id": task_schema_id},
-        ).first()
-    except SQLAlchemyError:
-        return labels
-
-    if row is None or row[0] is None:
-        return labels
-
-    raw = row[0]
-    if isinstance(raw, str):
-        try:
-            raw = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            return labels
-
-    if not isinstance(raw, list):
+    raw = _load_task_schema_label_fields(conn, task_schema_id)
+    if not raw:
         return labels
 
     from molabel.core.agents.output_validator import _normalize_labels
@@ -236,6 +231,143 @@ def _normalize_submission_labels(
 
     normalized, _ = _normalize_labels(labels, field_defs)
     return normalized if normalized else labels
+
+
+def _load_task_schema_label_fields(
+    conn,
+    task_schema_id: str,
+) -> list[dict[str, Any]]:
+    """Return raw task-schema field definitions for submission validation."""
+    try:
+        row = conn.execute(
+            text(
+                "SELECT label_fields FROM task_schemas "
+                "WHERE id = :task_schema_id LIMIT 1"
+            ),
+            {"task_schema_id": task_schema_id},
+        ).first()
+    except SQLAlchemyError:
+        return []
+
+    if row is None or row[0] is None:
+        return []
+
+    raw = row[0]
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    return raw if isinstance(raw, list) else []
+
+
+def _load_record_payload(
+    conn,
+    record_id: str,
+) -> dict[str, Any]:
+    """Load the record payload for submission-time structural validation."""
+    try:
+        row = conn.execute(
+            text("SELECT payload FROM records WHERE id = :record_id LIMIT 1"),
+            {"record_id": record_id},
+        ).first()
+    except SQLAlchemyError:
+        return {}
+
+    if row is None or row[0] is None:
+        return {}
+
+    raw = row[0]
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _looks_like_stable_evidence_atom(value: Any) -> bool:
+    """Return True when an evidence atom matches the benchmark ID format."""
+    return isinstance(value, str) and bool(_STABLE_EVIDENCE_ATOM_RE.fullmatch(value))
+
+
+def _validate_structured_submission_labels(
+    conn,
+    *,
+    record_id: str,
+    task_schema_id: str,
+    labels: dict[str, Any],
+) -> list[str]:
+    """Validate evidence/rationale structures before persisting a review."""
+    if not labels:
+        return []
+
+    label_fields = _load_task_schema_label_fields(conn, task_schema_id)
+    if not label_fields:
+        return []
+
+    field_map = {
+        str(field.get("name")): field
+        for field in label_fields
+        if isinstance(field, dict) and field.get("name")
+    }
+    errors: list[str] = []
+    verdict = str(labels.get("verdict") or "").strip().lower()
+
+    if "evidence_atoms" in field_map or "evidence_atoms" in labels:
+        evidence_atoms = labels.get("evidence_atoms")
+        evidence_field = field_map.get("evidence_atoms", {})
+        if evidence_atoms is None:
+            if evidence_field.get("required", True) and verdict != "nei":
+                errors.append("evidence_atoms is required when verdict is not 'nei'")
+        elif not isinstance(evidence_atoms, list):
+            errors.append(
+                "evidence_atoms must be a JSON array of stable evidence atom IDs"
+            )
+        else:
+            bad_atoms = [
+                atom
+                for atom in evidence_atoms
+                if not _looks_like_stable_evidence_atom(atom)
+            ]
+            if bad_atoms:
+                rendered = ", ".join(repr(atom) for atom in bad_atoms[:3])
+                errors.append(
+                    "evidence_atoms must contain only stable sentence/cell IDs; "
+                    f"got {rendered}"
+                )
+            if verdict != "nei" and not evidence_atoms:
+                errors.append(
+                    "evidence_atoms must include at least one supporting atom "
+                    "when verdict is not 'nei'"
+                )
+
+    if "rationale_token_mask" in field_map or "rationale_token_mask" in labels:
+        rationale_mask = labels.get("rationale_token_mask")
+        if not isinstance(rationale_mask, list):
+            errors.append("rationale_token_mask must be a JSON array of 0/1 integers")
+        else:
+            invalid_values = [
+                value
+                for value in rationale_mask
+                if not isinstance(value, int) or value not in {0, 1}
+            ]
+            if invalid_values:
+                rendered = ", ".join(repr(value) for value in invalid_values[:5])
+                errors.append(
+                    "rationale_token_mask must contain only binary integers; "
+                    f"got {rendered}"
+                )
+            payload = _load_record_payload(conn, record_id)
+            tokens = payload.get("tokens")
+            if isinstance(tokens, list) and len(tokens) != len(rationale_mask):
+                errors.append(
+                    "rationale_token_mask length must match the record token count "
+                    f"({len(tokens)}), got {len(rationale_mask)}"
+                )
+
+    return errors
 
 
 def _resolve_effective_submission_labels(
@@ -517,8 +649,18 @@ def submit_review(
 
         task_schema_id = str(row[3])
         effective_labels = _normalize_submission_labels(
-            conn, task_schema_id, effective_labels,
+            conn,
+            task_schema_id,
+            effective_labels,
         )
+        validation_errors = _validate_structured_submission_labels(
+            conn,
+            record_id=str(row[2]),
+            task_schema_id=task_schema_id,
+            labels=effective_labels,
+        )
+        if validation_errors:
+            raise ValueError("; ".join(validation_errors))
         labels_json = json.dumps(effective_labels)
         review_event_id = uuid.uuid4()
         task_schema_version = _resolve_task_schema_version(conn, task_schema_id)
@@ -1212,7 +1354,6 @@ def submit_correction(
     """
     now = datetime.now(UTC).isoformat()
     normalized_decision = _normalize_review_decision(decision)
-    labels_json = json.dumps(labels)
 
     with engine.begin() as conn:
         # Verify the task exists and belongs to this reviewer
@@ -1260,6 +1401,17 @@ def submit_correction(
         task_schema_id = str(latest_event[2])
         task_schema_version = int(latest_event[3])
         workspace_id = str(latest_event[10])
+
+        normalized_labels = _normalize_submission_labels(conn, task_schema_id, labels)
+        validation_errors = _validate_structured_submission_labels(
+            conn,
+            record_id=record_id,
+            task_schema_id=task_schema_id,
+            labels=normalized_labels,
+        )
+        if validation_errors:
+            raise ValueError("; ".join(validation_errors))
+        labels_json = json.dumps(normalized_labels)
 
         # Capture the previous labels for audit
         previous_labels_raw = latest_event[7]
@@ -1344,7 +1496,7 @@ def submit_correction(
             "reviewer_id": str(reviewer_id),
             "source": ReviewEventSource.human.value,
             "decision": decision_value,
-            "labels": labels,
+            "labels": normalized_labels,
             "previous_labels": previous_labels,
             "rationale": rationale,
             "ai_was_revealed": ai_was_revealed,

@@ -1,6 +1,6 @@
 ---
-name: "molabel-cli"
-description: "Use when Claude Code should operate a MoLabel workspace through the public molabel CLI and installed MoLabel skill only."
+name: 'molabel-cli'
+description: 'Use when Claude Code should operate a MoLabel workspace through the public molabel CLI and installed MoLabel skill only.'
 ---
 
 # MoLabel Claude Code Skill
@@ -19,7 +19,11 @@ Use this skill when Claude Code is operating a MoLabel workspace through the pub
 
 ## Grounded Benchmark Workflow
 
-When operating a grounded benchmark, read the workspace's `AGENTS.md`, `workbench.project.yaml`, and authority pack files (`authority/operator.yaml`, `authority/scenario.yaml`, `authority/label-map.yaml`) first to understand the benchmark structure, label set, and run artifact paths before running CLI commands.
+When operating a grounded benchmark, read only the operator-visible workspace
+files first: `AGENTS.md`, `workbench.project.yaml`, the task schema under
+`workbench/config/task-schemas/`, and the workflow YAML under
+`workbench/workflows/`. Do not read hidden authority-pack files unless the
+benchmark prompt explicitly allows them.
 
 ### Phase 1: Discover
 
@@ -27,7 +31,7 @@ When operating a grounded benchmark, read the workspace's `AGENTS.md`, `workbenc
 2. Read `workbench.project.yaml` to learn dataset IDs, task schema paths, and source paths.
 3. Read the task schema YAML under `workbench/config/task-schemas/` to learn label fields and options. **You MUST only submit label values that appear exactly in the `options` list — copy the exact string, do not paraphrase or reformat.** For example, if the options include `book_flight`, submit `"book_flight"` — never `"Book Flight"`, `"book a flight"`, or `"booking_flight"`.
 4. Read the workflow YAML under `workbench/workflows/` to learn step definitions.
-5. Read `authority/operator.yaml` to learn which model profile to use and which checks are evaluated.
+5. Infer the required model profile and artifact path rules from the visible benchmark notes and the operator prompt.
 
 ### Phase 2: Setup
 
@@ -35,6 +39,17 @@ Run these commands in order. Always append `--json` and capture the returned IDs
 
 ```
 molabel workspace bootstrap <workspace-path> --workspace-name "<name>"
+```
+
+Immediately create a reviewer session after bootstrap. This is required before
+`queue claim` or `review submit`:
+
+```
+molabel session list-reviewers --json
+```
+
+```
+molabel session select <reviewer-id> --json
 ```
 
 ```
@@ -81,7 +96,7 @@ molabel model-profile create --body-text '{
 }' --json
 ```
 
-For the grounded operator benchmark, use `model_identifier: "minimax-2.7"` exactly. Do not substitute Ollama, local models, or heuristic/builtin profiles. Before running the workflow, verify the chosen profile resolves to MiniMax 2.7 via `molabel model-profile list --json`.
+For the grounded operator benchmark, use `model_identifier: "MiniMax-M2.7-highspeed"` exactly. Do not substitute Ollama, local models, or heuristic/builtin profiles. Before running the workflow, verify the chosen profile resolves to MiniMax 2.7 highspeed via `molabel model-profile list --json`.
 
 ### Phase 3: Run workflow
 
@@ -106,6 +121,14 @@ Look for `queue_id` in the execution context or step outputs. If a step has `bre
 ```
 molabel workflow advance <workflow-slug-or-id> <execution-id> <step-id> --json
 ```
+
+For grounded benchmarks with a human-review queue, do not treat the workflow as
+done when it first reaches `waiting_for_human`. The run is only complete after:
+
+1. you found the review `queue_id`,
+2. the queue is fully reviewed,
+3. the persisted review count matches the benchmark record count,
+4. and the required benchmark artifacts are written.
 
 ### Phase 5: Review
 
@@ -133,11 +156,23 @@ molabel review submit <task-id> \
   --json
 ```
 
+If the task exposes tokenized text instead of a plain string, use the joined
+token text from `record_text` as the human-readable source, preserve any
+required token-aligned structures, and keep array lengths aligned to the source
+tokens. For rationale-mask tasks:
+
+- `rationale_token_mask` must be a JSON array of `0`/`1` integers,
+- its length must exactly match the visible token sequence length,
+- and multi-select labels must use only task-schema options, excluding values
+  that are not in the schema such as `"None"`.
+
 Review loop:
+
 1. Call `queue claim` once to get the first `task`.
 2. Submit that exact `task.id`.
 3. If the submit response contains `next_task`, continue with that object directly.
 4. Only call `queue claim` again when there is no current task and the queue is not empty.
+5. Stop only when the queue is empty and there is no `next_task`.
 
 Never issue two `queue claim` calls for a single review submission.
 
@@ -156,7 +191,17 @@ The workspace `AGENTS.md` specifies the output directory (typically `workbench/b
 - `summary.json` — JSON object with run metadata: benchmark_id, runner, timestamp, record_count, submitted_count.
 - `report.md` — Markdown summary of the run: what was done, how many records, any issues.
 
-**You must write both files before exiting.** This phase is required even if earlier phases had issues.
+Before writing either file, call:
+
+```
+molabel benchmark facts <workflow-execution-id> --json
+```
+
+Use that persisted payload as the source of truth for artifact counts and
+rates, not pre-review workflow placeholders. Prefer
+`semantic_decision_counts` for accept/edit/reject-style review outcome counts.
+**You must write both files before exiting.** This phase is required even if
+earlier phases had issues.
 
 ### Timing
 

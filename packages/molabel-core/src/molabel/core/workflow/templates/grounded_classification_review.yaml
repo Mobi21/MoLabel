@@ -1,0 +1,44 @@
+name: "Grounded Classification Review"
+version: 1
+description: >
+  Benchmark-aligned classification workflow with explicit proposer, review, and
+  export stages for grounded evaluation.
+
+steps:
+  - id: ingest
+    type: data_ingest
+    config:
+      source: "workbench/benchmarks/splits/test.jsonl"
+      record_id_field: "record_id"
+
+  - id: normalize
+    type: data_normalize
+    config:
+      schema_ref: "workbench/config/task-schemas/grounded-classification.yaml"
+
+  - id: propose_labels
+    type: agent_run
+    depends_on: [normalize]
+    config:
+      task_schema_id: grounded-classification
+      prompt_ref: grounded-classification-prompt
+      model: MiniMax-M2.7-highspeed
+      provider_type: anthropic
+      provider_name: MiniMax
+      base_url: https://api.minimax.io/anthropic
+      agent_role: proposer
+
+  - id: review
+    type: human_review
+    depends_on: [propose_labels]
+    config:
+      sample_strategy: all
+      task_schema_id: grounded-classification
+      breakpoint: true
+
+  - id: export_results
+    type: export
+    depends_on: [review]
+    config:
+      format: jsonl
+      destination: "workbench/benchmarks/runs"

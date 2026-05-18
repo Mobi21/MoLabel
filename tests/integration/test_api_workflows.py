@@ -144,7 +144,7 @@ def _seed_workflow(engine, workspace_id, *, include_export: bool = False):
             "step_id": "agent_label",
             "step_type": "agent_run",
             "config": {
-                "model": "minimax-2.7",
+                "model": "heuristic-agent",
                 "prompt_ref": "prompts/sentiment-demo-v1",
             },
         },
@@ -357,8 +357,7 @@ async def test_review_queue_must_complete_before_advance_and_export(
     with app.state.engine.connect() as conn:
         queue_row = conn.execute(
             text(
-                "SELECT DISTINCT queue_id FROM review_tasks "
-                "WHERE workspace_id = :wid"
+                "SELECT DISTINCT queue_id FROM review_tasks WHERE workspace_id = :wid"
             ),
             {"wid": str(workspace_id)},
         ).first()
@@ -493,10 +492,7 @@ async def test_review_completion_is_required_before_advancing_and_export_runs(
 
     with app.state.engine.connect() as conn:
         queue_row = conn.execute(
-            text(
-                "SELECT queue_id FROM review_tasks "
-                "WHERE workspace_id = :wid LIMIT 1"
-            ),
+            text("SELECT queue_id FROM review_tasks WHERE workspace_id = :wid LIMIT 1"),
             {"wid": str(workspace_id)},
         ).first()
     assert queue_row is not None

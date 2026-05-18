@@ -1,0 +1,50 @@
+name: "Grounded Rationale Moderation"
+version: 1
+description: >
+  Grounded moderation workflow with target-community labels and token-level
+  rationale-mask preservation.
+
+steps:
+  - id: ingest
+    type: data_ingest
+    config:
+      source: "workbench/benchmarks/splits/test.jsonl"
+      record_id_field: "post_id"
+
+  - id: normalize
+    type: data_normalize
+    config:
+      schema_ref: "workbench/config/task-schemas/rationale-moderation.yaml"
+
+  - id: propose_labels
+    type: agent_run
+    depends_on: [normalize]
+    config:
+      task_schema_id: rationale-moderation
+      prompt_ref: rationale-moderation-prompt
+      model: MiniMax-M2.7-highspeed
+      provider_type: anthropic
+      provider_name: MiniMax
+      base_url: https://api.minimax.io/anthropic
+      agent_role: proposer
+
+  - id: review
+    type: human_review
+    depends_on: [propose_labels]
+    config:
+      sample_strategy: all
+      task_schema_id: rationale-moderation
+      breakpoint: true
+
+  - id: adjudicate
+    type: human_adjudication
+    depends_on: [review]
+    config:
+      adjudication_policy: majority_vote_then_escalate
+
+  - id: export_results
+    type: export
+    depends_on: [adjudicate]
+    config:
+      format: jsonl
+      destination: "workbench/benchmarks/runs"

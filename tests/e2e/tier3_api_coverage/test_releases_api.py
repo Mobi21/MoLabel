@@ -46,7 +46,7 @@ async def test_releases_lifecycle(
     client: InstrumentedClient,
     ctx: TestContext,
 ) -> None:
-    """T3-14: Create release, list, get (404), approve (404)."""
+    """T3-14: Create release, list, get, approve, and reject lifecycle."""
 
     workspace_id = await _setup(client)
 
@@ -86,24 +86,32 @@ async def test_releases_lifecycle(
         )
         assert resp.status_code == 200, resp.text
 
-    with checkpoint(ctx, "get_release_404"):
-        # Stub raises 404 since no DB persistence
+    with checkpoint(ctx, "get_release"):
         resp = await client.get(f"{BASE}/releases/{release_id}")
-        assert resp.status_code == 404, resp.text
+        assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert "error" in body
+        assert body["release_id"] == release_id
+        assert body["proof_manifest"]["schema"] == "molabel.release.proof_manifest"
+        assert body["manifest_path"].endswith("proof-manifest.json")
 
-    with checkpoint(ctx, "approve_release_404"):
-        # Stub raises 404
+    with checkpoint(ctx, "approve_release"):
         resp = await client.post(
             f"{BASE}/releases/{release_id}/approve",
             json={"approved": True, "notes": "LGTM"},
         )
-        assert resp.status_code == 404, resp.text
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "approved"
+        assert body["approved_by"]
+        assert body["approved_at"]
+        assert body["proof_manifest"]["status"] == "approved"
 
-    with checkpoint(ctx, "reject_release_404"):
+    with checkpoint(ctx, "reject_release"):
         resp = await client.post(
             f"{BASE}/releases/{release_id}/approve",
             json={"approved": False, "notes": "Failed quality gates"},
         )
-        assert resp.status_code == 404, resp.text
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "rejected"
+        assert body["proof_manifest"]["status"] == "rejected"

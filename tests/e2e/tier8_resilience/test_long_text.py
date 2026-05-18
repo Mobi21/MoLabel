@@ -42,7 +42,10 @@ async def test_long_text(client, ctx):
 
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
-        ws = await client.post("/api/v1/workspaces", json={"path": "/tmp/ws-long-text-test", "workspace_name": "Long Text Test"})
+        ws = await client.post(
+            "/api/v1/workspaces",
+            json={"path": "/tmp/ws-long-text-test", "workspace_name": "Long Text Test"},
+        )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 

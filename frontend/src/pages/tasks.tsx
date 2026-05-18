@@ -185,7 +185,7 @@ function SchemaListItem({
   isSelected: boolean
   onSelect: () => void
 }) {
-  const Icon = typeIcon[schema.type] ?? Square
+  const Icon = typeIcon[schema.type]
 
   return (
     <button
@@ -280,7 +280,11 @@ function LabelFieldsTable({ fields }: { fields: LabelField[] }) {
                   <Button variant="ghost" size="icon" className="h-7 w-7">
                     <Pencil className="h-3 w-3" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/70 hover:text-destructive">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive/70 hover:text-destructive"
+                  >
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
@@ -369,7 +373,11 @@ function RubricSection({ entries }: { entries: RubricEntry[] }) {
 
             {/* Edit button */}
             <div className="pt-1">
-              <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+              >
                 <Pencil className="h-3 w-3" />
                 Edit Entry
               </Button>
@@ -384,10 +392,8 @@ function RubricSection({ entries }: { entries: RubricEntry[] }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function TasksPage() {
-  const [selectedId, setSelectedId] = useState<string>(
-    mockTaskSchemas[0]?.id ?? '',
-  )
-  const [blindReview, setBlindReview] = useState<boolean>(true)
+  const [selectedId, setSelectedId] = useState(mockTaskSchemas[0]?.id ?? '')
+  const [blindReview, setBlindReview] = useState(true)
 
   const selectedSchema = mockTaskSchemas.find((s) => s.id === selectedId)
 
@@ -411,9 +417,7 @@ export function TasksPage() {
         {/* ── Left Panel: Schema List ────────────────────────────────────────── */}
         <div className="flex w-[320px] shrink-0 flex-col border-r bg-muted/30">
           <div className="px-4 pt-4 pb-2">
-            <p className="text-sm font-semibold">
-              Task Schemas
-            </p>
+            <p className="text-sm font-semibold">Task Schemas</p>
           </div>
           <ScrollArea className="flex-1 px-3">
             <div className="space-y-1 pb-4">
@@ -422,7 +426,9 @@ export function TasksPage() {
                   key={schema.id}
                   schema={schema}
                   isSelected={schema.id === selectedId}
-                  onSelect={() => setSelectedId(schema.id)}
+                  onSelect={() => {
+                    setSelectedId(schema.id)
+                  }}
                 />
               ))}
             </div>
@@ -554,7 +560,9 @@ export function TasksPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="majority">Majority vote</SelectItem>
+                          <SelectItem value="majority">
+                            Majority vote
+                          </SelectItem>
                           <SelectItem value="unanimous">
                             Unanimous agreement
                           </SelectItem>
@@ -620,11 +628,7 @@ export function TasksPage() {
                   <CardContent className="pt-4">
                     <RubricSection entries={rubricEntries} />
                     <div className="mt-4 border-t pt-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                      >
+                      <Button variant="outline" size="sm" className="gap-1.5">
                         <Plus className="h-3.5 w-3.5" />
                         Add Rubric Entry
                       </Button>

@@ -36,7 +36,10 @@ async def _create_queue_with_n_tasks(
     """
     ws_resp = await client.post(
         "/api/v1/workspaces",
-        json={"path": f"/tmp/ws-review-decisions{queue_suffix}", "workspace_name": f"review-decisions-ws{queue_suffix}"},
+        json={
+            "path": f"/tmp/ws-review-decisions{queue_suffix}",
+            "workspace_name": f"review-decisions-ws{queue_suffix}",
+        },
     )
     assert ws_resp.status_code == 201
     ws_id = ws_resp.json()["workspace_id"]
@@ -55,7 +58,7 @@ async def _create_queue_with_n_tasks(
     records = [{"text": f"Record {i} for review decision testing."} for i in range(n)]
     import_resp = await client.post(
         f"/api/v1/datasets/{ds_id}/import",
-        json={"source_type": "jsonl", "records": records, "source_type": "jsonl"},
+        json={"source_type": "jsonl", "records": records},
     )
     assert import_resp.status_code in (200, 201, 202)
 

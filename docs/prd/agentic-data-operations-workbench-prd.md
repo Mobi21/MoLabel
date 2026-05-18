@@ -181,7 +181,7 @@ CLI commands, event streams, manifests, and artifact writes must be machine-read
 ### 7.6 Provider Agnosticism
 
 The operating harness may be Codex CLI, but the labeling model itself remains provider-configurable.
-The current labeling engine used in MoLabel is MiniMax 2.7 through the
+The current labeling engine used in MoLabel is MiniMax 2.7 highspeed through the
 Anthropic-compatible adapter path.
 Primary documentation, benchmark fixtures, and test harnesses should state that
 explicitly while the implementation remains provider-configurable underneath.

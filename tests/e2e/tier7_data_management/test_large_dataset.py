@@ -35,7 +35,11 @@ async def test_large_dataset(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-large-dataset-test", "workspace_name": "Large Dataset Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-large-dataset-test",
+                "workspace_name": "Large Dataset Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

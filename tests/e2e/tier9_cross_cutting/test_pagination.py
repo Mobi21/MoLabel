@@ -63,8 +63,7 @@ async def test_pagination(
     client: InstrumentedClient,
     ctx: TestContext,
 ) -> None:
-    """T9-07: All paginated list endpoints return consistent PaginatedResponse schema.
-    """
+    """T9-07: Paginated list endpoints return a consistent response schema."""
 
     workspace_id = await _setup(client)
 
@@ -137,7 +136,9 @@ async def test_pagination(
         assert resp.status_code == 200, resp.text
         body = resp.json()
         # The adjudication queue endpoint returns {items, total, unresolved}
-        assert "items" in body, f"Missing 'items' in adjudication queue response: {body}"
+        assert "items" in body, (
+            f"Missing 'items' in adjudication queue response: {body}"
+        )
         assert isinstance(body["items"], list)
 
     with checkpoint(ctx, "pagination_default_limit_respected"):

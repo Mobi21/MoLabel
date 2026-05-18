@@ -37,7 +37,8 @@ async def test_draft_saving_last_write_wins(
     """
     with checkpoint(ctx, "workspace_and_data_setup"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-draft-test-ws", "workspace_name": "draft-test-ws"}
+            "/api/v1/workspaces",
+            json={"path": "/tmp/ws-draft-test-ws", "workspace_name": "draft-test-ws"},
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]
@@ -58,7 +59,6 @@ async def test_draft_saving_last_write_wins(
             json={
                 "source_type": "jsonl",
                 "records": [{"text": "Record for draft testing."}],
-                "source_type": "jsonl",
             },
         )
         assert import_resp.status_code in (200, 201, 202)

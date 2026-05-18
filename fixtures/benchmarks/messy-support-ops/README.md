@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This benchmark is for live MiniMax 2.7 runs where Codex is the operator and
+This benchmark is for live MiniMax 2.7 highspeed runs where Codex is the operator and
 MoLabel is the workbench. It is intentionally small enough to run repeatedly,
 but messy enough to expose normalization, routing, and review failures.
 
@@ -53,7 +53,7 @@ demo. That means:
 4. Register a MiniMax model profile using the Anthropic-compatible path and the
    `.env` key.
 5. Create a prompt grounded in `AGENTS.md`.
-6. Run the records through MiniMax 2.7.
+6. Run the records through MiniMax 2.7 highspeed.
 7. Compare outputs against `support-triage-gold.jsonl`.
 8. Replay simulated human labels and reviews.
 9. Record where the model corrected bad human work and where it failed.

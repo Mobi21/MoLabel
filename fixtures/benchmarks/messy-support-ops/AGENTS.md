@@ -1,12 +1,12 @@
 # AGENTS.md
 
 Use this benchmark when Codex is validating support-triage behavior with a real
-MiniMax 2.7 run through MoLabel.
+MiniMax 2.7 highspeed run through MoLabel.
 
 ## Operating Contract
 
 - Codex is the operator and evaluator.
-- MiniMax 2.7 is the labeling model under test.
+- MiniMax 2.7 highspeed is the labeling model under test.
 - MoLabel APIs are used for project setup, registration, and inspection.
 - Model labels must be compared against gold labels and simulated human actions.
 - Do not silently normalize away important escalation cues.

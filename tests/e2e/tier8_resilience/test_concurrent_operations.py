@@ -27,7 +27,11 @@ async def test_concurrent_operations(client, ctx):
     # ── Checkpoint 1: Setup shared dataset ───────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-concurrent-ops-test", "workspace_name": "Concurrent Ops Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-concurrent-ops-test",
+                "workspace_name": "Concurrent Ops Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
@@ -67,7 +71,7 @@ async def test_concurrent_operations(client, ctx):
             "/api/v1/model-profiles",
             json={
                 "model_profile_slug": "concurrent-test-model",
-                "model_identifier": "minimax-2.7",
+                "model_identifier": "MiniMax-M2.7-highspeed",
                 "provider_type": "anthropic",
             },
         )

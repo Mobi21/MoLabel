@@ -33,7 +33,11 @@ async def test_adjudication_flow_detect_build_resolve(
     """
     with checkpoint(ctx, "session_setup"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-adjudication-test", "workspace_name": "Adjudication Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-adjudication-test",
+                "workspace_name": "Adjudication Test",
+            },
         )
         assert ws_resp.status_code == 201
 

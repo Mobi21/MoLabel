@@ -12,7 +12,10 @@ function PageLoader() {
   )
 }
 
-function lazyPage(factory: () => Promise<{ [key: string]: React.ComponentType }>, name: string) {
+function lazyPage(
+  factory: () => Promise<{ [key: string]: React.ComponentType }>,
+  name: string,
+) {
   const Component = lazy(() =>
     factory().then((mod) => ({ default: mod[name] as React.ComponentType })),
   )
@@ -27,23 +30,84 @@ export const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
-      { path: '/', element: lazyPage(() => import('@/pages/home'), 'HomePage') },
-      { path: '/mission-control', element: lazyPage(() => import('@/pages/mission-control'), 'MissionControlPage') },
-      { path: '/data', element: lazyPage(() => import('@/pages/data'), 'DataPage') },
-      { path: '/data/catalog', element: lazyPage(() => import('@/pages/data'), 'DataPage') },
-      { path: '/data/record/:id', element: lazyPage(() => import('@/pages/data'), 'DataPage') },
-      { path: '/data/analytics', element: lazyPage(() => import('@/pages/data'), 'DataPage') },
-      { path: '/tasks', element: lazyPage(() => import('@/pages/tasks'), 'TasksPage') },
-      { path: '/workflow', element: lazyPage(() => import('@/pages/workflow'), 'WorkflowPage') },
-      { path: '/workflow/:id', element: lazyPage(() => import('@/pages/workflow'), 'WorkflowPage') },
-      { path: '/agents', element: lazyPage(() => import('@/pages/agents'), 'AgentsPage') },
-      { path: '/review', element: lazyPage(() => import('@/pages/review'), 'ReviewPage') },
-      { path: '/adjudication', element: lazyPage(() => import('@/pages/adjudication'), 'AdjudicationPage') },
-      { path: '/quality', element: lazyPage(() => import('@/pages/quality'), 'QualityPage') },
-      { path: '/curation', element: lazyPage(() => import('@/pages/curation'), 'CurationPage') },
-      { path: '/exports', element: lazyPage(() => import('@/pages/exports'), 'ExportsPage') },
-      { path: '/plugins', element: lazyPage(() => import('@/pages/plugins'), 'PluginsPage') },
-      { path: '/settings', element: lazyPage(() => import('@/pages/settings'), 'SettingsPage') },
+      {
+        path: '/',
+        element: lazyPage(() => import('@/pages/home'), 'HomePage'),
+      },
+      {
+        path: '/mission-control',
+        element: lazyPage(
+          () => import('@/pages/mission-control'),
+          'MissionControlPage',
+        ),
+      },
+      {
+        path: '/data',
+        element: lazyPage(() => import('@/pages/data'), 'DataPage'),
+      },
+      {
+        path: '/data/catalog',
+        element: lazyPage(() => import('@/pages/data'), 'DataPage'),
+      },
+      {
+        path: '/data/record/:id',
+        element: lazyPage(() => import('@/pages/data'), 'DataPage'),
+      },
+      {
+        path: '/data/analytics',
+        element: lazyPage(() => import('@/pages/data'), 'DataPage'),
+      },
+      {
+        path: '/tasks',
+        element: lazyPage(() => import('@/pages/tasks'), 'TasksPage'),
+      },
+      {
+        path: '/workflow',
+        element: lazyPage(() => import('@/pages/workflow'), 'WorkflowPage'),
+      },
+      {
+        path: '/workflow/:id',
+        element: lazyPage(() => import('@/pages/workflow'), 'WorkflowPage'),
+      },
+      {
+        path: '/agents',
+        element: lazyPage(() => import('@/pages/agents'), 'AgentsPage'),
+      },
+      {
+        path: '/review',
+        element: lazyPage(() => import('@/pages/review'), 'ReviewPage'),
+      },
+      {
+        path: '/adjudication',
+        element: lazyPage(
+          () => import('@/pages/adjudication'),
+          'AdjudicationPage',
+        ),
+      },
+      {
+        path: '/quality',
+        element: lazyPage(() => import('@/pages/quality'), 'QualityPage'),
+      },
+      {
+        path: '/operations',
+        element: lazyPage(() => import('@/pages/operations'), 'OperationsPage'),
+      },
+      {
+        path: '/curation',
+        element: lazyPage(() => import('@/pages/curation'), 'CurationPage'),
+      },
+      {
+        path: '/exports',
+        element: lazyPage(() => import('@/pages/exports'), 'ExportsPage'),
+      },
+      {
+        path: '/plugins',
+        element: lazyPage(() => import('@/pages/plugins'), 'PluginsPage'),
+      },
+      {
+        path: '/settings',
+        element: lazyPage(() => import('@/pages/settings'), 'SettingsPage'),
+      },
     ],
   },
 ])

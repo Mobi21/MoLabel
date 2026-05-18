@@ -147,9 +147,7 @@ async def preview_label_mapping(
                 # Apply value mapping if present
                 str_val = str(val) if val is not None else ""
                 fallback = value_map.get((None, str_val), val)
-                mapped_val = value_map.get(
-                    (fm.target_field, str_val), fallback
-                )
+                mapped_val = value_map.get((fm.target_field, str_val), fallback)
                 mapped[fm.target_field] = mapped_val
             else:
                 warnings.append(f"Source field '{fm.source_field}' not found in record")
@@ -197,9 +195,7 @@ async def save_label_mapping(
         [vm.model_dump(mode="json") for vm in body.value_mappings]
     )
     type_conversions_json = (
-        json.dumps(body.type_conversions)
-        if body.type_conversions
-        else None
+        json.dumps(body.type_conversions) if body.type_conversions else None
     )
 
     with engine.connect() as conn:

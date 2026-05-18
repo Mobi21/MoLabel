@@ -11,6 +11,7 @@ then disconnect rather than consuming the full stream.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 
 import httpx
 import pytest
@@ -62,10 +63,8 @@ async def _sse_get(client: InstrumentedClient, url: str) -> tuple[int, str, str]
                 if first_chunk.strip():
                     return  # Got first event — exit via return, not break
 
-    try:
+    with contextlib.suppress(TimeoutError, httpx.ReadTimeout):
         await asyncio.wait_for(_read(), timeout=1.0)
-    except (asyncio.TimeoutError, httpx.ReadTimeout):
-        pass  # Expected: stream is infinite; cancelled after first event
 
     return status_code, content_type, first_chunk
 
@@ -88,23 +87,33 @@ async def test_sse_streams_content_type_and_401(
 
     # ── Agent run SSE ─────────────────────────────────────────────────────
     with checkpoint(ctx, "agent_run_sse_content_type"):
-        status, ct, chunk = await _sse_get(client, f"{BASE}/events/agent-runs/{fake_run_id}")
+        status, ct, chunk = await _sse_get(
+            client, f"{BASE}/events/agent-runs/{fake_run_id}"
+        )
         assert status == 200, f"Expected 200, got {status}"
         assert "text/event-stream" in ct, f"Bad Content-Type: {ct}"
 
     with checkpoint(ctx, "agent_run_sse_initial_event"):
-        status, ct, chunk = await _sse_get(client, f"{BASE}/events/agent-runs/{fake_run_id}")
+        status, ct, chunk = await _sse_get(
+            client, f"{BASE}/events/agent-runs/{fake_run_id}"
+        )
         assert status == 200
-        assert "event:" in chunk or "data:" in chunk, f"No SSE event in chunk: {chunk!r}"
+        assert "event:" in chunk or "data:" in chunk, (
+            f"No SSE event in chunk: {chunk!r}"
+        )
 
     # ── Queue SSE ─────────────────────────────────────────────────────────
     with checkpoint(ctx, "queue_sse_content_type"):
-        status, ct, chunk = await _sse_get(client, f"{BASE}/events/queue/{fake_queue_id}")
+        status, ct, chunk = await _sse_get(
+            client, f"{BASE}/events/queue/{fake_queue_id}"
+        )
         assert status == 200, f"Expected 200, got {status}"
         assert "text/event-stream" in ct, f"Bad Content-Type: {ct}"
 
     with checkpoint(ctx, "queue_sse_stats_event"):
-        status, ct, chunk = await _sse_get(client, f"{BASE}/events/queue/{fake_queue_id}")
+        status, ct, chunk = await _sse_get(
+            client, f"{BASE}/events/queue/{fake_queue_id}"
+        )
         assert status == 200
         assert "stats_update" in chunk or "data:" in chunk, f"No stats event: {chunk!r}"
 

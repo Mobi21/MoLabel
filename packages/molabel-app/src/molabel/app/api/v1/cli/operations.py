@@ -5,13 +5,17 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import bindparam, text
 from sqlmodel import Session, select
 
 from molabel.app.api.v1.cli.deps import CurrentCliReviewer
 from molabel.app.utils import get_engine
+from molabel.core.agents.queue_binding import deserialize_agent_output_ids
 from molabel.core.data.snapshot_service import SnapshotService
 from molabel.core.models import Dataset, DatasetSnapshot, Record
 from molabel.core.workflow.templates import (
@@ -28,6 +32,10 @@ class WorkflowTemplateSummary(BaseModel):
     name: str
     description: str
     file_path: str
+    version: str
+    task_family: str
+    capabilities: list[str] = Field(default_factory=list)
+    validated_by_benchmarks: list[str] = Field(default_factory=list)
 
 
 class WorkflowTemplateDetail(WorkflowTemplateSummary):
@@ -54,6 +62,28 @@ class LocksResponse(BaseModel):
     message: str
 
 
+class BenchmarkRunFactsResponse(BaseModel):
+    workflow_execution_id: str
+    workflow_status: str
+    current_step_id: str | None = None
+    workspace_id: str
+    workspace_root: str | None = None
+    queue_id: str | None = None
+    run_artifact_dir: str | None = None
+    summary_path: str | None = None
+    report_path: str | None = None
+    artifact_files: list[str] = Field(default_factory=list)
+    record_count: int = 0
+    available_count: int = 0
+    claimed_count: int = 0
+    submitted_count: int = 0
+    review_event_count: int = 0
+    queue_empty: bool = False
+    review_completion_rate: float = 0.0
+    decision_counts: dict[str, int] = Field(default_factory=dict)
+    semantic_decision_counts: dict[str, int] = Field(default_factory=dict)
+
+
 @router.get("/workflow-templates", response_model=list[WorkflowTemplateSummary])
 async def workflow_templates() -> list[WorkflowTemplateSummary]:
     """List built-in workflow templates available to the CLI."""
@@ -63,6 +93,10 @@ async def workflow_templates() -> list[WorkflowTemplateSummary]:
             name=template["name"],
             description=template["description"],
             file_path=template["file"],
+            version=template["version"],
+            task_family=template["task_family"],
+            capabilities=list(template.get("capabilities", [])),
+            validated_by_benchmarks=list(template.get("validated_by_benchmarks", [])),
         )
         for template in list_templates()
     ]
@@ -88,6 +122,10 @@ async def get_workflow_template(template_id: str) -> WorkflowTemplateDetail:
         name=template["name"],
         description=template["description"],
         file_path=template["file"],
+        version=template["version"],
+        task_family=template["task_family"],
+        capabilities=list(template.get("capabilities", [])),
+        validated_by_benchmarks=list(template.get("validated_by_benchmarks", [])),
         absolute_path=str(template_path),
         yaml=yaml_text,
     )
@@ -199,4 +237,258 @@ async def get_locks() -> LocksResponse:
         available=False,
         items=[],
         message="No lock registry is configured in the current backend",
+    )
+
+
+@router.get(
+    "/benchmark-run-facts/{workflow_execution_id}",
+    response_model=BenchmarkRunFactsResponse,
+)
+async def get_benchmark_run_facts(
+    request: Request,
+    workflow_execution_id: uuid.UUID,
+    _reviewer: CurrentCliReviewer,
+) -> BenchmarkRunFactsResponse:
+    """Return persisted review/queue facts for a benchmark workflow execution."""
+    engine = get_engine(request)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT we.id,
+                       we.status,
+                       we.current_step_id,
+                       we.context,
+                       we.workspace_id,
+                       ws.root_path
+                FROM workflow_executions AS we
+                JOIN workspaces AS ws ON ws.id = we.workspace_id
+                WHERE we.id = :workflow_execution_id
+                LIMIT 1
+                """
+            ),
+            {"workflow_execution_id": str(workflow_execution_id)},
+        ).first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Workflow execution not found")
+
+        context_raw = row[3]
+        if isinstance(context_raw, str):
+            try:
+                context_raw = json.loads(context_raw)
+            except json.JSONDecodeError:
+                context_raw = {}
+        context = context_raw if isinstance(context_raw, dict) else {}
+
+        queue_id = None
+        review_queue_ids = context.get("review_queue_ids")
+        if isinstance(review_queue_ids, list) and review_queue_ids:
+            last_queue = review_queue_ids[-1]
+            if isinstance(last_queue, str) and last_queue.strip():
+                queue_id = last_queue
+        if not queue_id:
+            step_outputs = context.get("step_outputs")
+            if isinstance(step_outputs, dict):
+                for value in step_outputs.values():
+                    if not isinstance(value, dict):
+                        continue
+                    summary = value.get("summary")
+                    if not isinstance(summary, dict):
+                        continue
+                    candidate = summary.get("queue_id")
+                    if isinstance(candidate, str) and candidate.strip():
+                        queue_id = candidate
+                        break
+
+        record_count = 0
+        available_count = 0
+        claimed_count = 0
+        submitted_count = 0
+        review_event_count = 0
+        decision_counts: dict[str, int] = {}
+        semantic_decision_counts: dict[str, int] = {}
+        if queue_id:
+            task_counts = conn.execute(
+                text(
+                    """
+                    SELECT status, COUNT(*)
+                    FROM review_tasks
+                    WHERE queue_id = :queue_id
+                    GROUP BY status
+                    """
+                ),
+                {"queue_id": queue_id},
+            ).all()
+            for status, count in task_counts:
+                count_int = int(count or 0)
+                record_count += count_int
+                normalized = str(status or "").strip().lower()
+                if normalized == "available":
+                    available_count = count_int
+                elif normalized == "claimed":
+                    claimed_count = count_int
+                elif normalized == "submitted":
+                    submitted_count = count_int
+
+            review_event_count = int(
+                conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*)
+                        FROM review_events AS re
+                        JOIN review_tasks AS rt ON rt.id = re.review_task_id
+                        WHERE rt.queue_id = :queue_id
+                        """
+                    ),
+                    {"queue_id": queue_id},
+                ).scalar_one()
+                or 0
+            )
+            for decision, count in conn.execute(
+                text(
+                    """
+                    SELECT COALESCE(decision, ''), COUNT(*)
+                    FROM review_events AS re
+                    JOIN review_tasks AS rt ON rt.id = re.review_task_id
+                    WHERE rt.queue_id = :queue_id
+                    GROUP BY COALESCE(decision, '')
+                    """
+                ),
+                {"queue_id": queue_id},
+            ):
+                key = str(decision or "").strip() or "unspecified"
+                decision_counts[key] = int(count or 0)
+
+            latest_event_rows = conn.execute(
+                text(
+                    """
+                    SELECT
+                        rt.id,
+                        rt.agent_output_ids,
+                        COALESCE(re.decision, ''),
+                        re.labels
+                    FROM review_tasks AS rt
+                    JOIN review_events AS re ON re.review_task_id = rt.id
+                    WHERE rt.queue_id = :queue_id
+                      AND re.created_at = (
+                          SELECT MAX(re2.created_at)
+                          FROM review_events AS re2
+                          WHERE re2.review_task_id = rt.id
+                      )
+                    """
+                ),
+                {"queue_id": queue_id},
+            ).all()
+
+            task_rows: list[tuple[list[str], str, dict[str, Any]]] = []
+            output_id_set: set[str] = set()
+            for _task_id, raw_output_ids, raw_decision, raw_labels in latest_event_rows:
+                output_ids = [
+                    str(output_id)
+                    for output_id in deserialize_agent_output_ids(raw_output_ids)
+                ]
+                labels = raw_labels
+                if isinstance(labels, str):
+                    try:
+                        labels = json.loads(labels)
+                    except json.JSONDecodeError:
+                        labels = {}
+                if not isinstance(labels, dict):
+                    labels = {}
+                task_rows.append(
+                    (output_ids, str(raw_decision or "").strip().lower(), labels)
+                )
+                output_id_set.update(output_ids)
+
+            proposal_by_output_id: dict[str, dict[str, Any]] = {}
+            if output_id_set:
+                query = text(
+                    """
+                    SELECT id, labels
+                    FROM agent_outputs
+                    WHERE id IN :output_ids
+                    """
+                ).bindparams(bindparam("output_ids", expanding=True))
+                for output_id, raw_labels in conn.execute(
+                    query,
+                    {"output_ids": sorted(output_id_set)},
+                ):
+                    labels = raw_labels
+                    if isinstance(labels, str):
+                        try:
+                            labels = json.loads(labels)
+                        except json.JSONDecodeError:
+                            labels = {}
+                    if isinstance(labels, dict):
+                        proposal_by_output_id[str(output_id)] = labels
+
+            for output_ids, raw_decision, review_labels in task_rows:
+                proposal_labels = next(
+                    (
+                        proposal_by_output_id[output_id]
+                        for output_id in output_ids
+                        if output_id in proposal_by_output_id
+                    ),
+                    None,
+                )
+                semantic = raw_decision or "unspecified"
+                if semantic in {"accept", "accept_ai", "edit", "edit_ai"}:
+                    semantic = (
+                        "edit_ai"
+                        if (
+                            proposal_labels is not None
+                            and proposal_labels != review_labels
+                        )
+                        else "accept_ai"
+                    )
+                elif semantic == "reject":
+                    semantic = "reject_ai"
+                semantic_decision_counts[semantic] = (
+                    semantic_decision_counts.get(semantic, 0) + 1
+                )
+
+    workspace_root = str(row[5]) if row[5] is not None else None
+    artifact_dir: Path | None = None
+    artifact_files: list[str] = []
+    summary_path: str | None = None
+    report_path: str | None = None
+    if workspace_root:
+        artifact_dir = (
+            Path(workspace_root) / "workbench" / "benchmarks" / "runs" / "live-operator"
+        )
+        if artifact_dir.exists():
+            artifact_files = sorted(
+                str(path.relative_to(artifact_dir))
+                for path in artifact_dir.rglob("*")
+                if path.is_file()
+            )
+            summary_candidate = artifact_dir / "summary.json"
+            report_candidate = artifact_dir / "report.md"
+            if summary_candidate.exists():
+                summary_path = str(summary_candidate)
+            if report_candidate.exists():
+                report_path = str(report_candidate)
+
+    return BenchmarkRunFactsResponse(
+        workflow_execution_id=str(row[0]),
+        workflow_status=str(row[1]),
+        current_step_id=str(row[2]) if row[2] is not None else None,
+        workspace_id=str(row[4]),
+        workspace_root=workspace_root,
+        queue_id=queue_id,
+        run_artifact_dir=str(artifact_dir) if artifact_dir is not None else None,
+        summary_path=summary_path,
+        report_path=report_path,
+        artifact_files=artifact_files,
+        record_count=record_count,
+        available_count=available_count,
+        claimed_count=claimed_count,
+        submitted_count=submitted_count,
+        review_event_count=review_event_count,
+        queue_empty=record_count > 0 and available_count == 0 and claimed_count == 0,
+        review_completion_rate=(
+            submitted_count / record_count if record_count else 0.0
+        ),
+        decision_counts=decision_counts,
+        semantic_decision_counts=semantic_decision_counts,
     )

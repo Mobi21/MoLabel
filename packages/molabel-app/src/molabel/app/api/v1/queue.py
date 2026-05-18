@@ -372,14 +372,17 @@ async def submit_review_endpoint(
 
     _add_notification_headers(response, reviewer.id)
 
-    submitted = submit_review(
-        engine,
-        task_id,
-        reviewer.id,
-        body.labels,
-        body.decision,
-        body.rationale,
-    )
+    try:
+        submitted = submit_review(
+            engine,
+            task_id,
+            reviewer.id,
+            body.labels,
+            body.decision,
+            body.rationale,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     if submitted is None:
         raise HTTPException(
@@ -585,14 +588,17 @@ async def submit_correction_endpoint(
 
     _add_notification_headers(response, reviewer.id)
 
-    result = submit_correction(
-        engine,
-        task_id,
-        reviewer.id,
-        body.labels,
-        body.decision,
-        body.rationale,
-    )
+    try:
+        result = submit_correction(
+            engine,
+            task_id,
+            reviewer.id,
+            body.labels,
+            body.decision,
+            body.rationale,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     if result is None:
         raise HTTPException(

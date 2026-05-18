@@ -103,9 +103,7 @@ function PluginCard({
   return (
     <Card
       className={`border bg-card transition-all ${
-        enabled
-          ? 'hover:border-primary/40 hover:shadow-md'
-          : 'opacity-50'
+        enabled ? 'hover:border-primary/40 hover:shadow-md' : 'opacity-50'
       }`}
     >
       <CardHeader className="pb-3">
@@ -229,7 +227,9 @@ export function PluginsPage() {
             key={plugin.id}
             plugin={plugin}
             enabled={pluginStates[plugin.id] ?? false}
-            onToggle={(checked) => togglePlugin(plugin.id, checked)}
+            onToggle={(checked) => {
+              togglePlugin(plugin.id, checked)
+            }}
           />
         ))}
       </div>
@@ -284,7 +284,9 @@ export function PluginsPage() {
                 <span className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-amber-500" />
                   <span className="font-medium">{updatesAvailable}</span>
-                  <span className="text-muted-foreground">updates available</span>
+                  <span className="text-muted-foreground">
+                    updates available
+                  </span>
                 </span>
               </div>
             </div>

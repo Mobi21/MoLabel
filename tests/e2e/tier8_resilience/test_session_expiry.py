@@ -43,7 +43,10 @@ async def test_session_expiry(client, ctx):
     with checkpoint(ctx, "login"):
         ws_resp = await client.post(
             "/api/v1/workspaces",
-            json={"path": "/tmp/ws-session-test-workspace", "workspace_name": "Session Test Workspace"},
+            json={
+                "path": "/tmp/ws-session-test-workspace",
+                "workspace_name": "Session Test Workspace",
+            },
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]

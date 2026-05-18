@@ -288,7 +288,7 @@ or one model vendor.
   invoked in practice.
 
 This separation is why the benchmark can insist on a specific current engine,
-MiniMax 2.7 through the Anthropic-compatible path, without baking that choice
+MiniMax 2.7 highspeed through the Anthropic-compatible path, without baking that choice
 into the whole product architecture.
 
 ## 9. Review And Adjudication Semantics

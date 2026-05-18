@@ -10,7 +10,10 @@ const MANIFEST_FILENAME = 'workbench.project.yaml'
 const VERSIONED_KINDS = new Map([
   ['workflow', { directory: 'workbench/workflows', extension: '.yaml' }],
   ['prompt', { directory: 'workbench/prompts', extension: '.yaml' }],
-  ['task-schema', { directory: 'workbench/config/task-schemas', extension: '.yaml' }],
+  [
+    'task-schema',
+    { directory: 'workbench/config/task-schemas', extension: '.yaml' },
+  ],
   ['mapping', { directory: 'workbench/config/mappings', extension: '.yaml' }],
 ])
 

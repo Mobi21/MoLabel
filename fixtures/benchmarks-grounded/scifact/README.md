@@ -4,7 +4,7 @@ This benchmark is a grounded micro-benchmark built on the SciFact scientific
 claim verification task. It keeps the joint verdict-plus-evidence contract
 from the paper while staying small enough to run repeatedly.
 
-The current MoLabel labeling engine for live benchmark runs is `MiniMax 2.7`
+The current MoLabel labeling engine for live benchmark runs is `MiniMax 2.7 highspeed`
 through the Anthropic-compatible adapter path.
 
 Evaluation modes:

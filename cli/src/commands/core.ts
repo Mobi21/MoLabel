@@ -11,25 +11,42 @@ import {
   safeGetJson,
 } from './context.js'
 
-export function registerCoreCommands(program: Command, runtime: CliRuntimeOptions): void {
-  program.command('doctor').description('Check environment health').action(async () => {
-    await runDoctor(getRuntimeOptions(program, runtime))
-  })
+export function registerCoreCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
+  program
+    .command('doctor')
+    .description('Check environment health')
+    .action(async () => {
+      await runDoctor(getRuntimeOptions(program, runtime))
+    })
 
-  program.command('status').description('Show workspace and backend status').action(async () => {
-    await runStatus(getRuntimeOptions(program, runtime))
-  })
+  program
+    .command('status')
+    .description('Show workspace and backend status')
+    .action(async () => {
+      await runStatus(getRuntimeOptions(program, runtime))
+    })
 
-  program.command('manifest').description('Print the CLI manifest').option('--json').action(async () => {
-    await emit(COMMAND_MANIFEST, 'json')
-  })
+  program
+    .command('manifest')
+    .description('Print the CLI manifest')
+    .option('--json')
+    .action(async () => {
+      await emit(COMMAND_MANIFEST, 'json')
+    })
 }
 
 async function runDoctor(options: CliRuntimeOptions): Promise<void> {
   const workspace = await detectWorkspaceRoot(options.workspaceRoot)
   const client = await buildClient(options)
-  const health = client ? await safeGetJson<Record<string, unknown>>(client, '/health') : null
-  const whoami = client ? await safeGetJson<Record<string, unknown>>(client, '/api/v1/me') : null
+  const health = client
+    ? await safeGetJson<Record<string, unknown>>(client, '/health')
+    : null
+  const whoami = client
+    ? await safeGetJson<Record<string, unknown>>(client, '/api/v1/me')
+    : null
 
   await emit(
     {
@@ -47,7 +64,9 @@ async function runDoctor(options: CliRuntimeOptions): Promise<void> {
 async function runStatus(options: CliRuntimeOptions): Promise<void> {
   const workspace = await detectWorkspaceRoot(options.workspaceRoot)
   const client = await buildClient(options)
-  const health = client ? await safeGetJson<Record<string, unknown>>(client, '/api/v1/cli/status') : null
+  const health = client
+    ? await safeGetJson<Record<string, unknown>>(client, '/api/v1/cli/status')
+    : null
 
   await emit(
     {

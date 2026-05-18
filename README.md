@@ -280,14 +280,14 @@ molabel model-profile create --body-text '{
   "model_profile_slug": "main-proposer",
   "provider_type": "anthropic",
   "provider_name": "anthropic-compatible",
-  "model_identifier": "minimax-2.7",
+  "model_identifier": "MiniMax-M2.7-highspeed",
   "auth_ref": "ANTHROPIC_API_KEY",
   "supports_structured_output": true
 }' --json
 ```
 
 MoLabel is provider-configurable underneath, but the grounded benchmark harness
-currently uses `MiniMax 2.7` through the Anthropic-compatible adapter path.
+currently uses `MiniMax 2.7 highspeed` through the Anthropic-compatible adapter path.
 
 ### 5. Create And Run A Workflow
 

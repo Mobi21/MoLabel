@@ -1,4 +1,4 @@
-"""Real benchmark runs against MiniMax 2.7 via the Anthropic-compatible path.
+"""Real benchmark runs against MiniMax 2.7 highspeed via the Anthropic-compatible path.
 
 These scenarios use live API setup calls through the MoLabel app plus real
 provider calls through the Anthropic adapter pointed at MiniMax's base URL.
@@ -26,7 +26,9 @@ from tests.e2e.infrastructure.parallel import INDEPENDENT
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BENCHMARKS_ROOT = REPO_ROOT / "fixtures" / "benchmarks"
-MINIMAX_BASE_URL = os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.io/anthropic")
+MINIMAX_BASE_URL = os.environ.get(
+    "MINIMAX_BASE_URL", "https://api.minimax.io/anthropic"
+)
 
 
 @dataclass(frozen=True)
@@ -37,9 +39,15 @@ class BenchmarkScenario:
 
 
 SCENARIOS = [
-    BenchmarkScenario("messy-support-ops", min_field_accuracy=0.55, min_exact_matches=2),
-    BenchmarkScenario("claims-audit-extraction", min_field_accuracy=0.5, min_exact_matches=1),
-    BenchmarkScenario("forum-policy-moderation", min_field_accuracy=0.6, min_exact_matches=2),
+    BenchmarkScenario(
+        "messy-support-ops", min_field_accuracy=0.55, min_exact_matches=2
+    ),
+    BenchmarkScenario(
+        "claims-audit-extraction", min_field_accuracy=0.5, min_exact_matches=1
+    ),
+    BenchmarkScenario(
+        "forum-policy-moderation", min_field_accuracy=0.6, min_exact_matches=2
+    ),
 ]
 
 
@@ -85,7 +93,9 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _load_raw_records(workspace_root: Path, scenario: dict[str, Any]) -> list[dict[str, Any]]:
+def _load_raw_records(
+    workspace_root: Path, scenario: dict[str, Any]
+) -> list[dict[str, Any]]:
     raw_format = scenario["raw_format"]
     source_path = scenario["source_path"]
 
@@ -100,7 +110,9 @@ def _load_raw_records(workspace_root: Path, scenario: dict[str, Any]) -> list[di
     if raw_format == "markdown":
         records: list[dict[str, Any]] = []
         for path in sorted(workspace_root.glob(source_path)):
-            records.append({"record_id": path.stem, "markdown": path.read_text(encoding="utf-8")})
+            records.append(
+                {"record_id": path.stem, "markdown": path.read_text(encoding="utf-8")}
+            )
         return records
 
     raise AssertionError(f"Unsupported raw format: {raw_format}")
@@ -111,10 +123,14 @@ def _record_identifier(record: dict[str, Any], scenario: dict[str, Any]) -> str:
         return str(record[scenario["record_id_field"]])
     if scenario.get("record_id_from") == "file_stem":
         return str(record["record_id"])
-    raise AssertionError(f"Scenario is missing record id mapping: {scenario['scenario_id']}")
+    raise AssertionError(
+        f"Scenario is missing record id mapping: {scenario['scenario_id']}"
+    )
 
 
-def _build_output_schema(task_schema: dict[str, Any], scenario_id: str) -> dict[str, Any]:
+def _build_output_schema(
+    task_schema: dict[str, Any], scenario_id: str
+) -> dict[str, Any]:
     properties: dict[str, Any] = {}
     required: list[str] = []
 
@@ -123,7 +139,10 @@ def _build_output_schema(task_schema: dict[str, Any], scenario_id: str) -> dict[
         field_type = field["field_type"]
 
         if field_type == "categorical":
-            properties[field_name] = {"type": "string", "enum": field.get("options", [])}
+            properties[field_name] = {
+                "type": "string",
+                "enum": field.get("options", []),
+            }
         elif field_type == "bool":
             properties[field_name] = {"type": "boolean"}
         elif field_type == "numeric":
@@ -183,11 +202,16 @@ def _values_match(expected: Any, actual: Any) -> bool:
     if isinstance(expected, list):
         if not isinstance(actual, list):
             return False
-        return sorted(str(item) for item in expected) == sorted(str(item) for item in actual)
+        return sorted(str(item) for item in expected) == sorted(
+            str(item) for item in actual
+        )
     if isinstance(expected, bool):
         return actual is expected
     if isinstance(expected, (int, float)):
-        return isinstance(actual, (int, float)) and abs(float(expected) - float(actual)) < 0.01
+        return (
+            isinstance(actual, (int, float))
+            and abs(float(expected) - float(actual)) < 0.01
+        )
     return str(expected) == str(actual)
 
 
@@ -215,7 +239,9 @@ def _score_predictions(
     return matched_fields / max(total_fields, 1), exact_matches
 
 
-def _scenario_paths(fixture_dir: str) -> tuple[Path, dict[str, Any], dict[str, Any], str]:
+def _scenario_paths(
+    fixture_dir: str,
+) -> tuple[Path, dict[str, Any], dict[str, Any], str]:
     workspace_root = BENCHMARKS_ROOT / fixture_dir
     scenario = _load_yaml(workspace_root / "workbench" / "benchmarks" / "scenario.yaml")
     task_schema = _load_yaml(workspace_root / scenario["task_schema_path"])
@@ -229,15 +255,23 @@ def _scenario_paths(fixture_dir: str) -> tuple[Path, dict[str, Any], dict[str, A
 @pytest.mark.tier1
 @pytest.mark.real_llm
 @pytest.mark.slow
-@pytest.mark.parametrize("benchmark", SCENARIOS, ids=[scenario.fixture_dir for scenario in SCENARIOS])
-async def test_live_benchmark_real_llm_with_api_setup(client, ctx, benchmark: BenchmarkScenario) -> None:
+@pytest.mark.parametrize(
+    "benchmark", SCENARIOS, ids=[scenario.fixture_dir for scenario in SCENARIOS]
+)
+async def test_live_benchmark_real_llm_with_api_setup(
+    client, ctx, benchmark: BenchmarkScenario
+) -> None:
     """Run each benchmark with live API setup and real MiniMax calls."""
 
     auth_ref = _resolve_auth_ref()
     if not auth_ref:
-        pytest.skip("ANTHROPIC_API_KEY or MINIMAX_API_KEY not set — skipping live benchmark")
+        pytest.skip(
+            "ANTHROPIC_API_KEY or MINIMAX_API_KEY not set — skipping live benchmark"
+        )
 
-    workspace_root, scenario, task_schema, agents_prompt = _scenario_paths(benchmark.fixture_dir)
+    workspace_root, scenario, task_schema, agents_prompt = _scenario_paths(
+        benchmark.fixture_dir
+    )
     raw_records = _load_raw_records(workspace_root, scenario)
     gold_rows = _load_jsonl(workspace_root / scenario["gold_labels_path"])
     gold = {row["record_id"]: row["labels"] for row in gold_rows}
@@ -255,7 +289,10 @@ async def test_live_benchmark_real_llm_with_api_setup(client, ctx, benchmark: Be
 
         reviewer_resp = await client.post(
             "/api/v1/reviewer-profiles",
-            json={"display_name": f"{scenario['name']} Operator", "workspace_id": workspace_id},
+            json={
+                "display_name": f"{scenario['name']} Operator",
+                "workspace_id": workspace_id,
+            },
         )
         assert reviewer_resp.status_code == 201, reviewer_resp.text
         reviewer_id = str(reviewer_resp.json()["id"])
@@ -275,7 +312,9 @@ async def test_live_benchmark_real_llm_with_api_setup(client, ctx, benchmark: Be
                 "model_profile_slug": f"{scenario['scenario_id']}-minimax-live",
                 "provider_type": "anthropic",
                 "provider_name": "MiniMax",
-                "model_identifier": scenario["default_model_profile"]["model_identifier"],
+                "model_identifier": scenario["default_model_profile"][
+                    "model_identifier"
+                ],
                 "auth_ref": auth_ref,
                 "base_url": MINIMAX_BASE_URL,
                 "cost_per_input_token": 0.000001,
@@ -285,9 +324,13 @@ async def test_live_benchmark_real_llm_with_api_setup(client, ctx, benchmark: Be
         assert model_profile_resp.status_code == 201, model_profile_resp.text
         model_profile = model_profile_resp.json()
 
-        profile_test_resp = await client.post(f"/api/v1/model-profiles/{model_profile['id']}/test")
+        profile_test_resp = await client.post(
+            f"/api/v1/model-profiles/{model_profile['id']}/test"
+        )
         assert profile_test_resp.status_code == 200, profile_test_resp.text
-        assert profile_test_resp.json()["health"]["is_healthy"] is True, profile_test_resp.text
+        assert profile_test_resp.json()["health"]["is_healthy"] is True, (
+            profile_test_resp.text
+        )
 
     with checkpoint(ctx, "dataset_schema_and_prompt_setup"):
         dataset_resp = await client.post(
@@ -297,7 +340,9 @@ async def test_live_benchmark_real_llm_with_api_setup(client, ctx, benchmark: Be
                 "workspace_id": workspace_id,
                 "source_type": scenario["raw_format"],
                 "loader_plugin": scenario["loader_plugin"],
-                "record_kind": "text" if scenario["raw_format"] != "jsonl" else "document",
+                "record_kind": "text"
+                if scenario["raw_format"] != "jsonl"
+                else "document",
                 "canonical_id_strategy": "source_record_id",
                 "indexing_mode": "projection",
             },
@@ -307,7 +352,10 @@ async def test_live_benchmark_real_llm_with_api_setup(client, ctx, benchmark: Be
 
         import_resp = await client.post(
             f"/api/v1/datasets/{dataset_id}/import",
-            json={"source_uri": str(workspace_root / scenario["source_path"]), "options": {}},
+            json={
+                "source_uri": str(workspace_root / scenario["source_path"]),
+                "options": {},
+            },
         )
         assert import_resp.status_code == 202, import_resp.text
 
@@ -319,7 +367,9 @@ async def test_live_benchmark_real_llm_with_api_setup(client, ctx, benchmark: Be
                 "task_type": task_schema["task_type"],
                 "title": task_schema["title"],
                 "instructions": task_schema.get("instructions"),
-                "blind_review_policy": task_schema.get("blind_review_policy", "hide_agent_outputs_by_default"),
+                "blind_review_policy": task_schema.get(
+                    "blind_review_policy", "hide_agent_outputs_by_default"
+                ),
                 "label_fields": task_schema["label_fields"],
                 "optional_fields": task_schema.get("optional_fields", []),
                 "overlap_policy": task_schema.get("overlap_policy"),
@@ -355,7 +405,9 @@ async def test_live_benchmark_real_llm_with_api_setup(client, ctx, benchmark: Be
         predictions: dict[str, dict[str, Any]] = {}
         for record in raw_records:
             record_id = _record_identifier(record, scenario)
-            messages = _build_messages(agents_prompt, task_schema, scenario, record, record_id)
+            messages = _build_messages(
+                agents_prompt, task_schema, scenario, record, record_id
+            )
             result = await asyncio.to_thread(
                 enforcer.enforce,
                 adapter,
@@ -369,10 +421,11 @@ async def test_live_benchmark_real_llm_with_api_setup(client, ctx, benchmark: Be
                 parsed = result.parsed or {}
                 predictions[record_id] = parsed
             else:
-                raise AssertionError(
-                    f"Structured output failed for {scenario['scenario_id']} record {record_id}: "
-                    f"{result.validation_errors}"
+                message = (
+                    f"Structured output failed for {scenario['scenario_id']} "
+                    f"record {record_id}: {result.validation_errors}"
                 )
+                raise AssertionError(message)
 
         field_accuracy, exact_matches = _score_predictions(
             predictions,

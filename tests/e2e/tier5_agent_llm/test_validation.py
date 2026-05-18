@@ -19,6 +19,7 @@ from tests.e2e.infrastructure.parallel import SHARED_WORKSPACE
 def _make_schema(task_slug: str, fields: list[dict]) -> TaskSchema:
     """Build a minimal TaskSchema for validation testing."""
     import uuid as _uuid
+
     label_fields = [LabelFieldDefinition(**f) for f in fields]
     return TaskSchema(
         id=_uuid.UUID("00000000-0000-0000-0000-000000000001"),
@@ -130,8 +131,7 @@ async def test_validation_failure_with_retry_recovery(
     ctx: TestContext,
     client: InstrumentedClient,
 ) -> None:
-    """T5-02: Validation failures trigger retry; retry_attempt increments; some recover.
-    """
+    """T5-02: Validation failures trigger retry and some recover."""
     with checkpoint(ctx, "missing_required_field_fails"):
         schema = _make_schema(
             "sentiment",

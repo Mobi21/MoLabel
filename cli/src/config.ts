@@ -17,7 +17,9 @@ export function getDefaultConfigPath(): string {
   return join(getConfigDir(), 'cli.json')
 }
 
-export async function loadConfig(configPath = getDefaultConfigPath()): Promise<CliConfig> {
+export async function loadConfig(
+  configPath = getDefaultConfigPath(),
+): Promise<CliConfig> {
   try {
     const raw = await readFile(configPath, 'utf8')
     return JSON.parse(raw) as CliConfig
@@ -53,13 +55,17 @@ export function resolveConfig(
   }
 
   const sessionToken =
-    runtime.sessionToken ?? process.env.MOLABEL_SESSION ?? fileConfig.sessionToken
+    runtime.sessionToken ??
+    process.env.MOLABEL_SESSION ??
+    fileConfig.sessionToken
   if (sessionToken) {
     result.sessionToken = sessionToken
   }
 
   const workspaceRoot =
-    runtime.workspaceRoot ?? process.env.MOLABEL_WORKSPACE ?? fileConfig.workspaceRoot
+    runtime.workspaceRoot ??
+    process.env.MOLABEL_WORKSPACE ??
+    fileConfig.workspaceRoot
   if (workspaceRoot) {
     result.workspaceRoot = workspaceRoot
   }

@@ -30,7 +30,7 @@ set. It is designed to measure:
 - external operator quality through the CLI-and-skill surface,
 - and review/adjudication behavior against paper-faithful evidence rules.
 
-The current MoLabel labeling engine for live benchmark runs is `MiniMax 2.7`
+The current MoLabel labeling engine for live benchmark runs is `MiniMax 2.7 highspeed`
 through the Anthropic-compatible adapter path.
 
 The committed slice keeps the benchmark redistributable while preserving the

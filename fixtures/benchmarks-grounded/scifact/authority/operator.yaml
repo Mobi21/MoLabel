@@ -2,8 +2,8 @@ benchmark_id: scifact
 goal: >
   Evaluate Codex as an external MoLabel operator on a grounded SciFact claim
   verification project using only the public CLI and installed skill, with
-  MiniMax 2.7 as the current labeling engine.
-current_labeling_engine: MiniMax 2.7
+  MiniMax 2.7 highspeed as the current labeling engine.
+current_labeling_engine: MiniMax 2.7 highspeed
 authority_pack: true
 reference_workspace_root: ../workbench
 benchmark_profiles:
@@ -13,6 +13,8 @@ benchmark_profiles:
 aggregation: weighted_mean
 label_quality_weight: 0.7
 checklist_weight: 0.3
+acceptable_operator_label_score: 0.5
+acceptable_checklist_score: 0.95
 blocking_check_ids:
   - uses_public_cli_and_skill_only
   - configures_minimax_2_7_profile
@@ -24,11 +26,11 @@ checks:
     weight: 1.0
   - check_id: configures_minimax_2_7_profile
     phase: setup
-    description: Registers MiniMax 2.7 through the Anthropic-compatible adapter path.
+    description: Registers MiniMax 2.7 highspeed through the Anthropic-compatible adapter path.
     weight: 1.0
   - check_id: uses_real_minimax_proposals
     phase: run
-    description: Sends real labeling requests through the MiniMax 2.7 model profile.
+    description: Sends real labeling requests through the MiniMax 2.7 highspeed model profile.
     weight: 1.0
   - check_id: bootstraps_workspace_and_dataset
     phase: setup

@@ -26,7 +26,11 @@ async def test_label_mapping(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-label-mapping-test", "workspace_name": "Label Mapping Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-label-mapping-test",
+                "workspace_name": "Label Mapping Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

@@ -29,7 +29,11 @@ async def test_import_yaml(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-yaml-import-test", "workspace_name": "YAML Import Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-yaml-import-test",
+                "workspace_name": "YAML Import Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

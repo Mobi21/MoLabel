@@ -32,7 +32,11 @@ async def test_concurrent_claims_only_one_succeeds(
     """
     with checkpoint(ctx, "workspace_and_single_task_setup"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-concurrent-claims-ws", "workspace_name": "concurrent-claims-ws"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-concurrent-claims-ws",
+                "workspace_name": "concurrent-claims-ws",
+            },
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]
@@ -54,7 +58,6 @@ async def test_concurrent_claims_only_one_succeeds(
             json={
                 "source_type": "jsonl",
                 "records": [{"text": "The sole record for concurrent claim testing."}],
-                "source_type": "jsonl",
             },
         )
         assert import_resp.status_code in (200, 201, 202)
@@ -100,7 +103,8 @@ async def test_concurrent_claims_only_one_succeeds(
         # If import was async, queue may be empty for both — skip in that case
         if claimed_count == 0:
             pytest.skip(
-                "Queue empty — import was async; concurrent atomicity cannot be verified"
+                "Queue empty; import was async, so concurrent atomicity "
+                "cannot be verified"
             )
         # Exactly one should have claimed, one should see empty queue
         assert claimed_count == 1, (

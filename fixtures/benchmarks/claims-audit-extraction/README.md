@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This benchmark evaluates whether MiniMax 2.7 can extract structured claims data
+This benchmark evaluates whether MiniMax 2.7 highspeed can extract structured claims data
 from noisy OCR packets while Codex manages the project through MoLabel.
 
 The records are intentionally messy:

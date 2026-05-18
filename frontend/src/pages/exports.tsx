@@ -92,15 +92,47 @@ function statusBadge(status: 'completed' | 'in-progress' | 'failed') {
 
 function formatBadge(format: string) {
   const colors: Record<string, { bg: string; text: string; border: string }> = {
-    'COCO JSON': { bg: 'bg-blue-500/10', text: 'text-blue-600', border: 'border-blue-500/20' },
-    'Pascal VOC': { bg: 'bg-violet-500/10', text: 'text-violet-600', border: 'border-violet-500/20' },
-    YOLO: { bg: 'bg-orange-500/10', text: 'text-orange-600', border: 'border-orange-500/20' },
-    JSONL: { bg: 'bg-emerald-500/10', text: 'text-emerald-600', border: 'border-emerald-500/20' },
-    CSV: { bg: 'bg-zinc-500/10', text: 'text-zinc-600', border: 'border-zinc-500/20' },
-    Parquet: { bg: 'bg-amber-500/10', text: 'text-amber-600', border: 'border-amber-500/20' },
-    'HuggingFace Hub': { bg: 'bg-yellow-500/10', text: 'text-yellow-700', border: 'border-yellow-500/20' },
+    'COCO JSON': {
+      bg: 'bg-blue-500/10',
+      text: 'text-blue-600',
+      border: 'border-blue-500/20',
+    },
+    'Pascal VOC': {
+      bg: 'bg-violet-500/10',
+      text: 'text-violet-600',
+      border: 'border-violet-500/20',
+    },
+    YOLO: {
+      bg: 'bg-orange-500/10',
+      text: 'text-orange-600',
+      border: 'border-orange-500/20',
+    },
+    JSONL: {
+      bg: 'bg-emerald-500/10',
+      text: 'text-emerald-600',
+      border: 'border-emerald-500/20',
+    },
+    CSV: {
+      bg: 'bg-zinc-500/10',
+      text: 'text-zinc-600',
+      border: 'border-zinc-500/20',
+    },
+    Parquet: {
+      bg: 'bg-amber-500/10',
+      text: 'text-amber-600',
+      border: 'border-amber-500/20',
+    },
+    'HuggingFace Hub': {
+      bg: 'bg-yellow-500/10',
+      text: 'text-yellow-700',
+      border: 'border-yellow-500/20',
+    },
   }
-  const c = colors[format] ?? { bg: 'bg-zinc-500/10', text: 'text-zinc-600', border: 'border-zinc-500/20' }
+  const c = colors[format] ?? {
+    bg: 'bg-zinc-500/10',
+    text: 'text-zinc-600',
+    border: 'border-zinc-500/20',
+  }
 
   return (
     <Badge variant="outline" className={`${c.bg} ${c.text} ${c.border}`}>
@@ -113,8 +145,8 @@ function formatBadge(format: string) {
 
 function ExportWizard() {
   const [isOpen, setIsOpen] = useState(true)
-  const [dataset, setDataset] = useState<string>('')
-  const [format, setFormat] = useState<string>('')
+  const [dataset, setDataset] = useState('')
+  const [format, setFormat] = useState('')
   const [inclusions, setInclusions] = useState({
     recordData: true,
     labels: true,
@@ -197,9 +229,9 @@ function ExportWizard() {
                   <Checkbox
                     id="inc-records"
                     checked={inclusions.recordData}
-                    onCheckedChange={(c) =>
+                    onCheckedChange={(c) => {
                       setInclusions((s) => ({ ...s, recordData: c === true }))
-                    }
+                    }}
                   />
                   <label htmlFor="inc-records" className="text-xs">
                     Record Data
@@ -209,9 +241,9 @@ function ExportWizard() {
                   <Checkbox
                     id="inc-labels"
                     checked={inclusions.labels}
-                    onCheckedChange={(c) =>
+                    onCheckedChange={(c) => {
                       setInclusions((s) => ({ ...s, labels: c === true }))
-                    }
+                    }}
                   />
                   <label htmlFor="inc-labels" className="text-xs">
                     Labels
@@ -221,9 +253,9 @@ function ExportWizard() {
                   <Checkbox
                     id="inc-metadata"
                     checked={inclusions.metadata}
-                    onCheckedChange={(c) =>
+                    onCheckedChange={(c) => {
                       setInclusions((s) => ({ ...s, metadata: c === true }))
-                    }
+                    }}
                   />
                   <label htmlFor="inc-metadata" className="text-xs">
                     Metadata
@@ -233,9 +265,12 @@ function ExportWizard() {
                   <Checkbox
                     id="inc-quality"
                     checked={inclusions.qualityScores}
-                    onCheckedChange={(c) =>
-                      setInclusions((s) => ({ ...s, qualityScores: c === true }))
-                    }
+                    onCheckedChange={(c) => {
+                      setInclusions((s) => ({
+                        ...s,
+                        qualityScores: c === true,
+                      }))
+                    }}
                   />
                   <label htmlFor="inc-quality" className="text-xs">
                     Quality Scores
@@ -245,9 +280,9 @@ function ExportWizard() {
                   <Checkbox
                     id="inc-lineage"
                     checked={inclusions.lineage}
-                    onCheckedChange={(c) =>
+                    onCheckedChange={(c) => {
                       setInclusions((s) => ({ ...s, lineage: c === true }))
-                    }
+                    }}
                   />
                   <label htmlFor="inc-lineage" className="text-xs">
                     Lineage
@@ -275,7 +310,9 @@ function ExportWizard() {
                     max={1}
                     step={0.05}
                     value={minAgreement}
-                    onChange={(e) => setMinAgreement(e.target.value)}
+                    onChange={(e) => {
+                      setMinAgreement(e.target.value)
+                    }}
                     className="h-9 w-28 tabular-nums"
                   />
                 </div>
@@ -415,7 +452,12 @@ const releasePipelineSteps = [
   'Released',
 ] as const
 
-type ReleaseStatus = 'draft' | 'validating' | 'pending-approval' | 'approved' | 'released'
+type ReleaseStatus =
+  | 'draft'
+  | 'validating'
+  | 'pending-approval'
+  | 'approved'
+  | 'released'
 
 interface Release {
   id: string
@@ -693,8 +735,9 @@ function ReleaseDetailCard({ release }: { release: Release }) {
 }
 
 function ReleasesTab() {
-  const [selectedRelease, setSelectedRelease] = useState<string>('rel-001')
-  const selected = mockReleases.find((r) => r.id === selectedRelease) ?? mockReleases[0]
+  const [selectedRelease, setSelectedRelease] = useState('rel-001')
+  const selected =
+    mockReleases.find((r) => r.id === selectedRelease) ?? mockReleases[0]
 
   return (
     <div className="space-y-4">
@@ -722,7 +765,9 @@ function ReleasesTab() {
                     className={`cursor-pointer ${
                       selectedRelease === rel.id ? 'bg-muted/50' : ''
                     }`}
-                    onClick={() => setSelectedRelease(rel.id)}
+                    onClick={() => {
+                      setSelectedRelease(rel.id)
+                    }}
                   >
                     <TableCell>
                       <div>
@@ -772,7 +817,8 @@ export function ExportsPage() {
               Exports & Releases
             </h1>
             <p className="text-sm text-muted-foreground">
-              Package and export labeled datasets with versioning and validation.
+              Package and export labeled datasets with versioning and
+              validation.
             </p>
           </div>
         </div>
@@ -781,11 +827,17 @@ export function ExportsPage() {
       {/* Tabs */}
       <Tabs defaultValue="exports">
         <TabsList>
-          <TabsTrigger value="exports" className="gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger
+            value="exports"
+            className="gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
             <Download className="h-3.5 w-3.5" />
             Exports
           </TabsTrigger>
-          <TabsTrigger value="releases" className="gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger
+            value="releases"
+            className="gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
             <Package className="h-3.5 w-3.5" />
             Releases
           </TabsTrigger>

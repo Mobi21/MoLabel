@@ -36,7 +36,11 @@ async def test_duplicate_records(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-duplicate-records-test", "workspace_name": "Duplicate Records Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-duplicate-records-test",
+                "workspace_name": "Duplicate Records Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

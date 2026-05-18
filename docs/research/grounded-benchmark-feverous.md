@@ -11,7 +11,7 @@ it already spans the product surfaces we care about:
 - and paper-faithful adjudication against gold labels.
 
 The current MoLabel labeling engine used when this benchmark is run live is
-`MiniMax 2.7` through the Anthropic-compatible adapter path.
+`MiniMax 2.7 highspeed` through the Anthropic-compatible adapter path.
 
 The official paper defines the primary score as a joint condition: the verdict
 must be correct and at least one complete gold evidence set must be contained

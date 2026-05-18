@@ -6,9 +6,16 @@ import type { Command } from 'commander'
 import { emit } from '../output.js'
 import { installSkillBundle } from '../skills.js'
 import type { CliRuntimeOptions } from '../types.js'
-import { getDefaultSkillTarget, getRuntimeOptions, outputMode } from './context.js'
+import {
+  getDefaultSkillTarget,
+  getRuntimeOptions,
+  outputMode,
+} from './context.js'
 
-export function registerSkillCommands(program: Command, runtime: CliRuntimeOptions): void {
+export function registerSkillCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
   const skill = program.command('skill').description('Skill operations')
   skill
     .command('install')

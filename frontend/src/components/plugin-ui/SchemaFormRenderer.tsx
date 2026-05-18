@@ -6,9 +6,9 @@
  * with Tailwind CSS (following shadcn/ui conventions).
  */
 
-import { useCallback } from "react"
+import { useCallback } from 'react'
 
-import type { FormSchema, SchemaProperty } from "@/types/plugin-ui"
+import type { FormSchema, SchemaProperty } from '@/types/plugin-ui'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -38,16 +38,26 @@ interface FieldProps {
   readOnly: boolean
 }
 
-function StringField({ name, property, value, onChange, required, readOnly }: FieldProps) {
-  const widget = property["x-widget"]
+function StringField({
+  name,
+  property,
+  value,
+  onChange,
+  required,
+  readOnly,
+}: FieldProps) {
+  const widget = property['x-widget']
+  const stringValue = typeof value === 'string' ? value : ''
 
-  if (widget === "textarea") {
+  if (widget === 'textarea') {
     return (
       <textarea
         id={name}
-        value={(value as string) ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={property["x-placeholder"]}
+        value={stringValue}
+        onChange={(e) => {
+          onChange(e.target.value)
+        }}
+        placeholder={property['x-placeholder']}
         required={required}
         readOnly={readOnly}
         minLength={property.minLength}
@@ -59,11 +69,15 @@ function StringField({ name, property, value, onChange, required, readOnly }: Fi
   }
 
   if (property.enum) {
-    const widgetType = widget ?? "select"
+    const widgetType = widget ?? 'select'
 
-    if (widgetType === "radio") {
+    if (widgetType === 'radio') {
       return (
-        <div className="flex flex-col gap-2" role="radiogroup" aria-labelledby={`${name}-label`}>
+        <div
+          className="flex flex-col gap-2"
+          role="radiogroup"
+          aria-labelledby={`${name}-label`}
+        >
           {property.enum.map((option) => (
             <label key={option} className="flex items-center gap-2 text-sm">
               <input
@@ -71,7 +85,9 @@ function StringField({ name, property, value, onChange, required, readOnly }: Fi
                 name={name}
                 value={option}
                 checked={value === option}
-                onChange={() => onChange(option)}
+                onChange={() => {
+                  onChange(option)
+                }}
                 disabled={readOnly}
                 className="h-4 w-4 border-input"
               />
@@ -85,8 +101,10 @@ function StringField({ name, property, value, onChange, required, readOnly }: Fi
     return (
       <select
         id={name}
-        value={(value as string) ?? ""}
-        onChange={(e) => onChange(e.target.value)}
+        value={stringValue}
+        onChange={(e) => {
+          onChange(e.target.value)
+        }}
         required={required}
         disabled={readOnly}
         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -105,9 +123,11 @@ function StringField({ name, property, value, onChange, required, readOnly }: Fi
     <input
       id={name}
       type="text"
-      value={(value as string) ?? ""}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={property["x-placeholder"]}
+      value={stringValue}
+      onChange={(e) => {
+        onChange(e.target.value)
+      }}
+      placeholder={property['x-placeholder']}
       required={required}
       readOnly={readOnly}
       minLength={property.minLength}
@@ -118,24 +138,36 @@ function StringField({ name, property, value, onChange, required, readOnly }: Fi
   )
 }
 
-function NumberField({ name, property, value, onChange, required, readOnly }: FieldProps) {
-  const widget = property["x-widget"]
+function NumberField({
+  name,
+  property,
+  value,
+  onChange,
+  required,
+  readOnly,
+}: FieldProps) {
+  const widget = property['x-widget']
+  const numberValue =
+    typeof value === 'number' ? value : (property.minimum ?? 0)
+  const inputValue = typeof value === 'number' ? value : ''
 
-  if (widget === "slider") {
+  if (widget === 'slider') {
     return (
       <div className="flex items-center gap-3">
         <input
           id={name}
           type="range"
-          value={(value as number) ?? property.minimum ?? 0}
-          onChange={(e) => onChange(Number(e.target.value))}
+          value={numberValue}
+          onChange={(e) => {
+            onChange(Number(e.target.value))
+          }}
           min={property.minimum}
           max={property.maximum}
           disabled={readOnly}
           className="w-full"
         />
         <span className="min-w-[3ch] text-right text-sm text-muted-foreground">
-          {(value as number) ?? property.minimum ?? 0}
+          {numberValue}
         </span>
       </div>
     )
@@ -145,13 +177,15 @@ function NumberField({ name, property, value, onChange, required, readOnly }: Fi
     <input
       id={name}
       type="number"
-      value={(value as number) ?? ""}
-      onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+      value={inputValue}
+      onChange={(e) => {
+        onChange(e.target.value === '' ? undefined : Number(e.target.value))
+      }}
       min={property.minimum}
       max={property.maximum}
       required={required}
       readOnly={readOnly}
-      placeholder={property["x-placeholder"]}
+      placeholder={property['x-placeholder']}
       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
     />
   )
@@ -163,8 +197,10 @@ function BooleanField({ name, value, onChange, readOnly }: FieldProps) {
       <input
         id={name}
         type="checkbox"
-        checked={(value as boolean) ?? false}
-        onChange={(e) => onChange(e.target.checked)}
+        checked={value === true}
+        onChange={(e) => {
+          onChange(e.target.checked)
+        }}
         disabled={readOnly}
         className="h-4 w-4 rounded border-input"
       />
@@ -174,7 +210,8 @@ function BooleanField({ name, value, onChange, readOnly }: FieldProps) {
 }
 
 function JsonField({ name, property, value, onChange, readOnly }: FieldProps) {
-  const stringValue = typeof value === "string" ? value : JSON.stringify(value ?? null, null, 2)
+  const stringValue =
+    typeof value === 'string' ? value : JSON.stringify(value ?? null, null, 2)
   return (
     <textarea
       id={name}
@@ -187,7 +224,7 @@ function JsonField({ name, property, value, onChange, readOnly }: FieldProps) {
           onChange(e.target.value)
         }
       }}
-      placeholder={property["x-placeholder"] ?? "Enter JSON..."}
+      placeholder={property['x-placeholder'] ?? 'Enter JSON...'}
       readOnly={readOnly}
       className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
       rows={6}
@@ -208,11 +245,18 @@ interface FormFieldProps {
   readOnly: boolean
 }
 
-function FormField({ name, property, value, onChange, required, readOnly }: FormFieldProps) {
-  const isHidden = property["x-widget"] === "hidden"
+function FormField({
+  name,
+  property,
+  value,
+  onChange,
+  required,
+  readOnly,
+}: FormFieldProps) {
+  const isHidden = property['x-widget'] === 'hidden'
   if (isHidden) return null
 
-  const isReadOnly = readOnly || (property["x-readonly"] ?? false)
+  const isReadOnly = readOnly || (property['x-readonly'] ?? false)
 
   const fieldProps: FieldProps = {
     name,
@@ -225,18 +269,18 @@ function FormField({ name, property, value, onChange, required, readOnly }: Form
 
   let fieldElement: React.ReactNode
   switch (property.type) {
-    case "string":
+    case 'string':
       fieldElement = <StringField {...fieldProps} />
       break
-    case "number":
-    case "integer":
+    case 'number':
+    case 'integer':
       fieldElement = <NumberField {...fieldProps} />
       break
-    case "boolean":
+    case 'boolean':
       fieldElement = <BooleanField {...fieldProps} />
       break
-    case "object":
-    case "array":
+    case 'object':
+    case 'array':
       fieldElement = <JsonField {...fieldProps} />
       break
     default:
@@ -255,7 +299,9 @@ function FormField({ name, property, value, onChange, required, readOnly }: Form
       </label>
       {fieldElement}
       {property.description && (
-        <p className="text-[0.8rem] text-muted-foreground">{property.description}</p>
+        <p className="text-[0.8rem] text-muted-foreground">
+          {property.description}
+        </p>
       )}
     </div>
   )
@@ -287,7 +333,7 @@ export function SchemaFormRenderer({
 
   // Sort fields by x-order, then by declaration order
   const sortedFields = Object.entries(schema.properties).sort(
-    ([, a], [, b]) => (a["x-order"] ?? 999) - (b["x-order"] ?? 999),
+    ([, a], [, b]) => (a['x-order'] ?? 999) - (b['x-order'] ?? 999),
   )
 
   const requiredSet = new Set(schema.required ?? [])
@@ -298,7 +344,9 @@ export function SchemaFormRenderer({
         <div className="space-y-1">
           <h3 className="text-lg font-semibold">{schema.title}</h3>
           {schema.description && (
-            <p className="text-sm text-muted-foreground">{schema.description}</p>
+            <p className="text-sm text-muted-foreground">
+              {schema.description}
+            </p>
           )}
         </div>
       )}

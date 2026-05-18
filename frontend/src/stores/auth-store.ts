@@ -14,5 +14,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => ({
   currentReviewer: null,
-  setCurrentReviewer: (r) => set({ currentReviewer: r }),
+  setCurrentReviewer: (r) => {
+    set({ currentReviewer: r })
+  },
 }))

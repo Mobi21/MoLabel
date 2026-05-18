@@ -70,15 +70,17 @@ function SidebarProvider({
         _setOpen(openState)
       }
 
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      document.cookie = `${SIDEBAR_COOKIE_NAME}=${String(openState)}; path=/; max-age=${String(SIDEBAR_COOKIE_MAX_AGE)}`
     },
     [setOpenProp, open],
   )
 
   const toggleSidebar = React.useCallback(() => {
-    return isMobile
-      ? setOpenMobile((prev) => !prev)
-      : setOpen((prev) => !prev)
+    if (isMobile) {
+      setOpenMobile((prev) => !prev)
+      return
+    }
+    setOpen((prev) => !prev)
   }, [isMobile, setOpen, setOpenMobile])
 
   React.useEffect(() => {
@@ -93,7 +95,9 @@ function SidebarProvider({
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
   }, [toggleSidebar])
 
   const state = open ? 'expanded' : 'collapsed'
@@ -200,11 +204,12 @@ function Sidebar({
           'group-data-[side=right]:rotate-180',
         )}
         style={{
-          width: state === 'collapsed' && collapsible === 'icon'
-            ? (variant === 'floating' || variant === 'inset'
+          width:
+            state === 'collapsed' && collapsible === 'icon'
+              ? variant === 'floating' || variant === 'inset'
                 ? `calc(${SIDEBAR_WIDTH_COLLAPSED} + 1rem)`
-                : SIDEBAR_WIDTH_COLLAPSED)
-            : SIDEBAR_WIDTH,
+                : SIDEBAR_WIDTH_COLLAPSED
+              : SIDEBAR_WIDTH,
         }}
       />
       {/* Fixed sidebar panel */}
@@ -220,11 +225,12 @@ function Sidebar({
           className,
         )}
         style={{
-          width: state === 'collapsed' && collapsible === 'icon'
-            ? (variant === 'floating' || variant === 'inset'
+          width:
+            state === 'collapsed' && collapsible === 'icon'
+              ? variant === 'floating' || variant === 'inset'
                 ? `calc(${SIDEBAR_WIDTH_COLLAPSED} + 1rem + 2px)`
-                : SIDEBAR_WIDTH_COLLAPSED)
-            : SIDEBAR_WIDTH,
+                : SIDEBAR_WIDTH_COLLAPSED
+              : SIDEBAR_WIDTH,
         }}
         {...props}
       >
@@ -264,10 +270,7 @@ function SidebarTrigger({
   )
 }
 
-function SidebarRail({
-  className,
-  ...props
-}: React.ComponentProps<'button'>) {
+function SidebarRail({ className, ...props }: React.ComponentProps<'button'>) {
   const { toggleSidebar } = useSidebar()
 
   return (
@@ -291,10 +294,7 @@ function SidebarRail({
   )
 }
 
-function SidebarInset({
-  className,
-  ...props
-}: React.ComponentProps<'main'>) {
+function SidebarInset({ className, ...props }: React.ComponentProps<'main'>) {
   return (
     <main
       className={cn(
@@ -307,10 +307,7 @@ function SidebarInset({
   )
 }
 
-function SidebarHeader({
-  className,
-  ...props
-}: React.ComponentProps<'div'>) {
+function SidebarHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-sidebar="header"
@@ -320,10 +317,7 @@ function SidebarHeader({
   )
 }
 
-function SidebarFooter({
-  className,
-  ...props
-}: React.ComponentProps<'div'>) {
+function SidebarFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-sidebar="footer"
@@ -346,10 +340,7 @@ function SidebarSeparator({
   )
 }
 
-function SidebarContent({
-  className,
-  ...props
-}: React.ComponentProps<'div'>) {
+function SidebarContent({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-sidebar="content"
@@ -362,10 +353,7 @@ function SidebarContent({
   )
 }
 
-function SidebarGroup({
-  className,
-  ...props
-}: React.ComponentProps<'div'>) {
+function SidebarGroup({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-sidebar="group"
@@ -429,10 +417,7 @@ function SidebarGroupContent({
   )
 }
 
-function SidebarMenu({
-  className,
-  ...props
-}: React.ComponentProps<'ul'>) {
+function SidebarMenu({ className, ...props }: React.ComponentProps<'ul'>) {
   return (
     <ul
       data-sidebar="menu"
@@ -442,10 +427,7 @@ function SidebarMenu({
   )
 }
 
-function SidebarMenuItem({
-  className,
-  ...props
-}: React.ComponentProps<'li'>) {
+function SidebarMenuItem({ className, ...props }: React.ComponentProps<'li'>) {
   return (
     <li
       data-sidebar="menu-item"
@@ -587,7 +569,7 @@ function SidebarMenuSkeleton({
   showIcon?: boolean | undefined
 }) {
   const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
+    return `${String(Math.floor(Math.random() * 40) + 50)}%`
   }, [])
 
   return (
@@ -615,10 +597,7 @@ function SidebarMenuSkeleton({
   )
 }
 
-function SidebarMenuSub({
-  className,
-  ...props
-}: React.ComponentProps<'ul'>) {
+function SidebarMenuSub({ className, ...props }: React.ComponentProps<'ul'>) {
   return (
     <ul
       data-sidebar="menu-sub"
@@ -632,9 +611,7 @@ function SidebarMenuSub({
   )
 }
 
-function SidebarMenuSubItem({
-  ...props
-}: React.ComponentProps<'li'>) {
+function SidebarMenuSubItem({ ...props }: React.ComponentProps<'li'>) {
   return <li {...props} />
 }
 

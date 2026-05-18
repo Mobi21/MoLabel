@@ -32,7 +32,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { mockReviewQueue, mockReviewers, mockDashboardStats } from '@/mocks/data'
+import {
+  mockReviewQueue,
+  mockReviewers,
+  mockDashboardStats,
+} from '@/mocks/data'
 import type { ReviewItem } from '@/mocks/data'
 import { formatNumber, relativeTime } from '@/lib/format'
 
@@ -61,7 +65,8 @@ const MOCK_AI_LABELS = {
   vehicle_type: 'truck',
   vehicle_count: 3,
   is_occluded: true,
-  confidence_note: 'Partial occlusion on rear vehicle, high confidence on lead truck',
+  confidence_note:
+    'Partial occlusion on rear vehicle, high confidence on lead truck',
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -112,14 +117,10 @@ function getAvatarColor(name: string): string {
 
 // ── Queue View ───────────────────────────────────────────────────────────────
 
-function QueueView({
-  onReview,
-}: {
-  onReview: (item: ReviewItem) => void
-}) {
-  const [priorityFilter, setPriorityFilter] = useState<string>('all')
-  const [datasetFilter, setDatasetFilter] = useState<string>('all')
-  const [taskTypeFilter, setTaskTypeFilter] = useState<string>('all')
+function QueueView({ onReview }: { onReview: (item: ReviewItem) => void }) {
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [datasetFilter, setDatasetFilter] = useState('all')
+  const [taskTypeFilter, setTaskTypeFilter] = useState('all')
   const [myItemsOnly, setMyItemsOnly] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -127,9 +128,12 @@ function QueueView({
   const taskTypes = [...new Set(mockReviewQueue.map((item) => item.taskType))]
 
   const filtered = mockReviewQueue.filter((item) => {
-    if (priorityFilter !== 'all' && item.priority !== priorityFilter) return false
-    if (datasetFilter !== 'all' && item.datasetName !== datasetFilter) return false
-    if (taskTypeFilter !== 'all' && item.taskType !== taskTypeFilter) return false
+    if (priorityFilter !== 'all' && item.priority !== priorityFilter)
+      return false
+    if (datasetFilter !== 'all' && item.datasetName !== datasetFilter)
+      return false
+    if (taskTypeFilter !== 'all' && item.taskType !== taskTypeFilter)
+      return false
     if (myItemsOnly && item.assignee !== CURRENT_USER) return false
     return true
   })
@@ -145,7 +149,9 @@ function QueueView({
           <Eye className="h-5 w-5 text-primary" />
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Review Queue</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Review Queue
+          </h1>
           <p className="text-sm text-muted-foreground">
             Human review queue for verifying and correcting AI-generated labels.
           </p>
@@ -156,7 +162,9 @@ function QueueView({
       <div className="flex items-center gap-6 rounded-lg border border-border bg-muted/30 px-5 py-3">
         <div className="flex items-center gap-2 text-sm">
           <div className="h-2 w-2 rounded-full bg-amber-500" />
-          <span className="font-medium">{formatNumber(mockDashboardStats.pendingReview)}</span>
+          <span className="font-medium">
+            {formatNumber(mockDashboardStats.pendingReview)}
+          </span>
           <span className="text-muted-foreground">pending</span>
         </div>
         <Separator orientation="vertical" className="h-4" />
@@ -250,7 +258,9 @@ function QueueView({
                 {/* Priority + Record ID */}
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <code className="text-sm font-semibold">{item.recordId}</code>
+                    <code className="text-sm font-semibold">
+                      {item.recordId}
+                    </code>
                     <Badge variant="outline" className={pc.badge}>
                       {pc.label}
                     </Badge>
@@ -269,7 +279,9 @@ function QueueView({
                       <Avatar className="h-6 w-6">
                         <AvatarFallback
                           className="text-[10px] text-white"
-                          style={{ backgroundColor: getAvatarColor(item.assignee) }}
+                          style={{
+                            backgroundColor: getAvatarColor(item.assignee),
+                          }}
                         >
                           {getInitials(item.assignee)}
                         </AvatarFallback>
@@ -277,7 +289,9 @@ function QueueView({
                       <span className="text-sm">{item.assignee}</span>
                     </>
                   ) : (
-                    <span className="text-sm text-muted-foreground">Unassigned</span>
+                    <span className="text-sm text-muted-foreground">
+                      Unassigned
+                    </span>
                   )}
                 </div>
 
@@ -289,11 +303,22 @@ function QueueView({
 
                 {/* Action button */}
                 {isAssignedToMe ? (
-                  <Button size="sm" onClick={() => onReview(item)}>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      onReview(item)
+                    }}
+                  >
                     Review
                   </Button>
                 ) : isUnassigned ? (
-                  <Button size="sm" variant="outline" onClick={() => onReview(item)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      onReview(item)
+                    }}
+                  >
                     Claim
                   </Button>
                 ) : (
@@ -317,7 +342,9 @@ function QueueView({
             variant="outline"
             size="icon"
             disabled={currentPage <= 1}
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            onClick={() => {
+              setCurrentPage((p) => Math.max(1, p - 1))
+            }}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -328,7 +355,9 @@ function QueueView({
             variant="outline"
             size="icon"
             disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => {
+              setCurrentPage((p) => Math.min(totalPages, p + 1))
+            }}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -351,8 +380,8 @@ function ReviewMode({
   const [blindMode, setBlindMode] = useState(true)
 
   // Form state
-  const [vehicleType, setVehicleType] = useState<string>('')
-  const [vehicleCount, setVehicleCount] = useState<string>('')
+  const [vehicleType, setVehicleType] = useState('')
+  const [vehicleCount, setVehicleCount] = useState('')
   const [isOccluded, setIsOccluded] = useState(false)
   const [confidenceNote, setConfidenceNote] = useState('')
 
@@ -361,7 +390,9 @@ function ReviewMode({
     const interval = setInterval(() => {
       setElapsedSeconds((s) => s + 1)
     }, 1000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+    }
   }, [])
 
   const formatTimer = useCallback((seconds: number): string => {
@@ -397,12 +428,16 @@ function ReviewMode({
             {pc.label}
           </Badge>
         </div>
-        <span className="text-sm text-muted-foreground">{item.datasetName}</span>
+        <span className="text-sm text-muted-foreground">
+          {item.datasetName}
+        </span>
         <div className="ml-auto flex items-center gap-4">
           <span className="text-sm text-muted-foreground">3 of 145</span>
           <div className="flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-mono text-sm">{formatTimer(elapsedSeconds)}</span>
+            <span className="font-mono text-sm">
+              {formatTimer(elapsedSeconds)}
+            </span>
           </div>
         </div>
       </div>
@@ -426,15 +461,21 @@ function ReviewMode({
                   Source Fields
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(MOCK_RECORD_PAYLOAD).map(([key, value]) => {
+                  {Object.entries(
+                    MOCK_RECORD_PAYLOAD as Record<string, unknown>,
+                  ).map(([key, value]) => {
                     if (typeof value === 'object' && value !== null) return null
                     return (
                       <div
                         key={key}
                         className="flex flex-col gap-0.5 rounded-md bg-muted/40 px-3 py-2"
                       >
-                        <span className="text-xs text-muted-foreground">{key}</span>
-                        <span className="font-mono text-sm">{String(value)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {key}
+                        </span>
+                        <span className="font-mono text-sm">
+                          {String(value)}
+                        </span>
                       </div>
                     )
                   })}
@@ -451,11 +492,15 @@ function ReviewMode({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-0.5 rounded-md bg-muted/40 px-3 py-2">
                     <span className="text-xs text-muted-foreground">lat</span>
-                    <span className="font-mono text-sm">{MOCK_RECORD_PAYLOAD.location.lat}</span>
+                    <span className="font-mono text-sm">
+                      {MOCK_RECORD_PAYLOAD.location.lat}
+                    </span>
                   </div>
                   <div className="flex flex-col gap-0.5 rounded-md bg-muted/40 px-3 py-2">
                     <span className="text-xs text-muted-foreground">lng</span>
-                    <span className="font-mono text-sm">{MOCK_RECORD_PAYLOAD.location.lng}</span>
+                    <span className="font-mono text-sm">
+                      {MOCK_RECORD_PAYLOAD.location.lng}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -467,15 +512,19 @@ function ReviewMode({
                   Metadata
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(MOCK_RECORD_PAYLOAD.metadata).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex flex-col gap-0.5 rounded-md bg-muted/40 px-3 py-2"
-                    >
-                      <span className="text-xs text-muted-foreground">{key}</span>
-                      <span className="font-mono text-sm">{value}</span>
-                    </div>
-                  ))}
+                  {Object.entries(MOCK_RECORD_PAYLOAD.metadata).map(
+                    ([key, value]) => (
+                      <div
+                        key={key}
+                        className="flex flex-col gap-0.5 rounded-md bg-muted/40 px-3 py-2"
+                      >
+                        <span className="text-xs text-muted-foreground">
+                          {key}
+                        </span>
+                        <span className="font-mono text-sm">{value}</span>
+                      </div>
+                    ),
+                  )}
                 </div>
               </div>
 
@@ -490,7 +539,9 @@ function ReviewMode({
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Eye className="h-8 w-8" />
                     <span className="text-sm">Image preview area</span>
-                    <span className="text-xs">{MOCK_RECORD_PAYLOAD.image_path}</span>
+                    <span className="text-xs">
+                      {MOCK_RECORD_PAYLOAD.image_path}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -576,7 +627,9 @@ function ReviewMode({
                       max={50}
                       placeholder="0"
                       value={vehicleCount}
-                      onChange={(e) => setVehicleCount(e.target.value)}
+                      onChange={(e) => {
+                        setVehicleCount(e.target.value)
+                      }}
                       className="flex-1"
                     />
                     {!blindMode && (
@@ -596,11 +649,14 @@ function ReviewMode({
                       <Checkbox
                         id="is-occluded"
                         checked={isOccluded}
-                        onCheckedChange={(checked) =>
+                        onCheckedChange={(checked) => {
                           setIsOccluded(checked === true)
-                        }
+                        }}
                       />
-                      <Label htmlFor="is-occluded" className="text-sm font-normal">
+                      <Label
+                        htmlFor="is-occluded"
+                        className="text-sm font-normal"
+                      >
                         Object is occluded
                       </Label>
                     </div>
@@ -621,7 +677,9 @@ function ReviewMode({
                       id="confidence-note"
                       placeholder="Optional note about labeling confidence..."
                       value={confidenceNote}
-                      onChange={(e) => setConfidenceNote(e.target.value)}
+                      onChange={(e) => {
+                        setConfidenceNote(e.target.value)
+                      }}
                       className="min-h-[80px] flex-1"
                     />
                   </div>
@@ -630,7 +688,9 @@ function ReviewMode({
                       <span className="text-xs font-medium text-muted-foreground">
                         AI note:
                       </span>
-                      <p className="mt-0.5 text-xs">{MOCK_AI_LABELS.confidence_note}</p>
+                      <p className="mt-0.5 text-xs">
+                        {MOCK_AI_LABELS.confidence_note}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -647,22 +707,36 @@ function ReviewMode({
                     <div className="rounded-lg border border-border bg-muted/20 p-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-xs text-muted-foreground">vehicle_type</span>
-                          <span className="font-mono text-sm">{MOCK_AI_LABELS.vehicle_type}</span>
+                          <span className="text-xs text-muted-foreground">
+                            vehicle_type
+                          </span>
+                          <span className="font-mono text-sm">
+                            {MOCK_AI_LABELS.vehicle_type}
+                          </span>
                         </div>
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-xs text-muted-foreground">vehicle_count</span>
-                          <span className="font-mono text-sm">{MOCK_AI_LABELS.vehicle_count}</span>
+                          <span className="text-xs text-muted-foreground">
+                            vehicle_count
+                          </span>
+                          <span className="font-mono text-sm">
+                            {MOCK_AI_LABELS.vehicle_count}
+                          </span>
                         </div>
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-xs text-muted-foreground">is_occluded</span>
+                          <span className="text-xs text-muted-foreground">
+                            is_occluded
+                          </span>
                           <span className="font-mono text-sm">
                             {String(MOCK_AI_LABELS.is_occluded)}
                           </span>
                         </div>
                         <div className="col-span-2 flex flex-col gap-0.5">
-                          <span className="text-xs text-muted-foreground">confidence_note</span>
-                          <span className="text-sm">{MOCK_AI_LABELS.confidence_note}</span>
+                          <span className="text-xs text-muted-foreground">
+                            confidence_note
+                          </span>
+                          <span className="text-sm">
+                            {MOCK_AI_LABELS.confidence_note}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -677,14 +751,18 @@ function ReviewMode({
             <div className="grid grid-cols-4 gap-2">
               <Button
                 className="bg-emerald-600 text-white hover:bg-emerald-700"
-                onClick={() => handleAction('accept')}
+                onClick={() => {
+                  handleAction('accept')
+                }}
               >
                 <CheckCircle className="h-4 w-4" />
                 Accept
               </Button>
               <Button
                 variant="default"
-                onClick={() => handleAction('correct')}
+                onClick={() => {
+                  handleAction('correct')
+                }}
               >
                 <Pencil className="h-4 w-4" />
                 Correct
@@ -692,14 +770,18 @@ function ReviewMode({
               <Button
                 variant="outline"
                 className="border-red-500/30 text-red-600 hover:bg-red-500/10"
-                onClick={() => handleAction('reject')}
+                onClick={() => {
+                  handleAction('reject')
+                }}
               >
                 <X className="h-4 w-4" />
                 Reject
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => handleAction('skip')}
+                onClick={() => {
+                  handleAction('skip')
+                }}
               >
                 <SkipForward className="h-4 w-4" />
                 Skip
@@ -748,7 +830,9 @@ export function ReviewPage() {
     return (
       <ReviewMode
         item={activeItem}
-        onBack={() => setActiveItem(null)}
+        onBack={() => {
+          setActiveItem(null)
+        }}
       />
     )
   }

@@ -18,34 +18,21 @@ import {
   safeGetJson,
 } from './context.js'
 
-export function registerWorkflowCommands(program: Command, runtime: CliRuntimeOptions): void {
-  const workflow = program.command('workflow').description('Workflow operations')
+export function registerWorkflowCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
+  const workflow = program
+    .command('workflow')
+    .description('Workflow operations')
   workflow
     .command('list')
     .description('List workflows')
     .action(async () => {
       await runWorkflowList(getRuntimeOptions(program, runtime))
     })
-  workflow
-    .command('create')
-    .description('Create a workflow definition from JSON or YAML')
-    .option('--file <path>', 'Workflow definition file (JSON or YAML)')
-    .option('--workspace-id <id>', 'Workspace ID override')
-    .option('--name <name>')
-    .option('--slug <slug>')
-    .option('--description <text>')
-    .option('--file-path <path>')
-    .action(async function (this: Command) {
-      const commandOptions = this.opts<{
-        file?: string
-        workspaceId?: string
-        name?: string
-        slug?: string
-        description?: string
-        filePath?: string
-      }>()
-      await runWorkflowCreate(getRuntimeOptions(program, runtime), commandOptions)
-    })
+  registerWorkflowCreateCommand(workflow, program, runtime, 'create')
+  registerWorkflowCreateCommand(workflow, program, runtime, 'new')
   workflow
     .command('run <selector>')
     .description('Execute a workflow by slug, id, or file selector')
@@ -62,25 +49,42 @@ export function registerWorkflowCommands(program: Command, runtime: CliRuntimeOp
     .command('execution <selector> <execution-id>')
     .description('Get workflow execution detail')
     .action(async (selector: string, executionId: string) => {
-      await runWorkflowExecution(getRuntimeOptions(program, runtime), selector, executionId)
+      await runWorkflowExecution(
+        getRuntimeOptions(program, runtime),
+        selector,
+        executionId,
+      )
     })
   workflow
     .command('advance <selector> <execution-id> <step-id>')
     .description('Advance a paused workflow step')
     .action(async (selector: string, executionId: string, stepId: string) => {
-      await runWorkflowAdvance(getRuntimeOptions(program, runtime), selector, executionId, stepId)
+      await runWorkflowAdvance(
+        getRuntimeOptions(program, runtime),
+        selector,
+        executionId,
+        stepId,
+      )
     })
   workflow
     .command('pause <selector> <execution-id>')
     .description('Pause a workflow execution')
     .action(async (selector: string, executionId: string) => {
-      await runWorkflowPause(getRuntimeOptions(program, runtime), selector, executionId)
+      await runWorkflowPause(
+        getRuntimeOptions(program, runtime),
+        selector,
+        executionId,
+      )
     })
   workflow
     .command('cancel <selector> <execution-id>')
     .description('Cancel a workflow execution')
     .action(async (selector: string, executionId: string) => {
-      await runWorkflowCancel(getRuntimeOptions(program, runtime), selector, executionId)
+      await runWorkflowCancel(
+        getRuntimeOptions(program, runtime),
+        selector,
+        executionId,
+      )
     })
   workflow
     .command('templates')
@@ -90,10 +94,49 @@ export function registerWorkflowCommands(program: Command, runtime: CliRuntimeOp
     })
 }
 
+function registerWorkflowCreateCommand(
+  workflow: Command,
+  program: Command,
+  runtime: CliRuntimeOptions,
+  name: 'create' | 'new',
+): void {
+  workflow
+    .command(name)
+    .description(
+      name === 'new'
+        ? 'Create a workflow from a built-in template, JSON, or YAML'
+        : 'Create a workflow definition from JSON, YAML, or a built-in template',
+    )
+    .option('--file <path>', 'Workflow definition file (JSON or YAML)')
+    .option('--template <templateId>', 'Built-in workflow template ID')
+    .option('--workspace-id <id>', 'Workspace ID override')
+    .option('--name <name>')
+    .option('--slug <slug>')
+    .option('--description <text>')
+    .option('--file-path <path>')
+    .action(async function (this: Command) {
+      const commandOptions = this.opts<{
+        file?: string
+        template?: string
+        workspaceId?: string
+        name?: string
+        slug?: string
+        description?: string
+        filePath?: string
+      }>()
+      await runWorkflowCreate(
+        getRuntimeOptions(program, runtime),
+        commandOptions,
+      )
+    })
+}
+
 async function runWorkflowList(options: CliRuntimeOptions): Promise<void> {
   const client = await safeClient(options)
   if (client) {
-    const response = await client.getJson<{ items?: unknown[] }>('/api/v1/workflows')
+    const response = await client.getJson<{ items?: unknown[] }>(
+      '/api/v1/workflows',
+    )
     await emit(response, outputMode(options))
     return
   }
@@ -104,7 +147,10 @@ async function runWorkflowList(options: CliRuntimeOptions): Promise<void> {
     return
   }
 
-  const workflows = await listLocalVersionedArtifacts(workspace.rootDir, 'workbench/workflows')
+  const workflows = await listLocalVersionedArtifacts(
+    workspace.rootDir,
+    'workbench/workflows',
+  )
   await emit({ items: workflows }, outputMode(options))
 }
 
@@ -112,6 +158,7 @@ async function runWorkflowCreate(
   options: CliRuntimeOptions,
   commandOptions: {
     file?: string
+    template?: string
     workspaceId?: string
     name?: string
     slug?: string
@@ -120,40 +167,68 @@ async function runWorkflowCreate(
   },
 ): Promise<void> {
   const client = await requireClient(options)
+  if (commandOptions.file && commandOptions.template) {
+    throw new Error(
+      'workflow create accepts either --file or --template, not both',
+    )
+  }
+
+  const workspaceId = await resolveWorkspaceId(
+    options,
+    commandOptions.workspaceId,
+  )
   const body = commandOptions.file
-    ? await readWorkflowDefinitionFile(options, commandOptions.file, commandOptions.workspaceId)
-    : {
-        workspace_id: await resolveWorkspaceId(options, commandOptions.workspaceId),
-        name: commandOptions.name,
-        workflow_slug: commandOptions.slug,
-        description: commandOptions.description,
-        file_path: commandOptions.filePath,
-        steps: [],
-        edges: [],
-      }
+    ? await readWorkflowDefinitionFile(commandOptions.file, workspaceId)
+    : commandOptions.template
+      ? await readWorkflowTemplateDefinition(
+          client,
+          commandOptions.template,
+          workspaceId,
+          compactWorkflowOverrides({
+            name: commandOptions.name,
+            slug: commandOptions.slug,
+            description: commandOptions.description,
+            filePath: commandOptions.filePath,
+          }),
+        )
+      : {
+          workspace_id: workspaceId,
+          name: commandOptions.name,
+          workflow_slug: commandOptions.slug,
+          description: commandOptions.description,
+          file_path: commandOptions.filePath,
+          steps: [],
+          edges: [],
+        }
 
   if (!body.name) {
     throw new Error('workflow create requires name')
   }
 
-  const response = await client.postJson<Record<string, unknown>>('/api/v1/workflows', body)
+  const response = await client.postJson('/api/v1/workflows', body)
   await emit(response, outputMode(options))
 }
 
-async function runWorkflowRun(options: CliRuntimeOptions, selector: string): Promise<void> {
+async function runWorkflowRun(
+  options: CliRuntimeOptions,
+  selector: string,
+): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const execution = await client.postJson<Record<string, unknown>>(
+  const execution = await client.postJson(
     `/api/v1/workflows/${workflow.workflow_id}/execute`,
     {},
   )
   await emit(execution, outputMode(options))
 }
 
-async function runWorkflowExecutions(options: CliRuntimeOptions, selector: string): Promise<void> {
+async function runWorkflowExecutions(
+  options: CliRuntimeOptions,
+  selector: string,
+): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const executions = await client.getJson<Record<string, unknown>>(
+  const executions = await client.getJson(
     `/api/v1/workflows/${workflow.workflow_id}/executions`,
   )
   await emit(executions, outputMode(options))
@@ -166,7 +241,7 @@ async function runWorkflowExecution(
 ): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const execution = await client.getJson<Record<string, unknown>>(
+  const execution = await client.getJson(
     `/api/v1/workflows/${workflow.workflow_id}/executions/${executionId}`,
   )
   await emit(execution, outputMode(options))
@@ -180,7 +255,7 @@ async function runWorkflowAdvance(
 ): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const execution = await client.postJson<Record<string, unknown>>(
+  const execution = await client.postJson(
     `/api/v1/workflows/${workflow.workflow_id}/executions/${executionId}/steps/${stepId}/advance`,
     {},
   )
@@ -194,7 +269,7 @@ async function runWorkflowPause(
 ): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const execution = await client.postJson<Record<string, unknown>>(
+  const execution = await client.postJson(
     `/api/v1/workflows/${workflow.workflow_id}/executions/${executionId}/pause`,
     {},
   )
@@ -208,7 +283,7 @@ async function runWorkflowCancel(
 ): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const execution = await client.postJson<Record<string, unknown>>(
+  const execution = await client.postJson(
     `/api/v1/workflows/${workflow.workflow_id}/executions/${executionId}/cancel`,
     {},
   )
@@ -243,9 +318,8 @@ async function safeClient(options: CliRuntimeOptions) {
 }
 
 async function readWorkflowDefinitionFile(
-  options: CliRuntimeOptions,
   path: string,
-  workspaceId?: string,
+  workspaceId: string,
 ): Promise<Record<string, unknown>> {
   const raw = await readInputText({
     file: resolve(path),
@@ -255,7 +329,8 @@ async function readWorkflowDefinitionFile(
   })
 
   const parsed =
-    extname(path).toLowerCase() === '.yaml' || extname(path).toLowerCase() === '.yml'
+    extname(path).toLowerCase() === '.yaml' ||
+    extname(path).toLowerCase() === '.yml'
       ? (parseYaml(raw) as Record<string, unknown> | null)
       : ((await readJsonInput({
           text: raw,
@@ -266,6 +341,80 @@ async function readWorkflowDefinitionFile(
     throw new Error(`Workflow file must contain an object: ${path}`)
   }
 
+  return buildWorkflowCreateBody(parsed, {
+    workspaceId,
+    ...compactWorkflowOverrides({
+      filePath: readString(parsed.file_path),
+    }),
+  })
+}
+
+async function readWorkflowTemplateDefinition(
+  client: Awaited<ReturnType<typeof requireClient>>,
+  templateId: string,
+  workspaceId: string,
+  overrides: {
+    name?: string
+    slug?: string
+    description?: string
+    filePath?: string
+  },
+): Promise<Record<string, unknown>> {
+  const template = await client.getJson<{ yaml?: unknown }>(
+    `/api/v1/cli/workflow-templates/${templateId}`,
+  )
+  const yaml = readString(template.yaml)
+  if (!yaml) {
+    throw new Error(`Workflow template '${templateId}' did not return YAML`)
+  }
+  const parsed = parseYaml(yaml) as Record<string, unknown> | null
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`Workflow template '${templateId}' is not a valid object`)
+  }
+
+  return buildWorkflowCreateBody(parsed, {
+    workspaceId,
+    ...compactWorkflowOverrides({
+      name: overrides.name,
+      slug: overrides.slug,
+      description: overrides.description,
+    }),
+    filePath:
+      overrides.filePath ??
+      `workbench/workflows/${templateId.replace(/_/g, '-')}.yaml`,
+  })
+}
+
+function compactWorkflowOverrides(
+  overrides: Partial<
+    Record<'name' | 'slug' | 'description' | 'filePath', string | undefined>
+  >,
+): {
+  name?: string
+  slug?: string
+  description?: string
+  filePath?: string
+} {
+  return Object.fromEntries(
+    Object.entries(overrides).filter(([, value]) => value !== undefined),
+  ) as {
+    name?: string
+    slug?: string
+    description?: string
+    filePath?: string
+  }
+}
+
+function buildWorkflowCreateBody(
+  parsed: Record<string, unknown>,
+  overrides: {
+    workspaceId: string
+    name?: string
+    slug?: string
+    description?: string
+    filePath?: string
+  },
+): Record<string, unknown> {
   const steps = Array.isArray(parsed.steps)
     ? parsed.steps.map((step, index) => normalizeWorkflowStep(step, index))
     : []
@@ -274,17 +423,23 @@ async function readWorkflowDefinitionFile(
     : []
 
   return {
-    workspace_id: await resolveWorkspaceId(options, workspaceId),
-    name: readString(parsed.name) ?? 'Workflow',
-    workflow_slug: readString(parsed.workflow_slug) ?? readString(parsed.slug),
-    description: readString(parsed.description),
-    file_path: readString(parsed.file_path),
+    workspace_id: overrides.workspaceId,
+    name: overrides.name ?? readString(parsed.name) ?? 'Workflow',
+    workflow_slug:
+      overrides.slug ??
+      readString(parsed.workflow_slug) ??
+      readString(parsed.slug),
+    description: overrides.description ?? readString(parsed.description),
+    file_path: overrides.filePath ?? readString(parsed.file_path),
     steps,
     edges,
   }
 }
 
-function normalizeWorkflowStep(step: unknown, index: number): Record<string, unknown> {
+function normalizeWorkflowStep(
+  step: unknown,
+  index: number,
+): Record<string, unknown> {
   if (!step || typeof step !== 'object' || Array.isArray(step)) {
     throw new Error(`Workflow step ${String(index + 1)} must be an object`)
   }
@@ -299,11 +454,15 @@ function normalizeWorkflowStep(step: unknown, index: number): Record<string, unk
     step_type: stepType,
     label: readString(value.label),
     config:
-      value.config && typeof value.config === 'object' && !Array.isArray(value.config)
+      value.config &&
+      typeof value.config === 'object' &&
+      !Array.isArray(value.config)
         ? value.config
         : {},
     position:
-      value.position && typeof value.position === 'object' && !Array.isArray(value.position)
+      value.position &&
+      typeof value.position === 'object' &&
+      !Array.isArray(value.position)
         ? value.position
         : undefined,
   }

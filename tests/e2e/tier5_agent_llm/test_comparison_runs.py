@@ -31,11 +31,14 @@ async def test_two_model_comparison_run(
     ctx: TestContext,
     client: InstrumentedClient,
 ) -> None:
-    """T5-03: 2-model comparison — separate runs, per-model accuracy + agreement_rate.
-    """
+    """T5-03: Two-model comparison with accuracy and agreement rate."""
     with checkpoint(ctx, "session_setup"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-two-model-comparison-test", "workspace_name": "Two Model Comparison Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-two-model-comparison-test",
+                "workspace_name": "Two Model Comparison Test",
+            },
         )
         assert ws_resp.status_code == 201
 
@@ -134,7 +137,11 @@ async def test_three_model_comparison_run(
     """T5-04: 3-model comparison — 3 agent runs, all appear in comparison result."""
     with checkpoint(ctx, "session_setup"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-three-model-comparison-test", "workspace_name": "Three Model Comparison Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-three-model-comparison-test",
+                "workspace_name": "Three Model Comparison Test",
+            },
         )
         assert ws_resp.status_code == 201
 

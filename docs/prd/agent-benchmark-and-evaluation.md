@@ -40,10 +40,10 @@ These benchmarks must test:
 - and end-to-end project operation through the CLI.
 
 The reference harness is Codex CLI.
-The current labeling engine in MoLabel is MiniMax 2.7 via the
+The current labeling engine in MoLabel is MiniMax 2.7 highspeed via the
 Anthropic-compatible adapter path.
 The architecture remains provider-configurable, but benchmark documentation and
-test harnesses should name MiniMax 2.7 explicitly as the current engine under
+test harnesses should name MiniMax 2.7 highspeed explicitly as the current engine under
 test.
 
 ## 2. What The Benchmarks Must Prove
@@ -283,7 +283,7 @@ Each benchmark should score at least these dimensions:
 Operator-first grounded benchmarks should also score:
 
 - use of public CLI-and-skill surfaces only,
-- correct MiniMax 2.7 labeling-engine setup,
+- correct MiniMax 2.7 highspeed labeling-engine setup,
 - data preparation correctness,
 - task schema quality,
 - prompt quality,

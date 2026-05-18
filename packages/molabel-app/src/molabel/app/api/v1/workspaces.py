@@ -16,12 +16,12 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.services.session import (
+    AVATAR_COLORS,
     COOKIE_HTTPONLY,
     COOKIE_NAME,
     COOKIE_PATH,
     COOKIE_SAMESITE,
     COOKIE_SECURE,
-    AVATAR_COLORS,
     create_session_token,
 )
 from molabel.app.utils import get_app_secret, get_engine

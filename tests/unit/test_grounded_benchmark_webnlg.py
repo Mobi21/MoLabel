@@ -14,10 +14,7 @@ from molabel.core.quality.grounded_benchmarks import (
 )
 
 ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "benchmarks-grounded"
-    / "webnlg"
+    Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks-grounded" / "webnlg"
 )
 
 
@@ -32,9 +29,12 @@ def test_webnlg_fixture_preserves_triple_grounded_generation() -> None:
     assert any(len(row["labels"]["generation"]["claims"]) > 1 for row in gold_rows)
     for row in gold_rows:
         artifact = row["labels"]["generation"]
-        assert validate_grounded_generation_artifact(
-            artifact, required_fields=["verbalization"]
-        ).is_valid is True
+        assert (
+            validate_grounded_generation_artifact(
+                artifact, required_fields=["verbalization"]
+            ).is_valid
+            is True
+        )
         assert all(
             anchor_id.startswith("triple_")
             for claim in artifact["claims"]

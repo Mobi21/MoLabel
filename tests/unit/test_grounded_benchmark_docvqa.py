@@ -12,10 +12,7 @@ from molabel.core.quality.grounded_benchmarks import (
 )
 
 ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "benchmarks-grounded"
-    / "docvqa"
+    Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks-grounded" / "docvqa"
 )
 
 
@@ -24,29 +21,21 @@ def test_docvqa_fixture_preserves_answer_first_and_grounded_views() -> None:
     assert bundle.scenario.benchmark_id == "docvqa"
     assert bundle.metrics.primary_metric_id == "anls"
 
-    split_rows = load_jsonl(
-        ROOT / "workbench" / "benchmarks" / "splits" / "dev.jsonl"
-    )
+    split_rows = load_jsonl(ROOT / "workbench" / "benchmarks" / "splits" / "dev.jsonl")
     for row in split_rows:
-        assert all(validate_grounded_anchor(anchor).is_valid for anchor in row["available_anchors"])
+        assert all(
+            validate_grounded_anchor(anchor).is_valid
+            for anchor in row["available_anchors"]
+        )
 
     paper_gold = load_jsonl(
         ROOT / "workbench" / "benchmarks" / "gold" / "paper-direct" / "dev.jsonl"
     )
     molabel_gold = load_jsonl(
-        ROOT
-        / "workbench"
-        / "benchmarks"
-        / "gold"
-        / "molabel-operated"
-        / "dev.jsonl"
+        ROOT / "workbench" / "benchmarks" / "gold" / "molabel-operated" / "dev.jsonl"
     )
-    assert all(
-        not row["labels"]["qa_bundle"]["supporting_facts"] for row in paper_gold
-    )
-    assert all(
-        row["labels"]["qa_bundle"]["supporting_facts"] for row in molabel_gold
-    )
+    assert all(not row["labels"]["qa_bundle"]["supporting_facts"] for row in paper_gold)
+    assert all(row["labels"]["qa_bundle"]["supporting_facts"] for row in molabel_gold)
 
     paper_summary = score_grounded_stage(
         bundle=bundle,

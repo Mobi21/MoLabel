@@ -3,7 +3,7 @@ track: grounded
 name: HateXplain Grounded Benchmark
 authority_pack: true
 reference_workspace_root: ../workbench
-current_labeling_engine: MiniMax 2.7
+current_labeling_engine: MiniMax 2.7 highspeed
 benchmark_profiles:
   - canonical
   - operator-primary

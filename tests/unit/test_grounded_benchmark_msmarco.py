@@ -12,10 +12,7 @@ from molabel.core.quality.grounded_benchmarks import (
 )
 
 ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "benchmarks-grounded"
-    / "msmarco"
+    Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks-grounded" / "msmarco"
 )
 
 
@@ -42,9 +39,9 @@ def test_msmarco_fixture_scores_reciprocal_rank_at_five() -> None:
         variant="paper_direct",
     )
     assert oracle.overall_score == pytest.approx(1.0)
-    assert all(
-        set(row["labels"]["qrels"].values()) == {1} for row in gold_rows
-    ), "MS MARCO slice should keep passage-ranking binary qrels"
+    assert all(set(row["labels"]["qrels"].values()) == {1} for row in gold_rows), (
+        "MS MARCO slice should keep passage-ranking binary qrels"
+    )
 
     degraded_predictions = deepcopy(gold_rows)
     degraded_predictions[0]["labels"]["ranking"]["results"] = [

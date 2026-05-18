@@ -1,7 +1,7 @@
-"""Live grounded benchmark runs against MiniMax 2.7.
+"""Live grounded benchmark runs against MiniMax 2.7 highspeed.
 
 These runs exercise the grounded benchmark contract end to end for the current
-MoLabel labeling engine, MiniMax 2.7, via the Anthropic-compatible adapter
+MoLabel labeling engine, MiniMax 2.7 highspeed, via the Anthropic-compatible adapter
 path. Each test copies a grounded fixture workspace, provisions the workspace
 through the API, runs paper-direct model scoring, and writes benchmark run
 artifacts with the shared grounded benchmark scorer.
@@ -146,7 +146,7 @@ def _build_messages(
 ) -> list[Message]:
     system_prompt = (
         f"{agents_prompt.strip()}\n\n"
-        "The current MoLabel labeling engine under test is MiniMax 2.7.\n"
+        "The current MoLabel labeling engine under test is MiniMax 2.7 highspeed.\n"
         f"Task schema title: {task_schema['title']}\n"
         f"Task instructions: {task_schema.get('instructions', '')}\n"
         "Return only the structured JSON object."
@@ -202,7 +202,7 @@ def _build_model_run_evidence(
 async def test_live_grounded_benchmark_real_llm_model_mode(
     client, ctx, benchmark: GroundedScenarioRun
 ) -> None:
-    """Run grounded paper-direct model scoring with live MiniMax 2.7 calls."""
+    """Run grounded paper-direct model scoring with live MiniMax 2.7 highspeed calls."""
 
     auth_ref = _resolve_auth_ref()
     if not auth_ref:

@@ -171,6 +171,106 @@ def _create_tasks(
     return tasks
 
 
+def _insert_task_schema(
+    engine,
+    workspace,
+    *,
+    schema_id: uuid.UUID,
+    slug: str,
+    label_fields: list[dict[str, object]],
+) -> None:
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO task_schemas (
+                    id, task_schema_slug, version, task_type, title, instructions,
+                    label_fields, blind_review_policy, workspace_id
+                ) VALUES (
+                    :id, :slug, 1, 'classification', :title, :instructions,
+                    :label_fields, 'hide_agent_outputs_by_default', :workspace_id
+                )
+                """
+            ),
+            {
+                "id": str(schema_id),
+                "slug": slug,
+                "title": slug,
+                "instructions": f"Schema for {slug}",
+                "label_fields": json.dumps(label_fields),
+                "workspace_id": str(workspace.id),
+            },
+        )
+        conn.commit()
+
+
+def _create_task_with_schema(
+    engine,
+    workspace,
+    *,
+    schema_id: uuid.UUID,
+    payload: dict[str, object],
+    queue_id: str = QUEUE_ID,
+) -> TaskData:
+    dataset_id = uuid.uuid4()
+    task_id = uuid.uuid4()
+    record_id = uuid.uuid4()
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO records (
+                    id, external_id, stable_fields, payload, workspace_id, dataset_id
+                ) VALUES (
+                    :id, :external_id, :stable_fields, :payload,
+                    :workspace_id, :dataset_id
+                )
+                """
+            ),
+            {
+                "id": str(record_id),
+                "external_id": f"structured-record-{task_id}",
+                "stable_fields": json.dumps(
+                    {"record_id": f"structured-record-{task_id}"}
+                ),
+                "payload": json.dumps(payload),
+                "workspace_id": str(workspace.id),
+                "dataset_id": str(dataset_id),
+            },
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO review_tasks (
+                    id, queue_id, record_id, task_schema_id, status, priority,
+                    workspace_id, dataset_id
+                ) VALUES (
+                    :id, :queue_id, :record_id, :task_schema_id, 'available', 0,
+                    :workspace_id, :dataset_id
+                )
+                """
+            ),
+            {
+                "id": str(task_id),
+                "queue_id": queue_id,
+                "record_id": str(record_id),
+                "task_schema_id": str(schema_id),
+                "workspace_id": str(workspace.id),
+                "dataset_id": str(dataset_id),
+            },
+        )
+        conn.commit()
+    return TaskData(
+        id=task_id,
+        queue_id=queue_id,
+        record_id=record_id,
+        task_schema_id=schema_id,
+        workspace_id=workspace.id,
+        dataset_id=dataset_id,
+        priority=0,
+    )
+
+
 @pytest.fixture()
 def tasks(engine, workspace) -> list[TaskData]:
     """Insert 5 test review tasks."""
@@ -292,6 +392,48 @@ class TestAtomicClaim:
         assert data["task"]["record_text"].startswith("Queue text for ")
         assert data["queue_empty"] is False
 
+    def test_claim_api_uses_token_list_for_record_text(
+        self, client, reviewer, engine, workspace
+    ) -> None:
+        """Tokenized payloads should expose readable joined text to reviewers."""
+        _login(client, reviewer)
+        schema_id = uuid.uuid4()
+        _insert_task_schema(
+            engine,
+            workspace,
+            schema_id=schema_id,
+            slug="tokenized-review",
+            label_fields=[
+                {
+                    "name": "stance_label",
+                    "field_type": "categorical",
+                    "options": ["normal", "offensive", "hatespeech"],
+                    "required": True,
+                }
+            ],
+        )
+        _create_task_with_schema(
+            engine,
+            workspace,
+            schema_id=schema_id,
+            payload={
+                "post_id": "post-1",
+                "post_tokens": ["<user>", "why", "so", "loud"],
+                "annotators": [{"label": "offensive"}],
+            },
+        )
+
+        resp = client.post(f"/api/v1/queues/{QUEUE_ID}/claim")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["task"]["record_text"] == "<user> why so loud"
+        assert data["task"]["record_view"]["payload"]["post_tokens"] == [
+            "<user>",
+            "why",
+            "so",
+            "loud",
+        ]
+
     def test_claim_api_empty_queue(self, client, reviewer) -> None:
         """POST /queues/{queue_id}/claim returns queue_empty=True for empty queue."""
         _login(client, reviewer)
@@ -355,6 +497,102 @@ class TestSubmitSkipRelease:
 
         result = submit_review(engine, task_id, second_reviewer.id, {"label": "x"})
         assert result is None
+
+    def test_submit_review_rejects_stringified_evidence_atoms(
+        self, engine, workspace, reviewer
+    ) -> None:
+        schema_id = uuid.uuid4()
+        _insert_task_schema(
+            engine,
+            workspace,
+            schema_id=schema_id,
+            slug="evidence-qa",
+            label_fields=[
+                {
+                    "name": "verdict",
+                    "field_type": "categorical",
+                    "options": ["supports", "refutes", "nei"],
+                    "required": True,
+                },
+                {
+                    "name": "evidence_atoms",
+                    "field_type": "json",
+                    "required": True,
+                },
+            ],
+        )
+        task = _create_task_with_schema(
+            engine,
+            workspace,
+            schema_id=schema_id,
+            payload={"text": "claim"},
+        )
+        claimed = claim_next(engine, task.queue_id, reviewer.id)
+        assert claimed is not None
+
+        with pytest.raises(
+            ValueError,
+            match="evidence_atoms must be a JSON array of stable evidence atom IDs",
+        ):
+            submit_review(
+                engine,
+                task.id,
+                reviewer.id,
+                {
+                    "verdict": "supports",
+                    "evidence_atoms": '["doc_1_sentence_0"]',
+                },
+                ReviewDecision.accept,
+            )
+
+    def test_submit_review_rejects_bad_rationale_mask_shape(
+        self, client, engine, workspace, reviewer
+    ) -> None:
+        _login(client, reviewer)
+        schema_id = uuid.uuid4()
+        _insert_task_schema(
+            engine,
+            workspace,
+            schema_id=schema_id,
+            slug="rationale-mask",
+            label_fields=[
+                {
+                    "name": "stance_label",
+                    "field_type": "categorical",
+                    "options": ["normal", "offensive", "hatespeech"],
+                    "required": True,
+                },
+                {
+                    "name": "rationale_token_mask",
+                    "field_type": "json",
+                    "required": True,
+                },
+            ],
+        )
+        task = _create_task_with_schema(
+            engine,
+            workspace,
+            schema_id=schema_id,
+            payload={"tokens": ["a", "b", "c", "d"]},
+        )
+
+        claim_resp = client.post(f"/api/v1/queues/{task.queue_id}/claim")
+        assert claim_resp.status_code == 200
+        task_id = claim_resp.json()["task"]["id"]
+
+        submit_resp = client.post(
+            f"/api/v1/review-tasks/{task_id}/submit",
+            json={
+                "labels": {
+                    "stance_label": "offensive",
+                    "rationale_token_mask": [1, 0],
+                },
+                "decision": "accept",
+                "auto_claim_next": False,
+            },
+        )
+        assert submit_resp.status_code == 422
+        assert "token count (4), got 2" in submit_resp.text
 
     def test_submit_api_auto_claims_next(self, client, engine, reviewer, tasks) -> None:
         """POST /review-tasks/{id}/submit auto-claims next item."""

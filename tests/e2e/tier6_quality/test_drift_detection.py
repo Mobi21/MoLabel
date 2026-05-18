@@ -100,7 +100,11 @@ async def test_chi_squared_drift_detection(
 
     with checkpoint(ctx, "drift_api_endpoint"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-drift-detection-test", "workspace_name": "Drift Detection Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-drift-detection-test",
+                "workspace_name": "Drift Detection Test",
+            },
         )
         assert ws_resp.status_code == 201
         drift_resp = await client.get(
@@ -125,8 +129,7 @@ async def test_kl_divergence_identical_and_shifted(
     ctx: TestContext,
     client: InstrumentedClient,
 ) -> None:
-    """T6-04: KL divergence is near-zero for identical distributions, high for shifted.
-    """
+    """T6-04: KL divergence is near-zero when identical and high when shifted."""
     service = DriftDetectionService(drift_threshold=0.1)
 
     with checkpoint(ctx, "identical_distributions_kl_near_zero"):

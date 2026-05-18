@@ -26,8 +26,7 @@ async def test_reviewer_profiles_crud_active_avatar(
     client: InstrumentedClient,
     ctx: TestContext,
 ) -> None:
-    """T3-20: Create, list, get, update reviewer profiles; active filter; auto avatar.
-    """
+    """T3-20: Create, list, get, update reviewer profiles, filters, avatar."""
 
     profile_id: str = ""
     with checkpoint(ctx, "create_profile"):

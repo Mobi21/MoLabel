@@ -32,6 +32,7 @@ from molabel.core.providers.cost_tracking import CostTracker
 from molabel.core.providers.custom_adapter import CustomAdapter
 from molabel.core.providers.detection import ProviderDetector
 from molabel.core.providers.hf_auth import HuggingFaceAuth
+from molabel.core.providers.model_defaults import MINIMAX_M27_HIGHSPEED
 from molabel.core.providers.ollama_adapter import OllamaAdapter
 from molabel.core.providers.openai_adapter import OpenAIAdapter
 from molabel.core.providers.openrouter_adapter import OpenRouterAdapter
@@ -431,6 +432,7 @@ class TestAnthropicAdapter:
         assert len(models) > 0
         model_ids = [m.model_id for m in models]
         assert "claude-sonnet-4-20250514" in model_ids
+        assert MINIMAX_M27_HIGHSPEED.model_identifier in model_ids
 
     def test_list_models_have_pricing(self) -> None:
         adapter = AnthropicAdapter()
@@ -439,6 +441,13 @@ class TestAnthropicAdapter:
         assert claude.cost_per_input_token is not None
         assert claude.cost_per_output_token is not None
         assert claude.context_window == 200000
+        minimax = next(
+            m for m in models if m.model_id == MINIMAX_M27_HIGHSPEED.model_identifier
+        )
+        assert minimax.display_name == MINIMAX_M27_HIGHSPEED.display_name
+        assert minimax.cost_per_input_token is not None
+        assert minimax.cost_per_output_token is not None
+        assert minimax.context_window == MINIMAX_M27_HIGHSPEED.context_window
 
     def test_estimate_cost_known_model(self) -> None:
         adapter = AnthropicAdapter()

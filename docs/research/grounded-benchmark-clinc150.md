@@ -11,7 +11,7 @@ is not the primary current-state guide.
 This fixture is a grounded micro-benchmark built from the official CLINC/OOS release rather than a synthetic reconstruction. The upstream repository says the dataset is English-only, single-intent, and includes 150 in-scope intents plus out-of-scope queries. The repo README also documents the canonical split structure and points to `data/data_full.json`.
 
 The current MoLabel labeling engine used when this benchmark is run live is
-`MiniMax 2.7` through the Anthropic-compatible adapter path.
+`MiniMax 2.7 highspeed` through the Anthropic-compatible adapter path.
 
 The benchmark is intentionally small:
 

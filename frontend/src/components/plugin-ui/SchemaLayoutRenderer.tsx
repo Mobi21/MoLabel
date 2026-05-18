@@ -6,9 +6,9 @@
  * (fields, json, text, markdown, custom) has a dedicated renderer.
  */
 
-import { useState } from "react"
+import { useState } from 'react'
 
-import type { LayoutSection, LayoutSpec } from "@/types/plugin-ui"
+import type { LayoutSection, LayoutSpec } from '@/types/plugin-ui'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -27,14 +27,25 @@ export interface SchemaLayoutRendererProps {
 // Section renderers
 // ---------------------------------------------------------------------------
 
-function extractValue(data: Record<string, unknown>, fieldPath: string): unknown {
-  const parts = fieldPath.split(".")
+function extractValue(
+  data: Record<string, unknown>,
+  fieldPath: string,
+): unknown {
+  const parts = fieldPath.split('.')
   let current: unknown = data
   for (const part of parts) {
-    if (current == null || typeof current !== "object") return undefined
+    if (current == null || typeof current !== 'object') return undefined
     current = (current as Record<string, unknown>)[part]
   }
   return current
+}
+
+function toDisplayText(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean')
+    return String(value)
+  return JSON.stringify(value)
 }
 
 function FieldsSection({
@@ -51,16 +62,18 @@ function FieldsSection({
         const value = extractValue(data, field)
         return (
           <div key={field} className="contents">
-            <dt className="text-sm font-medium text-muted-foreground">{field}</dt>
+            <dt className="text-sm font-medium text-muted-foreground">
+              {field}
+            </dt>
             <dd className="text-sm">
               {value == null ? (
                 <span className="text-muted-foreground">--</span>
-              ) : typeof value === "object" ? (
+              ) : typeof value === 'object' ? (
                 <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
                   {JSON.stringify(value)}
                 </code>
               ) : (
-                String(value)
+                toDisplayText(value)
               )}
             </dd>
           </div>
@@ -77,7 +90,7 @@ function JsonSection({
   section: LayoutSection
   data: Record<string, unknown>
 }) {
-  const fieldPath = section.config?.["fieldPath"] as string | undefined
+  const fieldPath = section.config?.['fieldPath'] as string | undefined
   const jsonData = fieldPath ? extractValue(data, fieldPath) : data
   return (
     <pre className="overflow-auto rounded-md bg-muted p-4 font-mono text-xs">
@@ -86,9 +99,15 @@ function JsonSection({
   )
 }
 
-function TextSection({ section, data }: { section: LayoutSection; data: Record<string, unknown> }) {
-  const fieldPath = section.config?.["fieldPath"] as string | undefined
-  const text = fieldPath ? String(extractValue(data, fieldPath) ?? "") : ""
+function TextSection({
+  section,
+  data,
+}: {
+  section: LayoutSection
+  data: Record<string, unknown>
+}) {
+  const fieldPath = section.config?.['fieldPath'] as string | undefined
+  const text = fieldPath ? toDisplayText(extractValue(data, fieldPath)) : ''
   return <p className="whitespace-pre-wrap text-sm">{text}</p>
 }
 
@@ -99,8 +118,8 @@ function MarkdownSection({
   section: LayoutSection
   data: Record<string, unknown>
 }) {
-  const fieldPath = section.config?.["fieldPath"] as string | undefined
-  const content = fieldPath ? String(extractValue(data, fieldPath) ?? "") : ""
+  const fieldPath = section.config?.['fieldPath'] as string | undefined
+  const content = fieldPath ? toDisplayText(extractValue(data, fieldPath)) : ''
   // Simple markdown rendering — for full markdown support, plugins should
   // use a Tier 2 custom component with a proper markdown library.
   return (
@@ -111,12 +130,14 @@ function MarkdownSection({
 }
 
 function CustomSection({ section }: { section: LayoutSection }) {
-  const componentName = section.config?.["component"] as string | undefined
+  const componentName = section.config?.['component'] as string | undefined
   return (
     <div className="rounded-md border border-dashed border-muted-foreground/25 p-4 text-center text-sm text-muted-foreground">
       Custom component: {componentName ?? section.sectionId}
       <br />
-      <span className="text-xs">Use Tier 2 dynamic loading for custom sections</span>
+      <span className="text-xs">
+        Use Tier 2 dynamic loading for custom sections
+      </span>
     </div>
   )
 }
@@ -138,14 +159,16 @@ function SectionWrapper({
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setIsOpen(!isOpen)
+        }}
         className="flex w-full items-center justify-between p-4 text-left"
         aria-expanded={isOpen}
       >
         <h4 className="text-sm font-semibold">{section.title}</h4>
         <span
           className="text-muted-foreground transition-transform"
-          style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+          style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
           aria-hidden
         >
           &#9660;
@@ -156,17 +179,20 @@ function SectionWrapper({
   )
 }
 
-function renderSection(section: LayoutSection, data: Record<string, unknown>): React.ReactNode {
+function renderSection(
+  section: LayoutSection,
+  data: Record<string, unknown>,
+): React.ReactNode {
   switch (section.sectionType) {
-    case "fields":
+    case 'fields':
       return <FieldsSection section={section} data={data} />
-    case "json":
+    case 'json':
       return <JsonSection section={section} data={data} />
-    case "text":
+    case 'text':
       return <TextSection section={section} data={data} />
-    case "markdown":
+    case 'markdown':
       return <MarkdownSection section={section} data={data} />
-    case "custom":
+    case 'custom':
       return <CustomSection section={section} />
     default:
       return null
@@ -192,9 +218,11 @@ export function SchemaLayoutRenderer({
   const hasSidebar = layout.sidebar && layout.sidebar.length > 0
 
   return (
-    <div className={`flex gap-6 ${className ?? ""}`}>
+    <div className={`flex gap-6 ${className ?? ''}`}>
       {/* Main content */}
-      <div className={`flex flex-col gap-4 ${hasSidebar ? "flex-1" : "w-full"}`}>
+      <div
+        className={`flex flex-col gap-4 ${hasSidebar ? 'flex-1' : 'w-full'}`}
+      >
         {layout.sections.map((section) => (
           <SectionWrapper key={section.sectionId} section={section}>
             {renderSection(section, data)}

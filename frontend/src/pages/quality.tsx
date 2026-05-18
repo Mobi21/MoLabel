@@ -45,12 +45,54 @@ const agreementEntities = [
 type Entity = (typeof agreementEntities)[number]
 
 const agreementScores: Record<Entity, Record<Entity, number>> = {
-  Sarah:  { Sarah: 1.00, Marcus: 0.91, Elena: 0.88, 'GPT-4o': 0.93, Claude: 0.96, Gemini: 0.85 },
-  Marcus: { Sarah: 0.91, Marcus: 1.00, Elena: 0.83, 'GPT-4o': 0.87, Claude: 0.89, Gemini: 0.78 },
-  Elena:  { Sarah: 0.88, Marcus: 0.83, Elena: 1.00, 'GPT-4o': 0.85, Claude: 0.90, Gemini: 0.82 },
-  'GPT-4o': { Sarah: 0.93, Marcus: 0.87, Elena: 0.85, 'GPT-4o': 1.00, Claude: 0.94, Gemini: 0.88 },
-  Claude: { Sarah: 0.96, Marcus: 0.89, Elena: 0.90, 'GPT-4o': 0.94, Claude: 1.00, Gemini: 0.86 },
-  Gemini: { Sarah: 0.85, Marcus: 0.78, Elena: 0.82, 'GPT-4o': 0.88, Claude: 0.86, Gemini: 1.00 },
+  Sarah: {
+    Sarah: 1.0,
+    Marcus: 0.91,
+    Elena: 0.88,
+    'GPT-4o': 0.93,
+    Claude: 0.96,
+    Gemini: 0.85,
+  },
+  Marcus: {
+    Sarah: 0.91,
+    Marcus: 1.0,
+    Elena: 0.83,
+    'GPT-4o': 0.87,
+    Claude: 0.89,
+    Gemini: 0.78,
+  },
+  Elena: {
+    Sarah: 0.88,
+    Marcus: 0.83,
+    Elena: 1.0,
+    'GPT-4o': 0.85,
+    Claude: 0.9,
+    Gemini: 0.82,
+  },
+  'GPT-4o': {
+    Sarah: 0.93,
+    Marcus: 0.87,
+    Elena: 0.85,
+    'GPT-4o': 1.0,
+    Claude: 0.94,
+    Gemini: 0.88,
+  },
+  Claude: {
+    Sarah: 0.96,
+    Marcus: 0.89,
+    Elena: 0.9,
+    'GPT-4o': 0.94,
+    Claude: 1.0,
+    Gemini: 0.86,
+  },
+  Gemini: {
+    Sarah: 0.85,
+    Marcus: 0.78,
+    Elena: 0.82,
+    'GPT-4o': 0.88,
+    Claude: 0.86,
+    Gemini: 1.0,
+  },
 }
 
 const driftDatasets = [
@@ -70,11 +112,41 @@ const calibrationBins = [
 ] as const
 
 const flaggedRecords = [
-  { id: 'rec-4821', dataset: 'Urban Scenes', issue: 'Low confidence (0.42)', severity: 'High' as const, action: 'Review' },
-  { id: 'rec-9103', dataset: 'Highway Nighttime', issue: 'Drift anomaly', severity: 'Medium' as const, action: 'Investigate' },
-  { id: 'rec-7290', dataset: 'Adverse Weather', issue: 'Reviewer disagreement', severity: 'Medium' as const, action: 'Adjudicate' },
-  { id: 'rec-2341', dataset: 'Construction Zones', issue: 'Missing labels', severity: 'High' as const, action: 'Complete' },
-  { id: 'rec-6677', dataset: 'Pedestrian Detection', issue: 'Schema violation', severity: 'Low' as const, action: 'Fix' },
+  {
+    id: 'rec-4821',
+    dataset: 'Urban Scenes',
+    issue: 'Low confidence (0.42)',
+    severity: 'High' as const,
+    action: 'Review',
+  },
+  {
+    id: 'rec-9103',
+    dataset: 'Highway Nighttime',
+    issue: 'Drift anomaly',
+    severity: 'Medium' as const,
+    action: 'Investigate',
+  },
+  {
+    id: 'rec-7290',
+    dataset: 'Adverse Weather',
+    issue: 'Reviewer disagreement',
+    severity: 'Medium' as const,
+    action: 'Adjudicate',
+  },
+  {
+    id: 'rec-2341',
+    dataset: 'Construction Zones',
+    issue: 'Missing labels',
+    severity: 'High' as const,
+    action: 'Complete',
+  },
+  {
+    id: 'rec-6677',
+    dataset: 'Pedestrian Detection',
+    issue: 'Schema violation',
+    severity: 'Low' as const,
+    action: 'Fix',
+  },
 ] as const
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -195,7 +267,9 @@ function HealthSummaryCards() {
           </div>
           <p className="text-xs text-muted-foreground">
             Cohen&apos;s kappa:{' '}
-            <span className="font-semibold tabular-nums text-foreground">0.84</span>
+            <span className="font-semibold tabular-nums text-foreground">
+              0.84
+            </span>
           </p>
         </CardContent>
       </Card>
@@ -245,11 +319,15 @@ function HealthSummaryCards() {
           <div className="flex gap-3 text-xs text-muted-foreground">
             <span>
               Self-reported:{' '}
-              <span className="font-semibold tabular-nums text-foreground">93.1%</span>
+              <span className="font-semibold tabular-nums text-foreground">
+                93.1%
+              </span>
             </span>
             <span>
               Composite:{' '}
-              <span className="font-semibold tabular-nums text-foreground">89.7%</span>
+              <span className="font-semibold tabular-nums text-foreground">
+                89.7%
+              </span>
             </span>
           </div>
         </CardContent>
@@ -272,9 +350,13 @@ function HealthSummaryCards() {
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
-            <span className="font-semibold tabular-nums text-foreground">176</span>{' '}
+            <span className="font-semibold tabular-nums text-foreground">
+              176
+            </span>{' '}
             resolved of{' '}
-            <span className="font-semibold tabular-nums text-foreground">186</span>{' '}
+            <span className="font-semibold tabular-nums text-foreground">
+              186
+            </span>{' '}
             found
           </p>
         </CardContent>
@@ -396,9 +478,7 @@ function DriftDetection() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-2xl font-bold tabular-nums">0.023</p>
-            <p className="text-xs text-muted-foreground">
-              Overall Drift Score
-            </p>
+            <p className="text-xs text-muted-foreground">Overall Drift Score</p>
           </div>
           <Badge
             variant="outline"
@@ -434,7 +514,7 @@ function DriftDetection() {
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className={`h-full rounded-full ${driftBarColor(ds.status)} transition-all`}
-                    style={{ width: `${pct}%` }}
+                    style={{ width: `${String(pct)}%` }}
                   />
                 </div>
               </div>
@@ -502,13 +582,13 @@ function ConfidenceCalibration() {
                   <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-blue-500 transition-all"
-                      style={{ width: `${predW}%` }}
+                      style={{ width: `${String(predW)}%` }}
                     />
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-emerald-500 transition-all"
-                      style={{ width: `${actW}%` }}
+                      style={{ width: `${String(actW)}%` }}
                     />
                   </div>
                 </div>

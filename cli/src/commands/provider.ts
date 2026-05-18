@@ -7,10 +7,16 @@ import { getRuntimeOptions, outputMode, requireClient } from './context.js'
 interface ProviderHealthOptions {
   providerBaseUrl?: string
   authRef?: string
+  modelId?: string
 }
 
-export function registerProviderCommands(program: Command, runtime: CliRuntimeOptions): void {
-  const provider = program.command('provider').description('Provider discovery and health')
+export function registerProviderCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
+  const provider = program
+    .command('provider')
+    .description('Provider discovery and health')
 
   provider
     .command('list')
@@ -29,8 +35,15 @@ export function registerProviderCommands(program: Command, runtime: CliRuntimeOp
   provider
     .command('health <providerType>')
     .description('Check provider health')
-    .option('--provider-base-url <url>', 'Override provider base URL for the health check')
-    .option('--auth-ref <env-var>', 'Override provider auth env var name for the health check')
+    .option(
+      '--provider-base-url <url>',
+      'Override provider base URL for the health check',
+    )
+    .option(
+      '--auth-ref <env-var>',
+      'Override provider auth env var name for the health check',
+    )
+    .option('--model-id <id>', 'Model identifier to validate')
     .action(async function (this: Command, providerType: string) {
       await runProviderHealth(
         getRuntimeOptions(program, runtime),
@@ -56,13 +69,13 @@ export function registerProviderCommands(program: Command, runtime: CliRuntimeOp
 
 async function runProviderList(options: CliRuntimeOptions): Promise<void> {
   const client = await requireClient(options)
-  const response = await client.getJson<Record<string, unknown>>('/api/v1/providers')
+  const response = await client.getJson('/api/v1/providers')
   await emit(response, outputMode(options))
 }
 
 async function runProviderScan(options: CliRuntimeOptions): Promise<void> {
   const client = await requireClient(options)
-  const response = await client.postJson<Record<string, unknown>>('/api/v1/providers/scan', {})
+  const response = await client.postJson('/api/v1/providers/scan', {})
   await emit(response, outputMode(options))
 }
 
@@ -79,8 +92,11 @@ async function runProviderHealth(
   if (query.authRef?.trim()) {
     search.set('auth_ref', query.authRef.trim())
   }
+  if (query.modelId?.trim()) {
+    search.set('model_id', query.modelId.trim())
+  }
   const suffix = search.size > 0 ? `?${search.toString()}` : ''
-  const response = await client.getJson<Record<string, unknown>>(
+  const response = await client.getJson(
     `/api/v1/providers/health/${providerType}${suffix}`,
   )
   await emit(response, outputMode(options))
@@ -91,7 +107,7 @@ async function runProviderModels(
   providerType: string,
 ): Promise<void> {
   const client = await requireClient(options)
-  const response = await client.getJson<Record<string, unknown>>(
+  const response = await client.getJson(
     `/api/v1/providers/models/${providerType}`,
   )
   await emit(response, outputMode(options))
@@ -99,6 +115,6 @@ async function runProviderModels(
 
 async function runProviderHfAuth(options: CliRuntimeOptions): Promise<void> {
   const client = await requireClient(options)
-  const response = await client.getJson<Record<string, unknown>>('/api/v1/providers/hf/auth')
+  const response = await client.getJson('/api/v1/providers/hf/auth')
   await emit(response, outputMode(options))
 }

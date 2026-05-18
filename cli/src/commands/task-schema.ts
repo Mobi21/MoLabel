@@ -16,8 +16,13 @@ import {
 
 type JsonObject = Record<string, unknown>
 
-export function registerTaskSchemaCommands(program: Command, runtime: CliRuntimeOptions): void {
-  const taskSchema = program.command('task-schema').description('Task schema operations')
+export function registerTaskSchemaCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
+  const taskSchema = program
+    .command('task-schema')
+    .description('Task schema operations')
 
   taskSchema
     .command('list')
@@ -73,7 +78,10 @@ export function registerTaskSchemaCommands(program: Command, runtime: CliRuntime
         title?: string
         workspaceId?: string
       }>()
-      await runTaskSchemaCreate(getRuntimeOptions(program, runtime), commandOptions)
+      await runTaskSchemaCreate(
+        getRuntimeOptions(program, runtime),
+        commandOptions,
+      )
     })
 }
 
@@ -117,16 +125,26 @@ async function runTaskSchemaCreate(
   const client = await requireClient(options, 'task-schema create')
   let body: JsonObject
   if (commandOptions.file) {
-    body = await readTaskSchemaFile(options, commandOptions.file, commandOptions.workspaceId)
+    body = await readTaskSchemaFile(
+      options,
+      commandOptions.file,
+      commandOptions.workspaceId,
+    )
   } else {
     body = {
-      workspace_id: await resolveWorkspaceId(options, commandOptions.workspaceId),
+      workspace_id: await resolveWorkspaceId(
+        options,
+        commandOptions.workspaceId,
+      ),
       task_schema_slug: commandOptions.slug,
       task_type: commandOptions.taskType,
       title: commandOptions.title,
       instructions: commandOptions.instructions,
       blind_review_policy: commandOptions.blindReviewPolicy,
-      label_fields: parseJsonOption(commandOptions.labelFieldsJson, 'label-fields-json'),
+      label_fields: parseJsonOption(
+        commandOptions.labelFieldsJson,
+        'label-fields-json',
+      ),
       required_fields: parseJsonOption(
         commandOptions.requiredFieldsJson,
         'required-fields-json',
@@ -143,7 +161,10 @@ async function runTaskSchemaCreate(
         commandOptions.recordSelectorJson,
         'record-selector-json',
       ),
-      overlap_policy: parseJsonOption(commandOptions.overlapPolicyJson, 'overlap-policy-json'),
+      overlap_policy: parseJsonOption(
+        commandOptions.overlapPolicyJson,
+        'overlap-policy-json',
+      ),
       adjudication_policy: parseJsonOption(
         commandOptions.adjudicationPolicyJson,
         'adjudication-policy-json',
@@ -161,10 +182,16 @@ async function runTaskSchemaCreate(
     requireField(body, 'task_type', 'task-schema create')
     requireField(body, 'title', 'task-schema create')
     if (!body.workspace_id) {
-      body.workspace_id = await resolveWorkspaceId(options, commandOptions.workspaceId)
+      body.workspace_id = await resolveWorkspaceId(
+        options,
+        commandOptions.workspaceId,
+      )
     }
   } else if (!body.workspace_id) {
-    body.workspace_id = await resolveWorkspaceId(options, commandOptions.workspaceId)
+    body.workspace_id = await resolveWorkspaceId(
+      options,
+      commandOptions.workspaceId,
+    )
   }
 
   const response = await client.postJson('/api/v1/task-schemas', body)
@@ -181,26 +208,30 @@ async function resolveWorkspaceId(
 
   const workspace = await detectWorkspaceRoot(options.workspaceRoot)
   if (!workspace.manifestPath) {
-    throw new Error('workspace_id is required when no workspace manifest is available')
+    throw new Error(
+      'workspace_id is required when no workspace manifest is available',
+    )
   }
 
   const manifest = await readFile(workspace.manifestPath, 'utf8')
   const parsed = parseYaml(manifest) as { workspace_id?: string } | null
   const workspaceId = parsed?.workspace_id
   if (!workspaceId) {
-    throw new Error('workspace_id is required; pass --workspace-id or bootstrap a workspace')
+    throw new Error(
+      'workspace_id is required; pass --workspace-id or bootstrap a workspace',
+    )
   }
-  return String(workspaceId)
+  return workspaceId
 }
 
-async function readJsonFile<T extends JsonObject>(path: string): Promise<T> {
+async function readJsonFile(path: string): Promise<JsonObject> {
   const raw = await readInputText({
     file: resolve(path),
     text: undefined,
     errorMessage: `Unable to read JSON file: ${path}`,
   })
   try {
-    return JSON.parse(raw) as T
+    return JSON.parse(raw) as JsonObject
   } catch (error) {
     throw new Error(`Invalid JSON in ${path}: ${(error as Error).message}`)
   }
@@ -213,7 +244,7 @@ async function readTaskSchemaFile(
 ): Promise<JsonObject> {
   const lowerExt = extname(path).toLowerCase()
   if (lowerExt !== '.yaml' && lowerExt !== '.yml') {
-    return readJsonFile<JsonObject>(path)
+    return readJsonFile(path)
   }
 
   const raw = await readInputText({
@@ -237,8 +268,12 @@ async function readTaskSchemaFile(
     instructions: readString(parsed.instructions),
     record_selector: parsed.record_selector,
     label_fields: Array.isArray(parsed.label_fields) ? parsed.label_fields : [],
-    required_fields: Array.isArray(parsed.required_fields) ? parsed.required_fields : [],
-    optional_fields: Array.isArray(parsed.optional_fields) ? parsed.optional_fields : [],
+    required_fields: Array.isArray(parsed.required_fields)
+      ? parsed.required_fields
+      : [],
+    optional_fields: Array.isArray(parsed.optional_fields)
+      ? parsed.optional_fields
+      : [],
     blind_review_policy: readString(parsed.blind_review_policy),
     overlap_policy: parsed.overlap_policy,
     adjudication_policy: parsed.adjudication_policy,
@@ -247,23 +282,36 @@ async function readTaskSchemaFile(
       : [],
     default_model_profile_id: readString(parsed.default_model_profile_id),
     export_mapping: parsed.export_mapping,
-    file_path: path.includes('workbench/') ? path.slice(path.indexOf('workbench/')) : undefined,
+    file_path: path.includes('workbench/')
+      ? path.slice(path.indexOf('workbench/'))
+      : undefined,
   }
 }
 
-function parseJsonOption<T>(value: string | undefined, flagName: string): T | undefined {
+function parseJsonOption(value: string | undefined, flagName: string): unknown {
   if (!value) {
     return undefined
   }
   try {
-    return JSON.parse(value) as T
+    return JSON.parse(value) as unknown
   } catch (error) {
-    throw new Error(`Invalid JSON for --${flagName}: ${(error as Error).message}`)
+    throw new Error(
+      `Invalid JSON for --${flagName}: ${(error as Error).message}`,
+    )
   }
 }
 
-function requireField(body: JsonObject, key: string, commandName: string): void {
-  if (!(key in body) || body[key] === undefined || body[key] === null || body[key] === '') {
+function requireField(
+  body: JsonObject,
+  key: string,
+  commandName: string,
+): void {
+  if (
+    !(key in body) ||
+    body[key] === undefined ||
+    body[key] === null ||
+    body[key] === ''
+  ) {
     throw new Error(`${commandName} requires ${key}`)
   }
 }

@@ -4,7 +4,7 @@ This benchmark is a grounded micro-benchmark built from official CLINC/OOS
 examples. It keeps the paper task structure intact while staying small enough
 to run repeatedly.
 
-The current MoLabel labeling engine for live benchmark runs is `MiniMax 2.7`
+The current MoLabel labeling engine for live benchmark runs is `MiniMax 2.7 highspeed`
 through the Anthropic-compatible adapter path.
 
 Evaluation modes:

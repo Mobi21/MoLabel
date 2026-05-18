@@ -82,8 +82,8 @@ def test_clinc150_grounded_fixture_contract() -> None:
     }
     assert {tax.tax_id for tax in bundle.metrics.tax_definitions} == {
         "model_tax",
-        "workflow_tax",
-        "review_lift",
+        "autorun_tax",
+        "review_tax",
         "operator_tax",
     }
 

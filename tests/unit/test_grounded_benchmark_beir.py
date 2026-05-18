@@ -11,12 +11,7 @@ from molabel.core.quality.grounded_benchmarks import (
     score_grounded_stage,
 )
 
-ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "benchmarks-grounded"
-    / "beir"
-)
+ROOT = Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks-grounded" / "beir"
 
 
 def test_beir_fixture_scores_graded_rankings_with_ndcg() -> None:
@@ -43,9 +38,9 @@ def test_beir_fixture_scores_graded_rankings_with_ndcg() -> None:
         variant="paper_direct",
     )
     assert oracle.overall_score == pytest.approx(1.0)
-    assert any(
-        max(row["labels"]["qrels"].values()) > 1 for row in gold_rows
-    ), "BEIR slice should preserve graded qrels, not binary set overlap"
+    assert any(max(row["labels"]["qrels"].values()) > 1 for row in gold_rows), (
+        "BEIR slice should preserve graded qrels, not binary set overlap"
+    )
 
     degraded_predictions = deepcopy(gold_rows)
     degraded_predictions[0]["labels"]["ranking"]["results"][0]["result_id"] = "d1"
@@ -60,4 +55,3 @@ def test_beir_fixture_scores_graded_rankings_with_ndcg() -> None:
     )
     assert degraded.overall_score < oracle.overall_score
     assert degraded.overall_score > 0.0
-

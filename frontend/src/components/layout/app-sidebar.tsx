@@ -9,6 +9,7 @@ import {
   Eye,
   Scale,
   Shield,
+  CircuitBoard,
   Filter,
   Package,
   Puzzle,
@@ -75,14 +76,13 @@ const navGroups: NavGroup[] = [
     label: 'Quality',
     items: [
       { title: 'Quality', url: '/quality', icon: Shield },
+      { title: 'Operations', url: '/operations', icon: CircuitBoard },
       { title: 'Curation', url: '/curation', icon: Filter },
     ],
   },
   {
     label: 'Output',
-    items: [
-      { title: 'Exports & Releases', url: '/exports', icon: Package },
-    ],
+    items: [{ title: 'Exports & Releases', url: '/exports', icon: Package }],
   },
   {
     label: 'System',

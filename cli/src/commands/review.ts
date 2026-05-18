@@ -9,7 +9,10 @@ import { buildClient, getRuntimeOptions, outputMode } from './context.js'
 
 type JsonObject = Record<string, unknown>
 
-export function registerReviewCommands(program: Command, runtime: CliRuntimeOptions): void {
+export function registerReviewCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
   const review = program.command('review').description('Review operations')
 
   review
@@ -113,7 +116,7 @@ async function runReviewSubmit(
   autoClaimNext?: boolean,
 ): Promise<void> {
   const client = await requireClient(options, 'review submit')
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     `/api/v1/review-tasks/${encodeURIComponent(taskId)}/submit`,
     {
       labels: await readLabelsPayload(labelsJson, labelsFile),
@@ -125,18 +128,24 @@ async function runReviewSubmit(
   await emit(response, outputMode(options))
 }
 
-async function runReviewSkip(options: CliRuntimeOptions, taskId: string): Promise<void> {
+async function runReviewSkip(
+  options: CliRuntimeOptions,
+  taskId: string,
+): Promise<void> {
   const client = await requireClient(options, 'review skip')
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     `/api/v1/review-tasks/${encodeURIComponent(taskId)}/skip`,
     {},
   )
   await emit(response, outputMode(options))
 }
 
-async function runReviewRelease(options: CliRuntimeOptions, taskId: string): Promise<void> {
+async function runReviewRelease(
+  options: CliRuntimeOptions,
+  taskId: string,
+): Promise<void> {
   const client = await requireClient(options, 'review release')
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     `/api/v1/review-tasks/${encodeURIComponent(taskId)}/release`,
     {},
   )
@@ -150,7 +159,7 @@ async function runReviewDraft(
   labelsFile?: string,
 ): Promise<void> {
   const client = await requireClient(options, 'review draft')
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     `/api/v1/review-tasks/${encodeURIComponent(taskId)}/draft`,
     {
       draft_labels: await readLabelsPayload(labelsJson, labelsFile),
@@ -164,7 +173,7 @@ async function runReviewRevealAi(
   taskId: string,
 ): Promise<void> {
   const client = await requireClient(options, 'review reveal-ai')
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     `/api/v1/review-tasks/${encodeURIComponent(taskId)}/reveal-ai`,
     {},
   )
@@ -180,7 +189,7 @@ async function runReviewCorrect(
   rationale?: string,
 ): Promise<void> {
   const client = await requireClient(options, 'review correct')
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     `/api/v1/review-tasks/${encodeURIComponent(taskId)}/correct`,
     {
       labels: await readLabelsPayload(labelsJson, labelsFile),

@@ -3,7 +3,7 @@ track: grounded
 name: FEVEROUS Grounded Benchmark
 authority_pack: true
 reference_workspace_root: ../workbench
-current_labeling_engine: MiniMax 2.7
+current_labeling_engine: MiniMax 2.7 highspeed
 benchmark_profiles:
   - canonical
   - operator-primary
@@ -45,7 +45,7 @@ evaluation_fields:
 default_model_profile:
   provider_type: anthropic
   provider_name: MiniMax
-  model_identifier: minimax-2.7
+  model_identifier: MiniMax-M2.7-highspeed
   sdk_stack: anthropic_sdk
   agent_role: proposer
 requires_dataset_download: false

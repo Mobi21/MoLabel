@@ -67,8 +67,7 @@ async def test_deletion_safety(
     client: InstrumentedClient,
     ctx: TestContext,
 ) -> None:
-    """T9-06: Deletion of resources respects FK constraints and returns proper errors.
-    """
+    """T9-06: Deletion respects FK constraints and returns proper errors."""
 
     ids = await _setup(client)
     workspace_id = ids["workspace_id"]
