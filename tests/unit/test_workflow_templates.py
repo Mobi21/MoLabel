@@ -15,9 +15,9 @@ from molabel.core.workflow.templates import (
 class TestTemplateRegistry:
     """Tests for the template listing and loading functions."""
 
-    def test_list_templates_returns_six(self) -> None:
+    def test_list_templates_returns_ten(self) -> None:
         templates = list_templates()
-        assert len(templates) == 6
+        assert len(templates) == 10
 
     def test_all_templates_have_required_keys(self) -> None:
         for t in list_templates():
@@ -25,6 +25,10 @@ class TestTemplateRegistry:
             assert "name" in t
             assert "description" in t
             assert "file" in t
+            assert "version" in t
+            assert "task_family" in t
+            assert "capabilities" in t
+            assert "validated_by_benchmarks" in t
 
     def test_get_template_path_exists(self) -> None:
         for t in list_templates():
@@ -111,3 +115,26 @@ class TestSpecificTemplates:
         step_types = [s.type for s in wf.steps]
         assert "loop" in step_types
         assert "data_sample" in step_types
+
+    def test_grounded_rationale_moderation(self) -> None:
+        wf = parse_workflow_yaml(
+            get_template_yaml("grounded_rationale_moderation"), from_string=True
+        )
+        step_types = [s.type for s in wf.steps]
+        assert "agent_run" in step_types
+        assert "human_review" in step_types
+        assert "human_adjudication" in step_types
+
+    def test_psychology_survey_codebook(self) -> None:
+        wf = parse_workflow_yaml(
+            get_template_yaml("psychology_survey_codebook"), from_string=True
+        )
+        step_types = [s.type for s in wf.steps]
+        metadata = wf.metadata["metadata"]
+        assert metadata["domain"] == "psychology_research"
+        assert metadata["canonical_model"] == "MiniMax-M2.7-highspeed"
+        assert "human_calibration" in step_types
+        assert "agent_run" in step_types
+        assert "agreement_analysis" in step_types
+        assert "human_adjudication" in step_types
+        assert "release_validation" in step_types

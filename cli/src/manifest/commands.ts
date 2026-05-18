@@ -63,6 +63,21 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       flags: [{ name: 'path', description: 'Workspace root to bootstrap' }],
     },
     {
+      name: 'workspace diff',
+      group: 'workspace',
+      description: 'Show semantic workspace proposals for a run',
+    },
+    {
+      name: 'workspace apply',
+      group: 'workspace',
+      description: 'Accept proposed workspace changes for a run',
+    },
+    {
+      name: 'workspace reject',
+      group: 'workspace',
+      description: 'Reject proposed workspace changes for a run',
+    },
+    {
       name: 'provider list',
       group: 'provider',
       description: 'List discovered providers',
@@ -77,8 +92,15 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       group: 'provider',
       description: 'Check provider health',
       flags: [
-        { name: '--provider-base-url', description: 'Override provider base URL' },
-        { name: '--auth-ref', description: 'Override provider auth env var name' },
+        {
+          name: '--provider-base-url',
+          description: 'Override provider base URL',
+        },
+        {
+          name: '--auth-ref',
+          description: 'Override provider auth env var name',
+        },
+        { name: '--model-id', description: 'Model identifier to validate' },
       ],
     },
     {
@@ -131,9 +153,19 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       description: 'Test model profile connectivity',
     },
     {
+      name: 'benchmark facts',
+      group: 'benchmark',
+      description:
+        'Show persisted benchmark run facts for a workflow execution',
+      flags: [
+        { name: 'workflow-execution-id', description: 'Workflow execution ID' },
+      ],
+    },
+    {
       name: 'benchmark inspect',
       group: 'benchmark',
-      description: 'Inspect a benchmark authority pack or legacy grounded fixture',
+      description:
+        'Inspect a benchmark authority pack or legacy grounded fixture',
     },
     {
       name: 'benchmark verify-pack',
@@ -145,19 +177,28 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       name: 'benchmark fetch-source',
       group: 'benchmark',
       description: 'Materialize or summarize the benchmark source payload',
-      flags: [{ name: '--output-dir', description: 'Copy source payload to this directory' }],
+      flags: [
+        {
+          name: '--output-dir',
+          description: 'Copy source payload to this directory',
+        },
+      ],
     },
     {
       name: 'benchmark score',
       group: 'benchmark',
       description: 'Summarize a benchmark run against a pack',
-      flags: [{ name: '--run', description: 'Run directory containing summary.json' }],
+      flags: [
+        { name: '--run', description: 'Run directory containing summary.json' },
+      ],
     },
     {
       name: 'benchmark report',
       group: 'benchmark',
       description: 'Render a benchmark report',
-      flags: [{ name: '--run', description: 'Run directory containing summary.json' }],
+      flags: [
+        { name: '--run', description: 'Run directory containing summary.json' },
+      ],
     },
     {
       name: 'benchmark compare',
@@ -211,9 +252,25 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
     {
       name: 'workflow create',
       group: 'workflow',
-      description: 'Create a workflow definition from JSON or YAML',
+      description:
+        'Create a workflow definition from JSON, YAML, or a built-in template',
       flags: [
         { name: '--file', description: 'Workflow definition file' },
+        { name: '--template', description: 'Built-in workflow template ID' },
+        { name: '--workspace-id', description: 'Workspace ID override' },
+        { name: '--name', description: 'Workflow name' },
+        { name: '--slug', description: 'Workflow slug' },
+        { name: '--description', description: 'Workflow description' },
+        { name: '--file-path', description: 'Workspace file path' },
+      ],
+    },
+    {
+      name: 'workflow new',
+      group: 'workflow',
+      description: 'Create a workflow from a built-in template, JSON, or YAML',
+      flags: [
+        { name: '--file', description: 'Workflow definition file' },
+        { name: '--template', description: 'Built-in workflow template ID' },
         { name: '--workspace-id', description: 'Workspace ID override' },
         { name: '--name', description: 'Workflow name' },
         { name: '--slug', description: 'Workflow slug' },
@@ -279,7 +336,8 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
     {
       name: 'review skip',
       group: 'review',
-      description: 'Skip a claimed review task and release it back to the queue',
+      description:
+        'Skip a claimed review task and release it back to the queue',
     },
     {
       name: 'review release',
@@ -327,6 +385,11 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       description: 'Start an agent run',
     },
     {
+      name: 'agent-run inspect',
+      group: 'agent-run',
+      description: 'Inspect an agent run',
+    },
+    {
       name: 'agent-run compare',
       group: 'agent-run',
       description: 'Start a comparison run',
@@ -357,6 +420,11 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       description: 'Create a release',
     },
     {
+      name: 'release certify',
+      group: 'release',
+      description: 'Create a release from benchmark certification evidence',
+    },
+    {
       name: 'artifact read',
       group: 'artifact',
       description: 'Read a canonical artifact from disk',
@@ -370,6 +438,51 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       name: 'artifact write',
       group: 'artifact',
       description: 'Write a canonical artifact safely',
+    },
+    {
+      name: 'artifact propose',
+      group: 'artifact',
+      description: 'Create a durable semantic diff proposal',
+    },
+    {
+      name: 'artifact trace',
+      group: 'artifact',
+      description: 'Trace a durable artifact proposal',
+    },
+    {
+      name: 'artifact decide',
+      group: 'artifact',
+      description: 'Accept or reject a semantic diff proposal',
+    },
+    {
+      name: 'audit timeline',
+      group: 'audit',
+      description: 'Show the workspace audit timeline',
+    },
+    {
+      name: 'audit explain',
+      group: 'audit',
+      description: 'Explain audit events related to a record',
+    },
+    {
+      name: 'run failures',
+      group: 'run',
+      description: 'Show failure details for a run',
+    },
+    {
+      name: 'run retry',
+      group: 'run',
+      description: 'Prepare a retry request for a failed run',
+    },
+    {
+      name: 'run repair-plan',
+      group: 'run',
+      description: 'Produce a deterministic repair plan for a failed run',
+    },
+    {
+      name: 'codebook test',
+      group: 'codebook',
+      description: 'Validate a local codebook artifact',
     },
     {
       name: 'skill install',

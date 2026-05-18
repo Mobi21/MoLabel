@@ -30,7 +30,11 @@ async def test_ai_reveal_tracking(
     """
     with checkpoint(ctx, "workspace_setup"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-ai-reveal-tracking-ws", "workspace_name": "ai-reveal-tracking-ws"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-ai-reveal-tracking-ws",
+                "workspace_name": "ai-reveal-tracking-ws",
+            },
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]
@@ -55,7 +59,6 @@ async def test_ai_reveal_tracking(
                     {"text": "First review record for reveal tracking."},
                     {"text": "Second review record for reveal tracking."},
                 ],
-                "source_type": "jsonl",
             },
         )
         assert import_resp.status_code in (200, 201, 202)
@@ -116,7 +119,9 @@ async def test_ai_reveal_tracking(
             assert body_b["task"].get("ai_revealed") is False
 
             # Reveal AI
-            reveal_resp = await client.post(f"/api/v1/review-tasks/{task_b_id}/reveal-ai")
+            reveal_resp = await client.post(
+                f"/api/v1/review-tasks/{task_b_id}/reveal-ai"
+            )
             # 200 if agent output exists, 409 if policy blocks it or no agent ran
             if reveal_resp.status_code == 200:
                 revealed_task = reveal_resp.json()["task"]

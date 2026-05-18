@@ -6,8 +6,8 @@
  * with the plugin identifier for debugging.
  */
 
-import { Component } from "react"
-import type { ErrorInfo, ReactNode } from "react"
+import { Component } from 'react'
+import type { ErrorInfo, ReactNode } from 'react'
 
 // ---------------------------------------------------------------------------
 // Props & State
@@ -56,7 +56,7 @@ export class PluginErrorBoundary extends Component<
   override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error(
       `[MoLabel] Plugin component error in "${this.props.pluginId}"` +
-        (this.props.pluginVersion ? ` v${this.props.pluginVersion}` : ""),
+        (this.props.pluginVersion ? ` v${this.props.pluginVersion}` : ''),
       error,
       errorInfo,
     )
@@ -77,13 +77,13 @@ export class PluginErrorBoundary extends Component<
             Plugin Error
           </h4>
           <p className="text-sm text-muted-foreground">
-            The plugin component{" "}
+            The plugin component{' '}
             <code className="rounded bg-muted px-1 py-0.5 text-xs">
               {this.props.pluginId}
             </code>
             {this.props.pluginVersion && (
               <span> (v{this.props.pluginVersion})</span>
-            )}{" "}
+            )}{' '}
             encountered an error and could not render.
           </p>
           {this.state.error && (

@@ -37,9 +37,9 @@ What should be replaced:
 
 Current engine note:
 
-- MoLabel currently uses `MiniMax 2.7` as the labeling engine in benchmark and
+- MoLabel currently uses `MiniMax 2.7 highspeed` as the labeling engine in benchmark and
   real-LLM paths through the Anthropic-compatible adapter path. Grounded
-  benchmark docs and harness outputs should keep naming `MiniMax 2.7`
+  benchmark docs and harness outputs should keep naming `MiniMax 2.7 highspeed`
   explicitly until the live engine changes.
 
 ## 2. Current Repo Contract
@@ -330,7 +330,7 @@ The current three-way score should be replaced by a five-stage model.
 
 `paper_model`
 
-- Run `MiniMax 2.7` directly against the paper-faithful task contract.
+- Run `MiniMax 2.7 highspeed` directly against the paper-faithful task contract.
 - Use the paper’s label and evidence structure.
 
 `molabel_model`
@@ -391,7 +391,7 @@ The following should remain hard failures regardless of final label quality:
 - relying on a prebuilt workspace in operator mode,
 - producing incomplete benchmark outputs,
 - or running with an undeclared labeling engine when the benchmark expects
-  `MiniMax 2.7`.
+  `MiniMax 2.7 highspeed`.
 
 ## 8. CLI-First Operator Benchmark Loop
 

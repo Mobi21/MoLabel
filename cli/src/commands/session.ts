@@ -1,6 +1,9 @@
 import type { Command } from 'commander'
 
-import { extractSessionTokenFromSetCookie, readSetCookieHeaders } from '../client/session.js'
+import {
+  extractSessionTokenFromSetCookie,
+  readSetCookieHeaders,
+} from '../client/session.js'
 import { getDefaultConfigPath, loadConfig, saveConfig } from '../config.js'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
@@ -12,7 +15,10 @@ import {
   resolveWorkspaceId,
 } from './context.js'
 
-export function registerSessionCommands(program: Command, runtime: CliRuntimeOptions): void {
+export function registerSessionCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
   const session = program.command('session').description('Session operations')
   session
     .command('whoami')
@@ -52,7 +58,12 @@ async function runSessionWhoami(options: CliRuntimeOptions): Promise<void> {
   const client = await buildClient(options)
   if (!client) {
     await emit(
-      { error: { code: 'NO_BACKEND', message: 'No backend base URL configured' } },
+      {
+        error: {
+          code: 'NO_BACKEND',
+          message: 'No backend base URL configured',
+        },
+      },
       'json',
     )
     return
@@ -67,8 +78,11 @@ async function runSessionListReviewers(
   commandOptions: { workspaceId?: string; all?: boolean },
 ): Promise<void> {
   const client = await requireBackendClient(options, 'session list-reviewers')
-  const workspaceId = await resolveWorkspaceId(options, commandOptions.workspaceId)
-  const response = await client.getJson<Record<string, unknown>[]>(
+  const workspaceId = await resolveWorkspaceId(
+    options,
+    commandOptions.workspaceId,
+  )
+  const response = await client.getJson(
     `/api/v1/reviewer-profiles${buildQuery({
       workspace_id: workspaceId,
       active_only: commandOptions.all ? 'false' : 'true',
@@ -77,12 +91,28 @@ async function runSessionListReviewers(
   await emit({ items: response }, outputMode(options))
 }
 
-async function runSessionSelect(options: CliRuntimeOptions, reviewerId: string): Promise<void> {
-  await runSessionMutation(options, '/api/v1/sessions', reviewerId, 'session_created')
+async function runSessionSelect(
+  options: CliRuntimeOptions,
+  reviewerId: string,
+): Promise<void> {
+  await runSessionMutation(
+    options,
+    '/api/v1/sessions',
+    reviewerId,
+    'session_created',
+  )
 }
 
-async function runSessionSwitch(options: CliRuntimeOptions, reviewerId: string): Promise<void> {
-  await runSessionMutation(options, '/api/v1/sessions/switch', reviewerId, 'session_switched')
+async function runSessionSwitch(
+  options: CliRuntimeOptions,
+  reviewerId: string,
+): Promise<void> {
+  await runSessionMutation(
+    options,
+    '/api/v1/sessions/switch',
+    reviewerId,
+    'session_switched',
+  )
 }
 
 async function runSessionMutation(
@@ -110,7 +140,9 @@ async function runSessionMutation(
         ...current,
         ...(runtimeConfig.baseUrl ? { baseUrl: runtimeConfig.baseUrl } : {}),
         sessionToken,
-        ...(runtimeConfig.workspaceRoot ? { workspaceRoot: runtimeConfig.workspaceRoot } : {}),
+        ...(runtimeConfig.workspaceRoot
+          ? { workspaceRoot: runtimeConfig.workspaceRoot }
+          : {}),
       },
       configPath,
     )

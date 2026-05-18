@@ -169,7 +169,7 @@ The model benchmark path:
 2. loads the authority/scenario bundle,
 3. loads the task schema and raw records,
 4. builds a structured output schema,
-5. runs the current labeling engine, MiniMax 2.7, through the
+5. runs the current labeling engine, MiniMax 2.7 highspeed, through the
    Anthropic-compatible adapter,
 6. scores predictions against the gold rows,
 7. writes `summary.json`, `report.md`, and the evidence bundle.

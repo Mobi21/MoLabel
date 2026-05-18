@@ -30,7 +30,11 @@ async def test_malformed_input(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-malformed-input-test", "workspace_name": "Malformed Input Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-malformed-input-test",
+                "workspace_name": "Malformed Input Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

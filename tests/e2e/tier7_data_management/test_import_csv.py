@@ -29,7 +29,11 @@ async def test_import_csv(client, ctx):
     # ── Checkpoint 1: Setup workspace + dataset ──────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-csv-import-test", "workspace_name": "CSV Import Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-csv-import-test",
+                "workspace_name": "CSV Import Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

@@ -236,7 +236,11 @@ async def test_krippendorffs_alpha_ordinal_and_missing(
 
     with checkpoint(ctx, "quality_api_endpoint_agreement"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-agreement-metrics-test", "workspace_name": "Agreement Metrics Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-agreement-metrics-test",
+                "workspace_name": "Agreement Metrics Test",
+            },
         )
         assert ws_resp.status_code == 201
         agreement_resp = await client.get(

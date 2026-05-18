@@ -6,11 +6,27 @@ import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 
 import { ApiClient } from '../client/http.js'
-import { detectWorkspace, normalizeArtifactSelector, resolveArtifact } from '../workspace-context.js'
-import { getDefaultConfigPath, loadConfig, resolveConfig, saveConfig } from '../config.js'
-import type { CliConfig, CliRuntimeOptions, OutputMode, WorkspaceDetection } from '../types.js'
+import {
+  detectWorkspace,
+  normalizeArtifactSelector,
+  resolveArtifact,
+} from '../workspace-context.js'
+import {
+  getDefaultConfigPath,
+  loadConfig,
+  resolveConfig,
+  saveConfig,
+} from '../config.js'
+import type {
+  CliConfig,
+  CliRuntimeOptions,
+  OutputMode,
+  WorkspaceDetection,
+} from '../types.js'
 
-export async function loadRuntimeConfig(options: CliRuntimeOptions): Promise<CliConfig> {
+export async function loadRuntimeConfig(
+  options: CliRuntimeOptions,
+): Promise<CliConfig> {
   const configPath = options.configPath ?? getDefaultConfigPath()
   const fileConfig = await loadConfig(configPath)
   return resolveConfig(fileConfig, {
@@ -27,7 +43,9 @@ export function outputMode(options: CliRuntimeOptions): OutputMode {
   return options.json === false ? 'text' : 'json'
 }
 
-export async function buildClient(options: CliRuntimeOptions): Promise<ApiClient | null> {
+export async function buildClient(
+  options: CliRuntimeOptions,
+): Promise<ApiClient | null> {
   const config = await loadRuntimeConfig(options)
   if (!config.baseUrl) {
     return null
@@ -39,7 +57,9 @@ export async function buildClient(options: CliRuntimeOptions): Promise<ApiClient
   )
 }
 
-export async function requireClient(options: CliRuntimeOptions): Promise<ApiClient> {
+export async function requireClient(
+  options: CliRuntimeOptions,
+): Promise<ApiClient> {
   const client = await buildClient(options)
   if (!client) {
     throw new Error('This command requires --base-url or MOLABEL_BASE_URL')
@@ -47,7 +67,10 @@ export async function requireClient(options: CliRuntimeOptions): Promise<ApiClie
   return client
 }
 
-export async function safeGetJson<T>(client: ApiClient, path: string): Promise<T | null> {
+export async function safeGetJson<T>(
+  client: ApiClient,
+  path: string,
+): Promise<T | null> {
   try {
     return await client.getJson<T>(path)
   } catch {
@@ -86,8 +109,11 @@ export async function readWorkspaceManifest(
   if (!raw) {
     return null
   }
-  const parsed = parseYaml(raw)
-  return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+  const parsed: unknown = parseYaml(raw)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null
+  }
+  return parsed as Record<string, unknown>
 }
 
 export async function resolveWorkspaceId(
@@ -104,7 +130,9 @@ export async function resolveWorkspaceId(
     readStringField(manifest?.workspaceId) ??
     readStringField(manifest?.id)
   if (!workspaceId) {
-    throw new Error('Workspace ID is required. Pass --workspace-id or run inside a workspace with workbench.project.yaml')
+    throw new Error(
+      'Workspace ID is required. Pass --workspace-id or run inside a workspace with workbench.project.yaml',
+    )
   }
   return workspaceId
 }
@@ -136,7 +164,9 @@ export async function listLocalVersionedArtifacts(
   directory: string,
 ): Promise<Array<Record<string, string>>> {
   const fullDirectory = join(rootDir, directory)
-  const entries = await readdir(fullDirectory, { withFileTypes: true }).catch(() => [])
+  const entries = await readdir(fullDirectory, { withFileTypes: true }).catch(
+    () => [],
+  )
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.yaml'))
     .map((entry) => ({
@@ -149,13 +179,14 @@ export async function resolveWorkflowRemote(
   client: ApiClient,
   selector: string,
 ): Promise<{ workflow_id: string; workflow_slug?: string }> {
-  const workflows = await client.getJson<{ items?: Array<Record<string, unknown>> }>(
-    '/api/v1/workflows',
-  )
+  const workflows = await client.getJson<{
+    items?: Array<Record<string, unknown>>
+  }>('/api/v1/workflows')
   const items = workflows.items ?? []
   const normalized = selector.trim()
   const found = items.find((item) => {
-    const workflowId = readStringField(item.workflow_id) ?? readStringField(item.id)
+    const workflowId =
+      readStringField(item.workflow_id) ?? readStringField(item.id)
     const workflowSlug = readStringField(item.workflow_slug)
     return workflowId === normalized || workflowSlug === normalized
   })
@@ -165,7 +196,8 @@ export async function resolveWorkflowRemote(
   }
 
   const resolved: { workflow_id: string; workflow_slug?: string } = {
-    workflow_id: readStringField(found.workflow_id) ?? readStringField(found.id) ?? '',
+    workflow_id:
+      readStringField(found.workflow_id) ?? readStringField(found.id) ?? '',
   }
   if (typeof found.workflow_slug === 'string') {
     resolved.workflow_slug = found.workflow_slug
@@ -192,13 +224,19 @@ export function normalizeArtifactKindForApi(kind: string): string {
   return kind
 }
 
-export { normalizeArtifactSelector, resolveArtifact } from '../workspace-context.js'
+export {
+  normalizeArtifactSelector,
+  resolveArtifact,
+} from '../workspace-context.js'
 
 export function readStringField(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-export function getRuntimeOptions(program: import('commander').Command, runtime: CliRuntimeOptions): CliRuntimeOptions {
+export function getRuntimeOptions(
+  program: import('commander').Command,
+  runtime: CliRuntimeOptions,
+): CliRuntimeOptions {
   const root = program.opts<{
     baseUrl?: string
     workspace?: string
@@ -234,7 +272,9 @@ export function getRuntimeOptions(program: import('commander').Command, runtime:
   return result
 }
 
-export async function detectWorkspaceRoot(path?: string): Promise<WorkspaceDetection> {
+export async function detectWorkspaceRoot(
+  path?: string,
+): Promise<WorkspaceDetection> {
   return detectWorkspace(path)
 }
 
@@ -256,5 +296,9 @@ export async function resolveArtifactPath(
   kind: string,
   selector: string,
 ): Promise<Awaited<ReturnType<typeof resolveArtifact>>> {
-  return resolveArtifact(workspaceRoot, kind, normalizeArtifactSelector(selector))
+  return resolveArtifact(
+    workspaceRoot,
+    kind,
+    normalizeArtifactSelector(selector),
+  )
 }

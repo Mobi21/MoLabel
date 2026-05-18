@@ -522,7 +522,8 @@ export const mockActivity: ActivityItem[] = [
   {
     id: 'act-005',
     type: 'agent_run',
-    message: 'Gemini Edge Detector processed 850 edge cases from Adverse Weather',
+    message:
+      'Gemini Edge Detector processed 850 edge cases from Adverse Weather',
     actor: 'System',
     timestamp: '2026-03-25T22:45:00Z',
   },
@@ -544,7 +545,8 @@ export const mockActivity: ActivityItem[] = [
   {
     id: 'act-008',
     type: 'system',
-    message: 'Quality alert: label drift detected on Construction Zones (+2.3%)',
+    message:
+      'Quality alert: label drift detected on Construction Zones (+2.3%)',
     actor: 'System',
     timestamp: '2026-03-25T16:00:00Z',
   },

@@ -90,8 +90,8 @@ const modelProfiles: ModelProfile[] = [
     model: 'gpt-4o',
     icon: Sparkles,
     iconColor: 'text-emerald-500',
-    costInput: 2.50,
-    costOutput: 10.00,
+    costInput: 2.5,
+    costOutput: 10.0,
     accuracy: 0.924,
     latency: 1.2,
     status: 'connected',
@@ -103,8 +103,8 @@ const modelProfiles: ModelProfile[] = [
     model: 'claude-sonnet-4-20250514',
     icon: Brain,
     iconColor: 'text-orange-500',
-    costInput: 3.00,
-    costOutput: 15.00,
+    costInput: 3.0,
+    costOutput: 15.0,
     accuracy: 0.951,
     latency: 1.8,
     status: 'connected',
@@ -117,7 +117,7 @@ const modelProfiles: ModelProfile[] = [
     icon: Globe,
     iconColor: 'text-blue-500',
     costInput: 1.25,
-    costOutput: 5.00,
+    costOutput: 5.0,
     accuracy: 0.887,
     latency: 2.1,
     status: 'connected',
@@ -235,7 +235,7 @@ function formatAccuracy(value: number): string {
 function getAccuracyColor(value: number): string {
   if (value === 0) return 'text-muted-foreground'
   if (value >= 0.95) return 'text-emerald-500'
-  if (value >= 0.90) return 'text-emerald-400'
+  if (value >= 0.9) return 'text-emerald-400'
   if (value >= 0.85) return 'text-amber-500'
   return 'text-red-500'
 }
@@ -282,10 +282,10 @@ function computeSummary() {
   }
 
   const parts: string[] = []
-  if (completed > 0) parts.push(`${completed} completed`)
-  if (running > 0) parts.push(`${running} running`)
-  if (failed > 0) parts.push(`${failed} failed`)
-  if (queued > 0) parts.push(`${queued} queued`)
+  if (completed > 0) parts.push(`${String(completed)} completed`)
+  if (running > 0) parts.push(`${String(running)} running`)
+  if (failed > 0) parts.push(`${String(failed)} failed`)
+  if (queued > 0) parts.push(`${String(queued)} queued`)
 
   return { text: parts.join(', '), totalCost }
 }
@@ -331,7 +331,10 @@ function AgentRunsTab() {
               const StatusIcon = config.icon
 
               return (
-                <TableRow key={run.id} className={`hover:bg-muted/50 ${config.rowBg}`}>
+                <TableRow
+                  key={run.id}
+                  className={`hover:bg-muted/50 ${config.rowBg}`}
+                >
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <div className={`h-2 w-2 rounded-full ${config.dot}`} />
@@ -339,7 +342,9 @@ function AgentRunsTab() {
                         variant="outline"
                         className={`text-[11px] font-medium ${config.badge}`}
                       >
-                        <StatusIcon className={`mr-1 h-3 w-3 ${run.status === 'running' ? 'animate-spin' : ''}`} />
+                        <StatusIcon
+                          className={`mr-1 h-3 w-3 ${run.status === 'running' ? 'animate-spin' : ''}`}
+                        />
                         {run.status}
                       </Badge>
                     </div>
@@ -516,18 +521,24 @@ function ComparisonTab() {
     'text-blue-500',
   ] as const
 
-  function formatMetricValue(value: number, format: ComparisonMetric['format']): string {
+  function formatMetricValue(
+    value: number,
+    format: ComparisonMetric['format'],
+  ): string {
     switch (format) {
       case 'percent':
-        return `${value}%`
+        return `${String(value)}%`
       case 'currency':
         return `$${value.toFixed(2)}`
       case 'seconds':
-        return `${value}s`
+        return `${String(value)}s`
     }
   }
 
-  function getBestIndex(values: [number, number, number], bestIs: 'highest' | 'lowest'): number {
+  function getBestIndex(
+    values: [number, number, number],
+    bestIs: 'highest' | 'lowest',
+  ): number {
     if (bestIs === 'highest') {
       return values.indexOf(Math.max(...values))
     }
@@ -600,7 +611,7 @@ function ComparisonTab() {
 
                   return (
                     <div
-                      key={`${metric.label}-${i}`}
+                      key={`${metric.label}-${String(i)}`}
                       className={`text-center font-mono text-sm ${
                         isBest
                           ? 'font-bold text-emerald-500'
@@ -648,7 +659,9 @@ function ComparisonTab() {
                   }`}
                 >
                   <div className="mb-3 flex items-center justify-between">
-                    <span className={`text-sm font-semibold ${colorClass ?? ''}`}>
+                    <span
+                      className={`text-sm font-semibold ${colorClass ?? ''}`}
+                    >
                       {output.model}
                     </span>
                     <span className="font-mono text-xs text-muted-foreground">
@@ -700,7 +713,7 @@ function ComparisonTab() {
                           )
 
                           return (
-                            <span key={`${output.model}-${attrIdx}`}>
+                            <span key={`${output.model}-${String(attrIdx)}`}>
                               {attrIdx > 0 && ', '}
                               <span
                                 className={
@@ -754,7 +767,7 @@ function AccuracyBarChart() {
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className={`h-full rounded-full transition-all ${m.color}`}
-                style={{ width: `${m.value}%` }}
+                style={{ width: `${String(m.value)}%` }}
               />
             </div>
           </div>
@@ -768,7 +781,12 @@ function CostPerLabelChart() {
   const models = [
     { name: 'Gemini Pro', value: 0.0047, color: 'bg-blue-500', barPct: 37 },
     { name: 'GPT-4o', value: 0.0078, color: 'bg-emerald-500', barPct: 62 },
-    { name: 'Claude Sonnet', value: 0.0126, color: 'bg-orange-500', barPct: 100 },
+    {
+      name: 'Claude Sonnet',
+      value: 0.0126,
+      color: 'bg-orange-500',
+      barPct: 100,
+    },
   ]
 
   return (
@@ -791,7 +809,7 @@ function CostPerLabelChart() {
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className={`h-full rounded-full transition-all ${m.color}`}
-                style={{ width: `${m.barPct}%` }}
+                style={{ width: `${String(m.barPct)}%` }}
               />
             </div>
           </div>
@@ -822,7 +840,10 @@ function AccuracyTrendChart() {
 
   function makePath(key: 'gpt4o' | 'claude' | 'gemini'): string {
     return accuracyTrend
-      .map((pt, i) => `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(1)} ${toY(pt[key]).toFixed(1)}`)
+      .map(
+        (pt, i) =>
+          `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(1)} ${toY(pt[key]).toFixed(1)}`,
+      )
       .join(' ')
   }
 
@@ -844,7 +865,7 @@ function AccuracyTrendChart() {
       </CardHeader>
       <CardContent>
         <svg
-          viewBox={`0 0 ${chartW} ${chartH}`}
+          viewBox={`0 0 ${String(chartW)} ${String(chartH)}`}
           className="w-full"
           preserveAspectRatio="xMidYMid meet"
         >
@@ -980,7 +1001,9 @@ function ErrorAnalysisTable() {
                     <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-red-500/60"
-                        style={{ width: `${(pair.percent / 15) * 100}%` }}
+                        style={{
+                          width: `${String((pair.percent / 15) * 100)}%`,
+                        }}
                       />
                     </div>
                     <span className="w-10 text-right font-mono text-xs text-muted-foreground">
@@ -1096,10 +1119,30 @@ export function AgentsPage() {
 
       <Tabs defaultValue="runs" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="runs" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Agent Runs</TabsTrigger>
-          <TabsTrigger value="models" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Model Profiles</TabsTrigger>
-          <TabsTrigger value="comparison" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Comparison</TabsTrigger>
-          <TabsTrigger value="performance" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Performance</TabsTrigger>
+          <TabsTrigger
+            value="runs"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Agent Runs
+          </TabsTrigger>
+          <TabsTrigger
+            value="models"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Model Profiles
+          </TabsTrigger>
+          <TabsTrigger
+            value="comparison"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Comparison
+          </TabsTrigger>
+          <TabsTrigger
+            value="performance"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Performance
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="runs">

@@ -368,10 +368,12 @@ class GroundedOperatorSpec(BaseModel):
 
     benchmark_id: str
     goal: str
-    current_labeling_engine: str = "MiniMax 2.7"
+    current_labeling_engine: str = "MiniMax 2.7 highspeed"
     aggregation: Literal["weighted_mean"] = "weighted_mean"
     label_quality_weight: float = 0.7
     checklist_weight: float = 0.3
+    acceptable_operator_label_score: float | None = None
+    acceptable_checklist_score: float | None = None
     blocking_check_ids: list[str] = Field(default_factory=list)
     checks: list[GroundedOperatorCheck] = Field(default_factory=list)
 
@@ -520,7 +522,7 @@ class GroundedRunSummary(BaseModel):
     tax_breakdown: list[GroundedTaxResult] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
-    summary_version: int = 4
+    summary_version: int = 5
 
 
 @dataclass(frozen=True)
@@ -2533,6 +2535,47 @@ def compute_stage_deltas(
     return results
 
 
+def _summary_by_stage(
+    summaries: list[GroundedRunSummary],
+) -> dict[BenchmarkStage, GroundedRunSummary]:
+    return {
+        summary.stage: summary for summary in summaries if summary.stage is not None
+    }
+
+
+def compute_named_stage_lifts(
+    summaries: list[GroundedRunSummary],
+) -> dict[str, float]:
+    """Compute intuitive-sign stage deltas for operator benchmark reporting."""
+
+    by_stage = _summary_by_stage(summaries)
+    required_stages: tuple[BenchmarkStage, ...] = (
+        "paper_model",
+        "molabel_model",
+        "workflow_autorun",
+        "workflow_reviewed",
+        "operator_reviewed",
+    )
+    if any(stage not in by_stage for stage in required_stages):
+        return {}
+
+    paper_model = by_stage["paper_model"].overall_score
+    molabel_model = by_stage["molabel_model"].overall_score
+    workflow_autorun = by_stage["workflow_autorun"].overall_score
+    workflow_reviewed = by_stage["workflow_reviewed"].overall_score
+    operator_reviewed = by_stage["operator_reviewed"].overall_score
+    review_lift = workflow_reviewed - workflow_autorun
+
+    return {
+        "model_lift_vs_paper": molabel_model - paper_model,
+        "autorun_lift_vs_model": workflow_autorun - molabel_model,
+        "review_lift_in_workflow": review_lift,
+        "operator_review_delta": operator_reviewed - workflow_reviewed,
+        "workflow_pipeline_delta": workflow_reviewed - molabel_model,
+        "headline_review_lift": review_lift,
+    }
+
+
 def compute_tax_breakdown(
     summaries: list[GroundedRunSummary],
     metrics_config: GroundedMetricsConfig,
@@ -2612,12 +2655,28 @@ def _final_review_events_by_record(
     return final_events, counts
 
 
-def _normalize_review_decision(decision: Any) -> str:
-    """Normalize persisted review decision variants into stable benchmark buckets."""
+def _normalize_review_decision(
+    decision: Any,
+    *,
+    proposal_matches_review: bool | None = None,
+) -> str:
+    """Normalize persisted review decisions into stable semantic benchmark buckets.
+
+    Persisted review events often record ``decision="accept"`` even when the
+    reviewer changed labels before submitting. For benchmark truthfulness and
+    audit reporting we care about the semantic outcome, not only the literal
+    button value. When proposal/review equality is available, treat unchanged
+    submissions as ``accept_ai`` and changed submissions as ``edit_ai``.
+    """
 
     normalized = str(decision or "").strip().lower()
     if not normalized:
         return "<missing>"
+    if normalized in {"accept", "accept_ai", "edit", "edit_ai"}:
+        if proposal_matches_review is False:
+            return "edit_ai"
+        if proposal_matches_review is True:
+            return "accept_ai"
     aliases = {
         "accept": "accept_ai",
         "accept_ai": "accept_ai",
@@ -3005,7 +3064,14 @@ def build_operator_diagnostics(
         for record_id, event in final_events.items()
     }
     final_decisions = {
-        record_id: _normalize_review_decision(event.get("decision"))
+        record_id: _normalize_review_decision(
+            event.get("decision"),
+            proposal_matches_review=(
+                delta_by_record.get(record_id).proposal_matches_review
+                if record_id in delta_by_record
+                else None
+            ),
+        )
         for record_id, event in final_events.items()
     }
     decision_counts = Counter(
@@ -3085,6 +3151,29 @@ def build_operator_diagnostics(
         )
 
     if summary_payload:
+
+        def _summary_claim_matches(field_name: str, expected_value: Any) -> bool:
+            claimed_value = summary_payload.get(field_name)
+            if field_name in {"proposal_coverage", "review_coverage"}:
+                if claimed_value == expected_value:
+                    return True
+                if isinstance(claimed_value, (int, float)):
+                    return math.isclose(
+                        float(claimed_value),
+                        _safe_ratio(float(expected_value), len(gold_rows)),
+                        abs_tol=1e-9,
+                    )
+                return False
+            if field_name in {"accept_ai_rate", "accept_rate"}:
+                if not isinstance(claimed_value, (int, float)):
+                    return False
+                return math.isclose(
+                    float(claimed_value),
+                    float(expected_value),
+                    abs_tol=1e-9,
+                )
+            return claimed_value == expected_value
+
         summary_checks: dict[str, tuple[str, Any]] = {
             "summary_record_count": ("record_count", len(gold_rows)),
             "summary_submitted_count": ("submitted_count", len(review_rows)),
@@ -3095,8 +3184,13 @@ def build_operator_diagnostics(
                 "proposal_failures",
                 max(len(gold_rows) - len(proposal_rows), 0),
             ),
+            "summary_review_coverage": ("review_coverage", len(review_rows)),
             "summary_accept_ai_rate": (
                 "accept_ai_rate",
+                _safe_ratio(accept_ai_count, final_decision_count),
+            ),
+            "summary_accept_rate": (
+                "accept_rate",
                 _safe_ratio(accept_ai_count, final_decision_count),
             ),
             "summary_hidden_benchmark_path_command_count": (
@@ -3119,7 +3213,7 @@ def build_operator_diagnostics(
             truthfulness_checks.append(
                 GroundedOperatorTruthfulnessCheck(
                     check_id=check_id,
-                    passed=summary_payload.get(field_name) == expected_value,
+                    passed=_summary_claim_matches(field_name, expected_value),
                     details={
                         "field": field_name,
                         "claimed": summary_payload.get(field_name),
@@ -3652,6 +3746,7 @@ def render_grounded_stage_report(
 ) -> str:
     """Render a stage-aware grounded benchmark report."""
     stability_summaries = compute_stage_stability(summaries)
+    named_lifts = compute_named_stage_lifts(summaries)
     summary_lines = [
         f"# {bundle.scenario.name} Benchmark Report",
         "",
@@ -3710,6 +3805,11 @@ def render_grounded_stage_report(
                     for metric_id, value in sorted(tax.metric_deltas.items())
                 )
                 summary_lines.append(f"  - metric deltas: {rendered_metric_deltas}")
+
+    if named_lifts:
+        summary_lines.extend(["", "## Named Lifts"])
+        for lift_id, value in named_lifts.items():
+            summary_lines.append(f"- `{lift_id}` = `{value:+.4f}`")
 
     if stability_summaries:
         summary_lines.extend(["", "## Stability"])

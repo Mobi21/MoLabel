@@ -13,10 +13,10 @@ from typing import Any
 
 import yaml
 
-from molabel.core.types import WorkflowStepType
+from molabel.core.workflow.registry import CANONICAL_STEP_TYPES
 
 # All valid step type strings
-_VALID_STEP_TYPES = {e.value for e in WorkflowStepType}
+_VALID_STEP_TYPES = set(CANONICAL_STEP_TYPES)
 
 
 class WorkflowParseError(Exception):

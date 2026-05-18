@@ -67,9 +67,7 @@ async def test_list_task_schemas_with_limit(client):
 @pytest.mark.asyncio
 async def test_get_task_schema_not_found(client):
     """API-030: GET /task-schemas/{id} returns 404 for unknown schema."""
-    resp = await client.get(
-        "/api/v1/task-schemas/00000000-0000-0000-0000-000000000099"
-    )
+    resp = await client.get("/api/v1/task-schemas/00000000-0000-0000-0000-000000000099")
     assert resp.status_code == 404
 
 
@@ -127,9 +125,7 @@ async def test_preview_label_mapping_requires_auth(client):
         json={
             "source_system": "external",
             "task_schema_id": "00000000-0000-0000-0000-000000000001",
-            "field_mappings": [
-                {"source_field": "label", "target_field": "sentiment"}
-            ],
+            "field_mappings": [{"source_field": "label", "target_field": "sentiment"}],
             "sample_records": [{"label": "positive", "text": "Great!"}],
         },
     )
@@ -146,9 +142,7 @@ async def test_save_label_mapping_requires_auth(client):
             "workspace_id": "00000000-0000-0000-0000-000000000001",
             "source_system": "external",
             "task_schema_id": "00000000-0000-0000-0000-000000000001",
-            "field_mappings": [
-                {"source_field": "label", "target_field": "sentiment"}
-            ],
+            "field_mappings": [{"source_field": "label", "target_field": "sentiment"}],
         },
     )
     assert resp.status_code == 401

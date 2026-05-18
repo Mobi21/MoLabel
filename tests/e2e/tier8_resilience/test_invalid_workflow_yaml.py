@@ -150,7 +150,7 @@ steps:
     type: agent_run
     depends_on: [ingest]
     config:
-      model: "minimax-2.7"
+      model: "MiniMax-M2.7-highspeed"
   - id: review
     type: human_review
     depends_on: [label]

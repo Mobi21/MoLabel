@@ -118,6 +118,12 @@ const colorSchemes = {
 
 type ColorKey = keyof typeof colorSchemes
 
+function getColorScheme(colorScheme: string) {
+  return colorScheme in colorSchemes
+    ? colorSchemes[colorScheme as ColorKey]
+    : colorSchemes.blue
+}
+
 // ── Status Indicator ──────────────────────────────────────────────────────────
 
 function StatusIndicator({ status }: { status: StepStatus }) {
@@ -137,15 +143,17 @@ function statusLabel(status: StepStatus): string {
 }
 
 function statusBadgeClass(status: StepStatus): string {
-  if (status === 'completed') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
-  if (status === 'in-progress') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+  if (status === 'completed')
+    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+  if (status === 'in-progress')
+    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border-blue-200 dark:border-blue-800'
   return 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
 }
 
 // ── Custom Workflow Node ──────────────────────────────────────────────────────
 
 function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeData>) {
-  const scheme = colorSchemes[data.colorScheme as ColorKey] ?? colorSchemes.blue
+  const scheme = getColorScheme(data.colorScheme)
   const Icon = data.icon
 
   return (
@@ -165,7 +173,9 @@ function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeData>) {
       />
 
       <div className="flex items-start gap-3 p-3">
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${scheme.iconBg}`}>
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${scheme.iconBg}`}
+        >
           <Icon className={`h-4.5 w-4.5 ${scheme.iconText}`} />
         </div>
 
@@ -428,12 +438,16 @@ const initialEdges: Edge[] = [
 function stepTypeBadgeClass(stepType: StepType): string {
   const map: Record<StepType, string> = {
     data: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400',
-    agent: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400',
-    human: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400',
-    quality: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
-    output: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400',
+    agent:
+      'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400',
+    human:
+      'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400',
+    quality:
+      'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
+    output:
+      'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400',
   }
-  return map[stepType] ?? ''
+  return map[stepType]
 }
 
 // ── Config Panel for each step type ───────────────────────────────────────────
@@ -443,17 +457,29 @@ function DataConfigPanel({ config }: { config: StepConfig }) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Source</Label>
-        <Input readOnly value={String(config['source'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['source'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Format</Label>
-        <Input readOnly value={String(config['format'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['format'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Record Count</Label>
         <Input
           readOnly
-          value={typeof config['recordCount'] === 'number' ? config['recordCount'].toLocaleString() : ''}
+          value={
+            typeof config['recordCount'] === 'number'
+              ? config['recordCount'].toLocaleString()
+              : ''
+          }
           className="h-8 text-sm"
         />
       </div>
@@ -466,15 +492,27 @@ function AgentConfigPanel({ config }: { config: StepConfig }) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Model</Label>
-        <Input readOnly value={String(config['model'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['model'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Prompt Version</Label>
-        <Input readOnly value={String(config['promptVersion'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['promptVersion'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Batch Size</Label>
-        <Input readOnly value={String(config['batchSize'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['batchSize'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
     </div>
   )
@@ -485,7 +523,11 @@ function HumanConfigPanel({ config }: { config: StepConfig }) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Reviewer Count</Label>
-        <Input readOnly value={String(config['reviewerCount'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['reviewerCount'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
       <div className="flex items-center justify-between">
         <Label className="text-xs text-muted-foreground">Blind Mode</Label>
@@ -493,7 +535,11 @@ function HumanConfigPanel({ config }: { config: StepConfig }) {
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Overlap Policy</Label>
-        <Input readOnly value={String(config['overlapPolicy'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['overlapPolicy'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
     </div>
   )
@@ -504,11 +550,19 @@ function QualityConfigPanel({ config }: { config: StepConfig }) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Threshold</Label>
-        <Input readOnly value={String(config['threshold'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['threshold'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Metrics</Label>
-        <Input readOnly value={String(config['metrics'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['metrics'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
     </div>
   )
@@ -519,17 +573,31 @@ function OutputConfigPanel({ config }: { config: StepConfig }) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Format</Label>
-        <Input readOnly value={String(config['format'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['format'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Destination</Label>
-        <Input readOnly value={String(config['destination'] ?? '')} className="h-8 text-sm" />
+        <Input
+          readOnly
+          value={String(config['destination'] ?? '')}
+          className="h-8 text-sm"
+        />
       </div>
     </div>
   )
 }
 
-function ConfigPanelForType({ stepType, config }: { stepType: StepType, config: StepConfig }) {
+function ConfigPanelForType({
+  stepType,
+  config,
+}: {
+  stepType: StepType
+  config: StepConfig
+}) {
   switch (stepType) {
     case 'data':
       return <DataConfigPanel config={config} />
@@ -567,7 +635,7 @@ function StepConfigPanel({
 
   const { data } = node
   const Icon = data.icon
-  const scheme = colorSchemes[data.colorScheme as ColorKey] ?? colorSchemes.blue
+  const scheme = getColorScheme(data.colorScheme)
 
   return (
     <ScrollArea className="h-full">
@@ -575,15 +643,24 @@ function StepConfigPanel({
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${scheme.iconBg}`}>
+            <div
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${scheme.iconBg}`}
+            >
               <Icon className={`h-4 w-4 ${scheme.iconText}`} />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-foreground">{data.label}</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                {data.label}
+              </h3>
               <p className="text-xs text-muted-foreground">{data.subtitle}</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            onClick={onClose}
+          >
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -594,7 +671,9 @@ function StepConfigPanel({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Type</span>
-            <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${stepTypeBadgeClass(data.stepType)}`}>
+            <span
+              className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${stepTypeBadgeClass(data.stepType)}`}
+            >
               {data.stepType.charAt(0).toUpperCase() + data.stepType.slice(1)}
             </span>
           </div>
@@ -602,7 +681,9 @@ function StepConfigPanel({
             <span className="text-xs text-muted-foreground">Status</span>
             <div className="flex items-center gap-1.5">
               <StatusIndicator status={data.status} />
-              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${statusBadgeClass(data.status)}`}>
+              <span
+                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${statusBadgeClass(data.status)}`}
+              >
                 {statusLabel(data.status)}
               </span>
             </div>
@@ -647,8 +728,7 @@ function StepConfigPanel({
 // ── Minimap Node Color ────────────────────────────────────────────────────────
 
 function minimapNodeColor(node: Node<WorkflowNodeData>): string {
-  const scheme = colorSchemes[node.data.colorScheme as ColorKey]
-  return scheme?.minimapColor ?? '#94a3b8'
+  return getColorScheme(node.data.colorScheme).minimapColor
 }
 
 // ── Main Page Component ───────────────────────────────────────────────────────
@@ -668,7 +748,10 @@ export function WorkflowPage() {
   const [panelOpen, setPanelOpen] = useState(true)
 
   const selectedNode = useMemo(
-    () => nodes.find((n) => n.id === selectedNodeId) as Node<WorkflowNodeData> | undefined,
+    () =>
+      nodes.find((n) => n.id === selectedNodeId) as
+        | Node<WorkflowNodeData>
+        | undefined,
     [nodes, selectedNodeId],
   )
 
@@ -708,12 +791,16 @@ export function WorkflowPage() {
             variant="ghost"
             size="icon"
             className="h-8 w-8"
-            onClick={() => setPanelOpen((v) => !v)}
+            onClick={() => {
+              setPanelOpen((v) => !v)
+            }}
             title={panelOpen ? 'Close panel' : 'Open panel'}
           >
-            {panelOpen
-              ? <PanelRightClose className="h-4 w-4" />
-              : <PanelRightOpen className="h-4 w-4" />}
+            {panelOpen ? (
+              <PanelRightClose className="h-4 w-4" />
+            ) : (
+              <PanelRightOpen className="h-4 w-4" />
+            )}
           </Button>
           <Separator orientation="vertical" className="mx-1 h-5" />
           <Button variant="outline" size="sm" className="gap-1.5">
@@ -748,13 +835,8 @@ export function WorkflowPage() {
               type: 'smoothstep',
               style: { strokeWidth: 2 },
             }}
-
           >
-            <Background
-              gap={16}
-              size={1}
-              color="var(--border)"
-            />
+            <Background gap={16} size={1} color="var(--border)" />
             <Controls
               position="bottom-left"
               showInteractive={false}

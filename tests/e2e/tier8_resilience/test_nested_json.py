@@ -70,7 +70,11 @@ async def test_nested_json(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-nested-json-test", "workspace_name": "Nested JSON Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-nested-json-test",
+                "workspace_name": "Nested JSON Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

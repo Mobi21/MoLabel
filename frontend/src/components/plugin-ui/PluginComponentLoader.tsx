@@ -15,10 +15,10 @@
  * See PRD section 17.5.2 for specification.
  */
 
-import { Suspense, lazy, useMemo } from "react"
+import { Suspense, lazy, useMemo } from 'react'
 
-import { PluginErrorBoundary } from "./PluginErrorBoundary"
-import type { PluginComponentManifest } from "@/types/plugin-ui"
+import { PluginErrorBoundary } from './PluginErrorBoundary'
+import type { PluginComponentManifest } from '@/types/plugin-ui'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -63,7 +63,10 @@ function buildImportPath(manifest: PluginComponentManifest): string {
  * This ensures that the same plugin component is not loaded multiple
  * times, and that version changes trigger a fresh import.
  */
-const componentCache = new Map<string, React.LazyExoticComponent<React.ComponentType<Record<string, unknown>>>>()
+const componentCache = new Map<
+  string,
+  React.LazyExoticComponent<React.ComponentType<Record<string, unknown>>>
+>()
 
 function getCacheKey(manifest: PluginComponentManifest): string {
   return `${manifest.pluginId}@${manifest.pluginVersion}:${manifest.slot}`
@@ -79,8 +82,8 @@ function getOrCreateLazyComponent(
   const importPath = buildImportPath(manifest)
   const LazyComponent = lazy(async () => {
     try {
-      const module = await import(/* @vite-ignore */ importPath) as {
-        default: React.ComponentType<Record<string, unknown>>
+      const module = (await import(/* @vite-ignore */ importPath)) as {
+        default?: React.ComponentType<Record<string, unknown>>
       }
       if (!module.default) {
         throw new Error(
@@ -88,7 +91,7 @@ function getOrCreateLazyComponent(
             `Plugin components must use "export default".`,
         )
       }
-      return module
+      return { default: module.default }
     } catch (error) {
       console.error(
         `[MoLabel] Failed to load plugin component: ${manifest.pluginId}`,

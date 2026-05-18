@@ -1,6 +1,6 @@
 ---
-name: "molabel-cli"
-description: "Use when Codex should operate a MoLabel workspace through the public molabel CLI and installed MoLabel skill only."
+name: 'molabel-cli'
+description: 'Use when Codex should operate a MoLabel workspace through the public molabel CLI and installed MoLabel skill only.'
 ---
 
 # MoLabel Codex Skill
@@ -39,6 +39,42 @@ When operating benchmark or evaluation workspaces:
 - pay special attention to intentionally bad human labels or reviews,
 - stay on the CLI-and-skill surface even if you suspect a backend shortcut exists,
 - and summarize whether the agent, the human, or both appear wrong.
+
+For grounded benchmark operator runs:
+
+1. Read only operator-visible workspace files first:
+   - `AGENTS.md`
+   - `workbench.project.yaml`
+   - `workbench/config/task-schemas/*.yaml`
+   - `workbench/workflows/*.yaml`
+2. Do not read hidden benchmark-authority paths such as `authority/`,
+   `workbench/benchmarks/gold/`, `workbench/benchmarks/human-labels/`,
+   `workbench/benchmarks/reviews/`, `label-map.yaml`, `metrics.yaml`,
+   `baselines.yaml`, `operator.yaml`, `paper.yaml`, or `scenario.yaml` unless
+   the prompt explicitly allows them.
+3. After `workspace bootstrap`, create or confirm a reviewer session before any
+   queue action:
+   - `molabel session list-reviewers --json`
+   - `molabel session select <reviewer-id> --json`
+4. Treat `workflow execution ... --json` as the source of truth for
+   `queue_id`. A grounded operator run is not complete when the workflow first
+   pauses; it is complete only when the review queue is empty, the persisted
+   review count matches the record count, and the required run artifacts are
+   written.
+5. Review sequentially:
+   - claim one task,
+   - optionally reveal AI for that task only,
+   - submit that task,
+   - continue with `next_task` when present,
+   - stop only when the queue is empty.
+6. For tokenized records, use the joined token text from `record_text` as the
+   reviewer-facing source text. Keep required arrays aligned to the visible
+   token sequence and use only exact task-schema option strings.
+7. Write `summary.json` and `report.md` under the benchmark run artifact
+   directory. Before writing them, call
+   `molabel benchmark facts <workflow-execution-id> --json` and use that
+   persisted payload as the source of truth for counts/rates. Prefer
+   `semantic_decision_counts` for accept/edit/reject-style outcome counts.
 
 ## Notes
 

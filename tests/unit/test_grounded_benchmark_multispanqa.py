@@ -43,4 +43,3 @@ def test_multispanqa_fixture_preserves_discontiguous_answer_segments() -> None:
         variant="paper_direct",
     )
     assert summary.overall_score == pytest.approx(1.0)
-

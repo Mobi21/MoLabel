@@ -29,7 +29,11 @@ async def test_cost_tracking_per_output_and_aggregation(
     """T5-07: Per-output tokens, per-run cost, cost summary aggregation."""
     with checkpoint(ctx, "session_setup"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-cost-tracking-test", "workspace_name": "Cost Tracking Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-cost-tracking-test",
+                "workspace_name": "Cost Tracking Test",
+            },
         )
         assert ws_resp.status_code == 201
 

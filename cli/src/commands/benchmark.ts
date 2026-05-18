@@ -7,7 +7,7 @@ import { parse as parseYaml } from 'yaml'
 
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
-import { getRuntimeOptions, outputMode } from './context.js'
+import { buildClient, getRuntimeOptions, outputMode } from './context.js'
 
 type JsonObject = Record<string, unknown>
 
@@ -58,12 +58,29 @@ interface BenchmarkRunSummary {
   path: string
 }
 
-export function registerBenchmarkCommands(program: Command, runtime: CliRuntimeOptions): void {
-  const benchmark = program.command('benchmark').description('Benchmark operations')
+export function registerBenchmarkCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
+  const benchmark = program
+    .command('benchmark')
+    .description('Benchmark operations')
+
+  benchmark
+    .command('facts <workflow-execution-id>')
+    .description('Show persisted benchmark run facts for a workflow execution')
+    .action(async (workflowExecutionId: string) => {
+      await runBenchmarkFacts(
+        getRuntimeOptions(program, runtime),
+        workflowExecutionId,
+      )
+    })
 
   benchmark
     .command('inspect <pack-root>')
-    .description('Inspect a benchmark authority pack or legacy grounded fixture')
+    .description(
+      'Inspect a benchmark authority pack or legacy grounded fixture',
+    )
     .action(async (packRoot: string) => {
       await runBenchmarkInspect(getRuntimeOptions(program, runtime), packRoot)
     })
@@ -100,7 +117,11 @@ export function registerBenchmarkCommands(program: Command, runtime: CliRuntimeO
     .option('--run <path>', 'Run directory containing summary.json', '.')
     .action(async function (this: Command, packRoot: string) {
       const options = this.opts<{ run?: string }>()
-      await runBenchmarkScore(getRuntimeOptions(program, runtime), packRoot, options.run ?? '.')
+      await runBenchmarkScore(
+        getRuntimeOptions(program, runtime),
+        packRoot,
+        options.run ?? '.',
+      )
     })
 
   benchmark
@@ -109,7 +130,11 @@ export function registerBenchmarkCommands(program: Command, runtime: CliRuntimeO
     .option('--run <path>', 'Run directory containing summary.json', '.')
     .action(async function (this: Command, packRoot: string) {
       const options = this.opts<{ run?: string }>()
-      await runBenchmarkReport(getRuntimeOptions(program, runtime), packRoot, options.run ?? '.')
+      await runBenchmarkReport(
+        getRuntimeOptions(program, runtime),
+        packRoot,
+        options.run ?? '.',
+      )
     })
 
   benchmark
@@ -134,6 +159,17 @@ async function runBenchmarkInspect(
 ): Promise<void> {
   const pack = await loadBenchmarkPack(packRoot)
   await emit({ benchmark: pack.pack }, outputMode(options))
+}
+
+async function runBenchmarkFacts(
+  options: CliRuntimeOptions,
+  workflowExecutionId: string,
+): Promise<void> {
+  const client = await requireBackendClient(options, 'benchmark facts')
+  const response = await client.getJson(
+    `/api/v1/cli/benchmark-run-facts/${encodeURIComponent(workflowExecutionId)}`,
+  )
+  await emit(response, outputMode(options))
 }
 
 async function runBenchmarkVerifyPack(
@@ -185,7 +221,11 @@ async function runBenchmarkFetchSource(
     return
   }
 
-  const destination = resolveOutputDir(pack.pack.root, outputDir, 'source-materialized')
+  const destination = resolveOutputDir(
+    pack.pack.root,
+    outputDir,
+    'source-materialized',
+  )
   await mkdir(destination, { recursive: true })
   const sourceStats = await stat(sourceRoot)
   if (sourceStats.isDirectory()) {
@@ -253,17 +293,34 @@ async function runBenchmarkCompare(
   await emit(comparison, outputMode(options))
 }
 
-async function loadBenchmarkPack(packRoot: string): Promise<BenchmarkPackLoadResult> {
+async function requireBackendClient(
+  options: CliRuntimeOptions,
+  commandName: string,
+): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
+  const client = await buildClient(options)
+  if (!client) {
+    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
+  }
+  return client
+}
+
+async function loadBenchmarkPack(
+  packRoot: string,
+): Promise<BenchmarkPackLoadResult> {
   const root = resolve(packRoot)
-  const authorityRoot = await pathExists(join(root, 'authority'))
+  const authorityRoot = (await pathExists(join(root, 'authority')))
     ? join(root, 'authority')
     : null
-  const legacyRoot = await pathExists(join(root, 'workbench', 'benchmarks'))
+  const legacyRoot = (await pathExists(join(root, 'workbench', 'benchmarks')))
     ? join(root, 'workbench', 'benchmarks')
     : null
 
   const layout: BenchmarkPackSummary['layout'] =
-    authorityRoot !== null ? 'authority' : legacyRoot !== null ? 'legacy' : 'missing'
+    authorityRoot !== null
+      ? 'authority'
+      : legacyRoot !== null
+        ? 'legacy'
+        : 'missing'
   const scenarioPath = await firstExistingPath(
     authorityRoot ? join(authorityRoot, 'scenario.yaml') : null,
     legacyRoot ? join(legacyRoot, 'scenario.yaml') : null,
@@ -306,12 +363,17 @@ async function loadBenchmarkPack(packRoot: string): Promise<BenchmarkPackLoadRes
     readString(paper?.benchmark_id) ??
     readString(packaging?.benchmark_id) ??
     null
-  const name = readString(scenario?.name) ?? readString(paper?.paper_title) ?? null
-  const description = readString(scenario?.description) ?? readString(paper?.task_summary) ?? null
-  const track = readString(scenario?.track) ?? readString(packaging?.track) ?? null
+  const name =
+    readString(scenario?.name) ?? readString(paper?.paper_title) ?? null
+  const description =
+    readString(scenario?.description) ?? readString(paper?.task_summary) ?? null
+  const track =
+    readString(scenario?.track) ?? readString(packaging?.track) ?? null
   const sourcePath = readString(scenario?.source_path) ?? null
 
-  const referenceWorkspaceRoot = (await pathExists(join(root, 'reference-workspace')))
+  const referenceWorkspaceRoot = (await pathExists(
+    join(root, 'reference-workspace'),
+  ))
     ? join(root, 'reference-workspace')
     : null
   const sourceRoot = sourcePath
@@ -325,10 +387,17 @@ async function loadBenchmarkPack(packRoot: string): Promise<BenchmarkPackLoadRes
   const profileNames = collectProfileNames(packaging, scenario)
   const warnings: string[] = []
   if (layout === 'legacy') {
-    warnings.push('Legacy workspace-first layout detected; treat as transitional.')
+    warnings.push(
+      'Legacy workspace-first layout detected; treat as transitional.',
+    )
   }
-  if (authorityRoot && !(await pathExists(join(authorityRoot, 'manifest.yaml')))) {
-    warnings.push('Missing authority/manifest.yaml; verify-pack will fall back to scenario metadata.')
+  if (
+    authorityRoot &&
+    !(await pathExists(join(authorityRoot, 'manifest.yaml')))
+  ) {
+    warnings.push(
+      'Missing authority/manifest.yaml; verify-pack will fall back to scenario metadata.',
+    )
   }
 
   return {
@@ -362,7 +431,10 @@ async function loadBenchmarkPack(packRoot: string): Promise<BenchmarkPackLoadRes
   }
 }
 
-function validateBenchmarkPack(pack: BenchmarkPackLoadResult): { errors: string[]; warnings: string[] } {
+function validateBenchmarkPack(pack: BenchmarkPackLoadResult): {
+  errors: string[]
+  warnings: string[]
+} {
   const errors: string[] = []
   const warnings = [...pack.pack.warnings]
   const benchmarkId = pack.pack.benchmark_id
@@ -379,7 +451,12 @@ function validateBenchmarkPack(pack: BenchmarkPackLoadResult): { errors: string[
   if (!pack.paper) {
     errors.push('paper.yaml is required')
   } else {
-    for (const key of ['paper_url', 'dataset_url', 'dataset_license', 'task_summary']) {
+    for (const key of [
+      'paper_url',
+      'dataset_url',
+      'dataset_license',
+      'task_summary',
+    ]) {
       if (!readString(pack.paper[key])) {
         errors.push(`paper.yaml missing ${key}`)
       }
@@ -408,7 +485,9 @@ function validateBenchmarkPack(pack: BenchmarkPackLoadResult): { errors: string[
   ] satisfies Array<[string, JsonObject | null]>) {
     const fileBenchmarkId = readString(payload?.benchmark_id)
     if (benchmarkId && fileBenchmarkId && fileBenchmarkId !== benchmarkId) {
-      errors.push(`${label} benchmark_id ${fileBenchmarkId} does not match ${benchmarkId}`)
+      errors.push(
+        `${label} benchmark_id ${fileBenchmarkId} does not match ${benchmarkId}`,
+      )
     }
   }
 
@@ -417,7 +496,9 @@ function validateBenchmarkPack(pack: BenchmarkPackLoadResult): { errors: string[
   if (!primaryMetricId) {
     errors.push('metrics.yaml missing primary_metric_id')
   } else if (!metricIds.includes(primaryMetricId)) {
-    errors.push(`metrics.yaml primary_metric_id ${primaryMetricId} is not declared in metrics[]`)
+    errors.push(
+      `metrics.yaml primary_metric_id ${primaryMetricId} is not declared in metrics[]`,
+    )
   }
   if (metricIds.length === 0) {
     errors.push('metrics.yaml must declare at least one metric')
@@ -425,7 +506,9 @@ function validateBenchmarkPack(pack: BenchmarkPackLoadResult): { errors: string[
 
   const baselineEntries = baselineEntriesFromPack(pack)
   if (baselineEntries.length === 0) {
-    warnings.push('No baselines declared; benchmark score output will lack baseline context.')
+    warnings.push(
+      'No baselines declared; benchmark score output will lack baseline context.',
+    )
   } else if (
     primaryMetricId &&
     !baselineEntries.some((entry) => entry.metrics.has(primaryMetricId))
@@ -436,7 +519,9 @@ function validateBenchmarkPack(pack: BenchmarkPackLoadResult): { errors: string[
   }
 
   if (pack.operator) {
-    const checks = Array.isArray(pack.operator.checks) ? pack.operator.checks : []
+    const checks = Array.isArray(pack.operator.checks)
+      ? pack.operator.checks
+      : []
     const checkIds = new Set(
       checks
         .map((check) =>
@@ -453,20 +538,30 @@ function validateBenchmarkPack(pack: BenchmarkPackLoadResult): { errors: string[
       : []
     for (const checkId of blockingCheckIds) {
       if (!checkIds.has(checkId)) {
-        errors.push(`operator.yaml blocking_check_ids references missing check ${checkId}`)
+        errors.push(
+          `operator.yaml blocking_check_ids references missing check ${checkId}`,
+        )
       }
     }
   }
 
   const sourceRoot = pack.pack.source_root
   if (!sourceRoot) {
-    warnings.push('No source payload found; source acquisition may be bootstrap-only.')
-  } else if (!(sourceRoot.endsWith('source/raw') || sourceRoot.includes('/source/raw/'))) {
-    warnings.push('Source path is not a source/raw tree; verify authority-pack projection.')
+    warnings.push(
+      'No source payload found; source acquisition may be bootstrap-only.',
+    )
+  } else if (
+    !(sourceRoot.endsWith('source/raw') || sourceRoot.includes('/source/raw/'))
+  ) {
+    warnings.push(
+      'Source path is not a source/raw tree; verify authority-pack projection.',
+    )
   }
 
   if (pack.pack.layout === 'authority' && !pack.pack.reference_workspace_root) {
-    warnings.push('No reference-workspace/ found; this is acceptable but limits baseline debugging.')
+    warnings.push(
+      'No reference-workspace/ found; this is acceptable but limits baseline debugging.',
+    )
   }
 
   return { errors, warnings }
@@ -497,16 +592,23 @@ async function loadBenchmarkRun(runRoot: string): Promise<BenchmarkRunSummary> {
     record_count: readNumber(parsed.record_count),
     overall_score: readNumber(parsed.overall_score),
     primary_metric_id: readString(parsed.primary_metric_id),
-    metrics: Array.isArray(parsed.metrics) ? (parsed.metrics as Array<Record<string, unknown>>) : [],
+    metrics: Array.isArray(parsed.metrics)
+      ? (parsed.metrics as Array<Record<string, unknown>>)
+      : [],
     tax_breakdown: Array.isArray(parsed.tax_breakdown)
       ? (parsed.tax_breakdown as Array<Record<string, unknown>>)
       : [],
-    notes: Array.isArray(parsed.notes) ? parsed.notes.map((value) => String(value)) : [],
+    notes: Array.isArray(parsed.notes)
+      ? parsed.notes.map((value) => String(value))
+      : [],
     path: summaryPath,
   }
 }
 
-function buildScoreEnvelope(pack: BenchmarkPackLoadResult, run: BenchmarkRunSummary): JsonObject {
+function buildScoreEnvelope(
+  pack: BenchmarkPackLoadResult,
+  run: BenchmarkRunSummary,
+): JsonObject {
   const metricMap = new Map<string, number>()
   for (const metric of run.metrics) {
     const metricId = readString(metric.metric_id)
@@ -526,7 +628,11 @@ function buildScoreEnvelope(pack: BenchmarkPackLoadResult, run: BenchmarkRunSumm
   }
 
   const primaryMetricId = resolvePrimaryMetricId(pack, run)
-  const baselineComparisons = buildBaselineComparisons(pack, run, primaryMetricId)
+  const baselineComparisons = buildBaselineComparisons(
+    pack,
+    run,
+    primaryMetricId,
+  )
   const warnings = summarizeRunWarnings(pack.pack, run)
 
   return {
@@ -541,7 +647,9 @@ function buildScoreEnvelope(pack: BenchmarkPackLoadResult, run: BenchmarkRunSumm
       record_count: run.record_count,
       overall_score: run.overall_score,
       primary_metric_id: primaryMetricId,
-      primary_metric_value: primaryMetricId ? metricMap.get(primaryMetricId) ?? null : null,
+      primary_metric_value: primaryMetricId
+        ? (metricMap.get(primaryMetricId) ?? null)
+        : null,
       metric_values: Object.fromEntries(metricMap.entries()),
       tax_values: Object.fromEntries(taxMap.entries()),
       baseline_comparisons: baselineComparisons,
@@ -551,9 +659,16 @@ function buildScoreEnvelope(pack: BenchmarkPackLoadResult, run: BenchmarkRunSumm
   }
 }
 
-function renderBenchmarkReport(pack: BenchmarkPackLoadResult, run: BenchmarkRunSummary): string {
+function renderBenchmarkReport(
+  pack: BenchmarkPackLoadResult,
+  run: BenchmarkRunSummary,
+): string {
   const primaryMetricId = resolvePrimaryMetricId(pack, run)
-  const baselineComparisons = buildBaselineComparisons(pack, run, primaryMetricId)
+  const baselineComparisons = buildBaselineComparisons(
+    pack,
+    run,
+    primaryMetricId,
+  )
   const warnings = summarizeRunWarnings(pack.pack, run)
   const lines: string[] = []
   lines.push(`# Grounded Benchmark Report`)
@@ -580,7 +695,9 @@ function renderBenchmarkReport(pack: BenchmarkPackLoadResult, run: BenchmarkRunS
   lines.push(``)
   lines.push(`## Taxes`)
   for (const tax of run.tax_breakdown) {
-    lines.push(`- ${readString(tax.tax_id) ?? 'tax'}: ${formatNumber(readNumber(tax.value))}`)
+    lines.push(
+      `- ${readString(tax.tax_id) ?? 'tax'}: ${formatNumber(readNumber(tax.value))}`,
+    )
   }
   if (run.tax_breakdown.length === 0) {
     lines.push(`- None`)
@@ -618,9 +735,16 @@ function compareBenchmarkRuns(
 ): JsonObject {
   const baselineMetrics = metricMapFromRun(baseline)
   const candidateMetrics = metricMapFromRun(candidate)
-  const metricDeltas: Array<{ metric_id: string; baseline: number; candidate: number; delta: number }> =
-    []
-  for (const metricId of new Set([...baselineMetrics.keys(), ...candidateMetrics.keys()])) {
+  const metricDeltas: Array<{
+    metric_id: string
+    baseline: number
+    candidate: number
+    delta: number
+  }> = []
+  for (const metricId of new Set([
+    ...baselineMetrics.keys(),
+    ...candidateMetrics.keys(),
+  ])) {
     const baselineValue = baselineMetrics.get(metricId) ?? 0
     const candidateValue = candidateMetrics.get(metricId) ?? 0
     metricDeltas.push({
@@ -633,8 +757,16 @@ function compareBenchmarkRuns(
 
   const baselineTaxes = taxMapFromRun(baseline)
   const candidateTaxes = taxMapFromRun(candidate)
-  const taxDeltas: Array<{ tax_id: string; baseline: number; candidate: number; delta: number }> = []
-  for (const taxId of new Set([...baselineTaxes.keys(), ...candidateTaxes.keys()])) {
+  const taxDeltas: Array<{
+    tax_id: string
+    baseline: number
+    candidate: number
+    delta: number
+  }> = []
+  for (const taxId of new Set([
+    ...baselineTaxes.keys(),
+    ...candidateTaxes.keys(),
+  ])) {
     const baselineValue = baselineTaxes.get(taxId) ?? 0
     const candidateValue = candidateTaxes.get(taxId) ?? 0
     taxDeltas.push({
@@ -655,9 +787,15 @@ function compareBenchmarkRuns(
       compatible: warnings.length === 0,
       overall_score_baseline: baseline.overall_score,
       overall_score_candidate: candidate.overall_score,
-      overall_score_delta: round((candidate.overall_score ?? 0) - (baseline.overall_score ?? 0)),
-      metric_deltas: metricDeltas.sort((left, right) => left.metric_id.localeCompare(right.metric_id)),
-      tax_deltas: taxDeltas.sort((left, right) => left.tax_id.localeCompare(right.tax_id)),
+      overall_score_delta: round(
+        (candidate.overall_score ?? 0) - (baseline.overall_score ?? 0),
+      ),
+      metric_deltas: metricDeltas.sort((left, right) =>
+        left.metric_id.localeCompare(right.metric_id),
+      ),
+      tax_deltas: taxDeltas.sort((left, right) =>
+        left.tax_id.localeCompare(right.tax_id),
+      ),
       warnings,
     },
   }
@@ -693,8 +831,13 @@ function buildBaselineComparisons(
   }
 
   return baselineEntriesFromPack(pack)
-    .filter((baseline) => baseline.mode === run.mode && baseline.variant === run.variant)
-    .filter((baseline) => baseline.stage === null || baseline.stage === run.stage)
+    .filter(
+      (baseline) =>
+        baseline.mode === run.mode && baseline.variant === run.variant,
+    )
+    .filter(
+      (baseline) => baseline.stage === null || baseline.stage === run.stage,
+    )
     .map((baseline) => {
       const baselineValue = baseline.metrics.get(primaryMetricId)
       if (baselineValue === undefined) {
@@ -712,7 +855,10 @@ function buildBaselineComparisons(
         relation,
       }
     })
-    .filter((comparison): comparison is NonNullable<typeof comparison> => comparison !== null)
+    .filter(
+      (comparison): comparison is NonNullable<typeof comparison> =>
+        comparison !== null,
+    )
     .sort((left, right) => left.baseline_id.localeCompare(right.baseline_id))
 }
 
@@ -740,7 +886,10 @@ function taxMapFromRun(run: BenchmarkRunSummary): Map<string, number> {
   return taxes
 }
 
-function collectProfileNames(packaging: JsonObject | null, scenario: JsonObject | null): string[] {
+function collectProfileNames(
+  packaging: JsonObject | null,
+  scenario: JsonObject | null,
+): string[] {
   const profiles = new Set<string>()
   for (const source of [packaging, scenario]) {
     if (!source) {
@@ -774,7 +923,9 @@ function baselineEntriesFromPack(pack: BenchmarkPackLoadResult): Array<{
   stage: string | null
   metrics: Map<string, number>
 }> {
-  const entries = Array.isArray(pack.baselines?.baselines) ? pack.baselines.baselines : []
+  const entries = Array.isArray(pack.baselines?.baselines)
+    ? pack.baselines.baselines
+    : []
   return entries
     .map((entry) => {
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
@@ -783,7 +934,11 @@ function baselineEntriesFromPack(pack: BenchmarkPackLoadResult): Array<{
       const record = entry as JsonObject
       const rawMetrics = record.metrics
       const metrics = new Map<string, number>()
-      if (rawMetrics && typeof rawMetrics === 'object' && !Array.isArray(rawMetrics)) {
+      if (
+        rawMetrics &&
+        typeof rawMetrics === 'object' &&
+        !Array.isArray(rawMetrics)
+      ) {
         for (const [metricId, value] of Object.entries(rawMetrics)) {
           const numeric = readNumber(value)
           if (numeric !== null) {
@@ -808,23 +963,36 @@ function baselineEntriesFromPack(pack: BenchmarkPackLoadResult): Array<{
 }
 
 function metricDefinitionIdsFromPack(pack: BenchmarkPackLoadResult): string[] {
-  const metrics = Array.isArray(pack.metrics?.metrics) ? pack.metrics.metrics : []
+  const metrics = Array.isArray(pack.metrics?.metrics)
+    ? pack.metrics.metrics
+    : []
   return metrics
-    .map((metric) => (metric && typeof metric === 'object' && !Array.isArray(metric)
-      ? readString((metric as JsonObject).metric_id)
-      : null))
+    .map((metric) =>
+      metric && typeof metric === 'object' && !Array.isArray(metric)
+        ? readString((metric as JsonObject).metric_id)
+        : null,
+    )
     .filter((metricId): metricId is string => metricId !== null)
 }
 
-function summarizeRunWarnings(pack: BenchmarkPackSummary, run: BenchmarkRunSummary): string[] {
+function summarizeRunWarnings(
+  pack: BenchmarkPackSummary,
+  run: BenchmarkRunSummary,
+): string[] {
   const warnings: string[] = []
-  if (pack.benchmark_id && run.benchmark_id && pack.benchmark_id !== run.benchmark_id) {
+  if (
+    pack.benchmark_id &&
+    run.benchmark_id &&
+    pack.benchmark_id !== run.benchmark_id
+  ) {
     warnings.push(
       `Run benchmark_id ${run.benchmark_id} does not match pack benchmark_id ${pack.benchmark_id}.`,
     )
   }
   if (!run.stage) {
-    warnings.push('Run summary is missing stage; stage-aware reporting will be incomplete.')
+    warnings.push(
+      'Run summary is missing stage; stage-aware reporting will be incomplete.',
+    )
   }
   return warnings
 }
@@ -838,7 +1006,11 @@ function summarizeComparisonWarnings(
     ...summarizeRunWarnings(pack, baseline),
     ...summarizeRunWarnings(pack, candidate),
   ]
-  if (baseline.benchmark_id && candidate.benchmark_id && baseline.benchmark_id !== candidate.benchmark_id) {
+  if (
+    baseline.benchmark_id &&
+    candidate.benchmark_id &&
+    baseline.benchmark_id !== candidate.benchmark_id
+  ) {
     warnings.push(
       `Comparing different benchmark ids: ${baseline.benchmark_id} vs ${candidate.benchmark_id}.`,
     )
@@ -862,7 +1034,9 @@ function summarizeComparisonWarnings(
 }
 
 async function resolveSourceRoot(
-  pack: BenchmarkPackLoadResult | { root: string; sourcePath: string | null; authorityRoot: string | null },
+  pack:
+    | BenchmarkPackLoadResult
+    | { root: string; sourcePath: string | null; authorityRoot: string | null },
 ): Promise<string | null> {
   const root = 'pack' in pack ? pack.pack.root : pack.root
   const sourcePath = 'pack' in pack ? pack.pack.source_root : pack.sourcePath
@@ -881,19 +1055,28 @@ async function resolveSourceRoot(
   return null
 }
 
-async function resolveRelativePath(root: string, value: string): Promise<string | null> {
+async function resolveRelativePath(
+  root: string,
+  value: string,
+): Promise<string | null> {
   const absolute = isAbsolute(value) ? value : resolve(root, value)
   return (await pathExists(absolute)) ? absolute : null
 }
 
-function resolveOutputDir(root: string, outputDir: string | undefined, defaultName: string): string {
+function resolveOutputDir(
+  root: string,
+  outputDir: string | undefined,
+  defaultName: string,
+): string {
   if (outputDir && outputDir.trim()) {
     return resolve(outputDir)
   }
   return join(root, '.molabel', defaultName)
 }
 
-async function listFiles(root: string): Promise<Array<{ path: string; sha256: string }>> {
+async function listFiles(
+  root: string,
+): Promise<Array<{ path: string; sha256: string }>> {
   const entries: Array<{ path: string; sha256: string }> = []
   await walkFiles(root, async (filePath) => {
     entries.push({
@@ -935,7 +1118,9 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function firstExistingPath(...paths: Array<string | null>): Promise<string | null> {
+async function firstExistingPath(
+  ...paths: Array<string | null>
+): Promise<string | null> {
   for (const candidate of paths) {
     if (candidate && (await pathExists(candidate))) {
       return candidate
@@ -964,7 +1149,11 @@ function readNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value
   }
-  if (typeof value === 'string' && value.trim() && !Number.isNaN(Number(value))) {
+  if (
+    typeof value === 'string' &&
+    value.trim() &&
+    !Number.isNaN(Number(value))
+  ) {
     return Number(value)
   }
   return null

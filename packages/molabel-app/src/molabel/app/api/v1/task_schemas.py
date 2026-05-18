@@ -41,6 +41,7 @@ class LabelFieldDef(BaseModel):
     """ordinal | categorical | text | numeric | bool | multi_select | json."""
     required: bool = True
     options: list[str] | None = None
+    option_descriptions: dict[str, str] | None = None
     scale_min: float | None = None
     scale_max: float | None = None
     description: str = ""

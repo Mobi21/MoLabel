@@ -6,8 +6,8 @@ sentence-level rationales on grounded SciFact data.
 Rules:
 
 - Operate through the public `molabel` CLI and this benchmark guidance only.
-- Use only these benchmark inputs: `workbench/benchmarks/splits/test.jsonl`, `workbench/config/task-schemas/scifact-grounded-v1.yaml`, and `workbench/workflows/scifact-grounded.yaml`.
-- Register the proposer model as MiniMax 2.7 exactly: provider `anthropic`, provider name `MiniMax`, model identifier `minimax-2.7`, auth ref `ANTHROPIC_API_KEY`, structured output enabled.
+- Use only these benchmark inputs: `workbench/benchmarks/splits/dev.jsonl`, `workbench/config/task-schemas/scifact-grounded-v1.yaml`, and `workbench/workflows/scifact-grounded.yaml`.
+- Register the proposer model as MiniMax 2.7 highspeed exactly: provider `anthropic`, provider name `MiniMax`, model identifier `MiniMax-M2.7-highspeed`, auth ref `ANTHROPIC_API_KEY`, structured output enabled.
 - Write run artifacts under `workbench/benchmarks/runs/live-operator/`.
 - Do not read, list, or edit authority, gold, review, or benchmark-config paths such as `authority/`, `workbench/benchmarks/gold/`, `workbench/benchmarks/human-labels/`, `workbench/benchmarks/reviews/`, `label-map.yaml`, `metrics.yaml`, `baselines.yaml`, `operator.yaml`, `paper.yaml`, or `scenario.yaml`.
 - Emit verdicts only from the declared vocabulary (`supports`, `refutes`, `nei`) in the MoLabel-operated view.

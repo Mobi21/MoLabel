@@ -344,6 +344,9 @@ class LabelFieldDefinition(BaseModel):
     options: list[str] | None = None
     """For categorical / ordinal / multi_select: the allowed values in order."""
 
+    option_descriptions: dict[str, str] | None = None
+    """Optional per-option rubric text for near-neighbor label decisions."""
+
     scale_min: float | None = None
     """For numeric / ordinal: minimum value."""
 

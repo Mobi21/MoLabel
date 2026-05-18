@@ -13,7 +13,9 @@ export function registerAdjudicationCommands(
   program: Command,
   runtime: CliRuntimeOptions,
 ): void {
-  const adjudication = program.command('adjudication').description('Adjudication operations')
+  const adjudication = program
+    .command('adjudication')
+    .description('Adjudication operations')
 
   adjudication
     .command('queue')
@@ -89,7 +91,7 @@ export function registerAdjudicationCommands(
 
 async function runAdjudicationQueue(options: CliRuntimeOptions): Promise<void> {
   const client = await requireClient(options, 'adjudication queue')
-  const response = await client.getJson<Record<string, unknown>>('/api/v1/adjudication/queue')
+  const response = await client.getJson('/api/v1/adjudication/queue')
   await emit(response, outputMode(options))
 }
 
@@ -100,7 +102,7 @@ async function runAdjudicationDetect(
   eventsFile?: string,
 ): Promise<void> {
   const client = await requireClient(options, 'adjudication detect')
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     '/api/v1/adjudication/detect',
     await buildEventsBody(taskSchemaId, eventsJson, eventsFile),
   )
@@ -114,7 +116,7 @@ async function runAdjudicationBuild(
   eventsFile?: string,
 ): Promise<void> {
   const client = await requireClient(options, 'adjudication build')
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     '/api/v1/adjudication/queue/build',
     await buildEventsBody(taskSchemaId, eventsJson, eventsFile),
   )
@@ -138,14 +140,14 @@ async function runAdjudicationResolve(
     resolution,
     rationale: rationale ?? null,
   }
-  const resolvedLabels = await readOptionalJsonObject(resolvedLabelsJson, resolvedLabelsFile)
+  const resolvedLabels = await readOptionalJsonObject(
+    resolvedLabelsJson,
+    resolvedLabelsFile,
+  )
   if (resolvedLabels) {
     body.resolved_labels = resolvedLabels
   }
-  const response = await client.postJson<Record<string, unknown>>(
-    '/api/v1/adjudication/resolve',
-    body,
-  )
+  const response = await client.postJson('/api/v1/adjudication/resolve', body)
   await emit(response, outputMode(options))
 }
 
@@ -157,7 +159,10 @@ async function buildEventsBody(
   if (!taskSchemaId) {
     throw new Error('--task-schema-id is required')
   }
-  const reviewEventsByRecord = await readOptionalJsonObject(eventsJson, eventsFile)
+  const reviewEventsByRecord = await readOptionalJsonObject(
+    eventsJson,
+    eventsFile,
+  )
   if (!reviewEventsByRecord) {
     throw new Error('Provide --events-json, --events-file, or piped JSON input')
   }

@@ -38,7 +38,11 @@ async def test_batch_partial_failure_eight_of_ten(
     """
     with checkpoint(ctx, "session_setup"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-batch-partial-failure-test", "workspace_name": "Batch Partial Failure Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-batch-partial-failure-test",
+                "workspace_name": "Batch Partial Failure Test",
+            },
         )
         assert ws_resp.status_code == 201
 

@@ -1,8 +1,8 @@
 benchmark_id: tabfact
 goal: Evaluate Codex as an external MoLabel operator on the grounded TabFact slice
-  using only the public CLI and installed benchmark skill, with MiniMax 2.7 as the
+  using only the public CLI and installed benchmark skill, with MiniMax 2.7 highspeed as the
   current labeling engine.
-current_labeling_engine: MiniMax 2.7
+current_labeling_engine: MiniMax 2.7 highspeed
 authority_pack: true
 reference_workspace_root: ../workbench
 benchmark_profiles:
@@ -24,7 +24,7 @@ checks:
   weight: 1.0
 - check_id: configures_minimax_2_7_profile
   phase: setup
-  description: Registers MiniMax 2.7 through the Anthropic-compatible adapter path.
+  description: Registers MiniMax 2.7 highspeed through the Anthropic-compatible adapter path.
   weight: 1.0
 - check_id: preserves_table_cell_anchors
   phase: run

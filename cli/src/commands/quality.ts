@@ -2,7 +2,12 @@ import type { Command } from 'commander'
 
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
-import { buildClient, getRuntimeOptions, outputMode, resolveWorkspaceId } from './context.js'
+import {
+  buildClient,
+  getRuntimeOptions,
+  outputMode,
+  resolveWorkspaceId,
+} from './context.js'
 
 interface QualityQueryOptions {
   workspaceId?: string
@@ -10,7 +15,10 @@ interface QualityQueryOptions {
   taskSchemaId?: string
 }
 
-export function registerQualityCommands(program: Command, runtime: CliRuntimeOptions): void {
+export function registerQualityCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
   const quality = program.command('quality').description('Quality operations')
 
   quality
@@ -45,7 +53,10 @@ export function registerQualityCommands(program: Command, runtime: CliRuntimeOpt
     .option('--workspace-id <id>', 'Workspace ID')
     .option('--dataset-id <id>', 'Dataset ID')
     .action(async function (this: Command) {
-      await runQualityDrift(getRuntimeOptions(program, runtime), this.opts<QualityQueryOptions>())
+      await runQualityDrift(
+        getRuntimeOptions(program, runtime),
+        this.opts<QualityQueryOptions>(),
+      )
     })
 }
 
@@ -55,7 +66,7 @@ async function runQualityDashboard(
 ): Promise<void> {
   const client = await requireBackendClient(options, 'quality dashboard')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
-  const response = await client.getJson<Record<string, unknown>>(
+  const response = await client.getJson(
     `/api/v1/quality/dashboard${buildQuery({
       workspace_id: workspaceId,
       dataset_id: query.datasetId,
@@ -71,7 +82,7 @@ async function runQualityAgreement(
 ): Promise<void> {
   const client = await requireBackendClient(options, 'quality agreement')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
-  const response = await client.getJson<Record<string, unknown>>(
+  const response = await client.getJson(
     `/api/v1/quality/agreement${buildQuery({
       workspace_id: workspaceId,
       dataset_id: query.datasetId,
@@ -81,10 +92,13 @@ async function runQualityAgreement(
   await emit(response, outputMode(options))
 }
 
-async function runQualityDrift(options: CliRuntimeOptions, query: QualityQueryOptions): Promise<void> {
+async function runQualityDrift(
+  options: CliRuntimeOptions,
+  query: QualityQueryOptions,
+): Promise<void> {
   const client = await requireBackendClient(options, 'quality drift')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
-  const response = await client.getJson<Record<string, unknown>>(
+  const response = await client.getJson(
     `/api/v1/quality/drift${buildQuery({
       workspace_id: workspaceId,
       dataset_id: query.datasetId,

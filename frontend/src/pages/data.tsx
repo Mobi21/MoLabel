@@ -176,11 +176,19 @@ function DatasetCard({ dataset }: { dataset: Dataset }) {
             {relativeTime(dataset.updatedAt)}
           </span>
           <div className="flex gap-1.5">
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+            >
               <Eye className="h-3 w-3" />
               Records
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+            >
               <BarChart3 className="h-3 w-3" />
               Analytics
             </Button>
@@ -193,8 +201,8 @@ function DatasetCard({ dataset }: { dataset: Dataset }) {
 
 function DatasetCatalogTab() {
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [formatFilter, setFormatFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [formatFilter, setFormatFilter] = useState('all')
 
   const filtered = mockDatasets.filter((ds) => {
     const matchesSearch =
@@ -203,8 +211,7 @@ function DatasetCatalogTab() {
       ds.description.toLowerCase().includes(search.toLowerCase())
     const matchesStatus =
       statusFilter === 'all' || ds.healthStatus === statusFilter
-    const matchesFormat =
-      formatFilter === 'all' || ds.format === formatFilter
+    const matchesFormat = formatFilter === 'all' || ds.format === formatFilter
     return matchesSearch && matchesStatus && matchesFormat
   })
 
@@ -218,7 +225,9 @@ function DatasetCatalogTab() {
             <Input
               placeholder="Search datasets..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value)
+              }}
               className="pl-8"
             />
           </div>
@@ -310,9 +319,7 @@ function TimelineEntry({
     <div className="flex gap-3">
       <div className="flex flex-col items-center">
         <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
-        {!isLast && (
-          <div className="w-px flex-1 bg-border" />
-        )}
+        {!isLast && <div className="w-px flex-1 bg-border" />}
       </div>
       <div className={`pb-4 ${isLast ? 'pb-0' : ''}`}>
         <p className="text-xs font-medium leading-none">{label}</p>
@@ -339,19 +346,11 @@ function RecordInspectorTab() {
         </CardHeader>
         <CardContent>
           <div className="divide-y divide-border">
-            <FieldRow
-              label="external_id"
-              value="urban-sf-frame-4821"
-              mono
-            />
+            <FieldRow label="external_id" value="urban-sf-frame-4821" mono />
             <FieldRow label="sequence_index" value="4821" mono />
             <FieldRow label="content_hash" value="a3f8c2..." mono />
             <FieldRow label="source" value="cameras/front_center" mono />
-            <FieldRow
-              label="timestamp"
-              value="2026-01-15T14:23:41Z"
-              mono
-            />
+            <FieldRow label="timestamp" value="2026-01-15T14:23:41Z" mono />
             <FieldRow label="resolution" value="1920x1080" />
             <FieldRow label="weather" value="overcast" />
           </div>
@@ -387,9 +386,7 @@ function RecordInspectorTab() {
                 <span className="font-semibold">3</span>
               </div>
               <div className="flex gap-1">
-                <span className="text-muted-foreground">
-                  pedestrian_count:
-                </span>
+                <span className="text-muted-foreground">pedestrian_count:</span>
                 <span className="font-semibold">1</span>
               </div>
               <div className="flex gap-1">
@@ -406,9 +403,7 @@ function RecordInspectorTab() {
           {/* Human review */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium">
-                Human: Sarah Chen
-              </span>
+              <span className="text-xs font-medium">Human: Sarah Chen</span>
               <Badge
                 variant="outline"
                 className="border-emerald-500/20 bg-emerald-500/10 text-[10px] text-emerald-600"
@@ -427,9 +422,7 @@ function RecordInspectorTab() {
                 </span>
               </div>
               <div className="flex gap-1">
-                <span className="text-muted-foreground">
-                  pedestrian_count:
-                </span>
+                <span className="text-muted-foreground">pedestrian_count:</span>
                 <span className="font-semibold">1</span>
               </div>
             </div>
@@ -567,7 +560,7 @@ const labelDistribution = [
   { label: 'construction', count: 2_100, color: 'bg-red-500' },
 ] as const
 
-const maxLabelCount = labelDistribution[0]?.count ?? 1
+const maxLabelCount = labelDistribution[0].count
 
 const qualityTrend = [62, 68, 71, 74, 78, 82, 85, 88, 89, 91, 91, 92] as const
 
@@ -580,7 +573,7 @@ const agreementMatrix = [
 const reviewerNames = ['Sarah C.', 'Marcus J.', 'Elena R.'] as const
 
 const driftTrend = [
-  0.018, 0.015, 0.019, 0.021, 0.017, 0.020, 0.022, 0.023,
+  0.018, 0.015, 0.019, 0.021, 0.017, 0.02, 0.022, 0.023,
 ] as const
 
 function LabelDistributionCard() {
@@ -611,7 +604,7 @@ function LabelDistributionCard() {
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className={`h-full rounded-full ${item.color} transition-all`}
-                  style={{ width: `${pct}%` }}
+                  style={{ width: `${String(pct)}%` }}
                 />
               </div>
             </div>
@@ -631,10 +624,10 @@ function QualityOverTimeCard() {
   }))
 
   const pathD = points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${String(p.x)} ${String(p.y)}`)
     .join(' ')
 
-  const areaD = `${pathD} L 100 ${chartHeight} L 0 ${chartHeight} Z`
+  const areaD = `${pathD} L 100 ${String(chartHeight)} L 0 ${String(chartHeight)} Z`
 
   return (
     <Card>
@@ -654,14 +647,22 @@ function QualityOverTimeCard() {
           <span>W12</span>
         </div>
         <svg
-          viewBox={`0 0 100 ${chartHeight}`}
+          viewBox={`0 0 100 ${String(chartHeight)}`}
           className="h-[120px] w-full"
           preserveAspectRatio="none"
         >
           <defs>
             <linearGradient id="qualityGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.02" />
+              <stop
+                offset="0%"
+                stopColor="hsl(var(--primary))"
+                stopOpacity="0.3"
+              />
+              <stop
+                offset="100%"
+                stopColor="hsl(var(--primary))"
+                stopOpacity="0.02"
+              />
             </linearGradient>
           </defs>
           <path d={areaD} fill="url(#qualityGrad)" />
@@ -832,7 +833,7 @@ function DriftDetectionCard() {
                     className={`w-full rounded-sm transition-colors ${
                       isLast ? 'bg-primary' : 'bg-primary/30'
                     }`}
-                    style={{ height: `${h}px` }}
+                    style={{ height: `${String(h)}px` }}
                   />
                 </div>
               )
@@ -891,15 +892,24 @@ export function DataPage() {
       {/* Tabs */}
       <Tabs defaultValue="catalog">
         <TabsList>
-          <TabsTrigger value="catalog" className="gap-1.5 text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger
+            value="catalog"
+            className="gap-1.5 text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
             <Database className="h-3.5 w-3.5" />
             Dataset Catalog
           </TabsTrigger>
-          <TabsTrigger value="inspector" className="gap-1.5 text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger
+            value="inspector"
+            className="gap-1.5 text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
             <Eye className="h-3.5 w-3.5" />
             Record Inspector
           </TabsTrigger>
-          <TabsTrigger value="analytics" className="gap-1.5 text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger
+            value="analytics"
+            className="gap-1.5 text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
             <BarChart3 className="h-3.5 w-3.5" />
             Analytics
           </TabsTrigger>

@@ -10,4 +10,4 @@
  *   // ... use generated SDK functions
  */
 
-export {};
+export {}

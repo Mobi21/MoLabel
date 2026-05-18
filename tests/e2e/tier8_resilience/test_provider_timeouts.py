@@ -27,7 +27,11 @@ async def test_provider_timeouts(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-provider-timeout-test", "workspace_name": "Provider Timeout Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-provider-timeout-test",
+                "workspace_name": "Provider Timeout Test",
+            },
         )
         assert ws.status_code == 201
         _ws_id = ws.json()["workspace_id"]
@@ -92,9 +96,9 @@ async def test_provider_timeouts(client, ctx):
             "/api/v1/model-profiles",
             json={
                 "model_profile_slug": "minimax-2-7",
-                "model_identifier": "minimax-2.7",
+                "model_identifier": "MiniMax-M2.7-highspeed",
                 "provider_type": "anthropic",
-                "base_url": "https://api.minimax.chat/v1",
+                "base_url": "https://api.minimax.io/anthropic",
             },
         )
         assert model_resp.status_code == 201

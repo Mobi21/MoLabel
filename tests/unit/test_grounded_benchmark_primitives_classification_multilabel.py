@@ -54,7 +54,7 @@ def _bundle_for_metrics(
         default_model_profile={
             "provider_type": "anthropic",
             "provider_name": "MiniMax",
-            "model_identifier": "minimax-2.7",
+            "model_identifier": "MiniMax-M2.7-highspeed",
             "sdk_stack": "anthropic_sdk",
         },
     )

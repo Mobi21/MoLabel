@@ -38,7 +38,11 @@ async def test_all_eight_agent_roles(
     """T5-10: All 8 AgentRole enum values accepted by the agent-runs API."""
     with checkpoint(ctx, "session_setup"):
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-agent-roles-test", "workspace_name": "Agent Roles Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-agent-roles-test",
+                "workspace_name": "Agent Roles Test",
+            },
         )
         assert ws_resp.status_code == 201
 

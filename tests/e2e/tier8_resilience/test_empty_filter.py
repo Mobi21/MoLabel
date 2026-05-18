@@ -27,7 +27,11 @@ async def test_empty_filter(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-empty-filter-test", "workspace_name": "Empty Filter Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-empty-filter-test",
+                "workspace_name": "Empty Filter Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

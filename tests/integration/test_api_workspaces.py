@@ -66,9 +66,7 @@ async def test_list_workspaces_with_limit(client):
 @pytest.mark.asyncio
 async def test_get_workspace_not_found(client):
     """API-004: GET /workspaces/{id} returns 404 for unknown workspace."""
-    resp = await client.get(
-        "/api/v1/workspaces/00000000-0000-0000-0000-000000000099"
-    )
+    resp = await client.get("/api/v1/workspaces/00000000-0000-0000-0000-000000000099")
     assert resp.status_code == 404
 
 

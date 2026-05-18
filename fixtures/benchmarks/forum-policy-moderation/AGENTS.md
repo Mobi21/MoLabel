@@ -1,12 +1,12 @@
 # AGENTS.md
 
 Use this benchmark when Codex is validating evidence-aware moderation behavior
-with MiniMax 2.7 and MoLabel.
+with MiniMax 2.7 highspeed and MoLabel.
 
 ## Operating Contract
 
 - Codex is the operator, scorer, and reviewer of disagreements.
-- MiniMax 2.7 is the moderation model under test.
+- MiniMax 2.7 highspeed is the moderation model under test.
 - Gold labels are authoritative for scoring.
 - Simulated human actions are intentionally imperfect in places.
 - The model must give evidence-based moderation labels, not policy essays.

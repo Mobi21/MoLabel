@@ -6,7 +6,6 @@ from pathlib import Path
 
 import yaml
 
-
 BENCHMARKS_ROOT = Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks"
 
 
@@ -45,7 +44,9 @@ def _raw_record_ids(workspace_root: Path, scenario: dict) -> set[str]:
 
 
 def test_benchmark_fixture_workspaces_are_self_consistent() -> None:
-    scenario_paths = sorted(BENCHMARKS_ROOT.glob("*/workbench/benchmarks/scenario.yaml"))
+    scenario_paths = sorted(
+        BENCHMARKS_ROOT.glob("*/workbench/benchmarks/scenario.yaml")
+    )
     assert scenario_paths, "Expected benchmark scenarios under fixtures/benchmarks"
 
     for scenario_path in scenario_paths:
@@ -54,7 +55,10 @@ def test_benchmark_fixture_workspaces_are_self_consistent() -> None:
 
         assert scenario["default_model_profile"]["provider_type"] == "anthropic"
         assert scenario["default_model_profile"]["provider_name"] == "MiniMax"
-        assert scenario["default_model_profile"]["model_identifier"] == "minimax-2.7"
+        assert (
+            scenario["default_model_profile"]["model_identifier"]
+            == "MiniMax-M2.7-highspeed"
+        )
         assert scenario["default_model_profile"]["sdk_stack"] == "anthropic_sdk"
         assert "human_review" in scenario["exercise_modes"]
 
@@ -71,7 +75,11 @@ def test_benchmark_fixture_workspaces_are_self_consistent() -> None:
         raw_ids = _raw_record_ids(workspace_root, scenario)
         gold_rows = _load_jsonl(gold_labels_path)
         gold_ids = {row["record_id"] for row in gold_rows}
-        assert raw_ids == gold_ids, f"Gold labels do not align with source records for {scenario['scenario_id']}"
+        message = (
+            "Gold labels do not align with source records for "
+            f"{scenario['scenario_id']}"
+        )
+        assert raw_ids == gold_ids, message
 
         intentional_error_count = 0
         for relative_path in scenario["human_label_paths"] + scenario["review_paths"]:

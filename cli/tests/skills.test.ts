@@ -16,8 +16,16 @@ describe('skills', () => {
       join(packageRoot, 'skills', 'molabel-grounded-benchmark-operator'),
       { recursive: true },
     )
-    await writeFile(join(packageRoot, 'skills', 'codex', 'SKILL.md'), '# codex\n', 'utf8')
-    await writeFile(join(packageRoot, 'skills', 'shared', 'AGENTS.md'), '# shared\n', 'utf8')
+    await writeFile(
+      join(packageRoot, 'skills', 'codex', 'SKILL.md'),
+      '# codex\n',
+      'utf8',
+    )
+    await writeFile(
+      join(packageRoot, 'skills', 'shared', 'AGENTS.md'),
+      '# shared\n',
+      'utf8',
+    )
     await writeFile(
       join(
         packageRoot,

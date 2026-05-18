@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This benchmark evaluates whether MiniMax 2.7 can moderate messy markdown thread
+This benchmark evaluates whether MiniMax 2.7 highspeed can moderate messy markdown thread
 content with evidence-backed reasoning while Codex operates the workflow in
 MoLabel.
 

@@ -22,6 +22,7 @@ from molabel.core.providers.base import (
     make_metadata,
     resolve_api_key,
 )
+from molabel.core.providers.model_defaults import MINIMAX_M27_HIGHSPEED
 from molabel.core.types import (
     CompletionChunk,
     CompletionResult,
@@ -43,6 +44,10 @@ _ANTHROPIC_PRICING: dict[str, tuple[float, float]] = {
     "claude-3-5-sonnet-20241022": (3.0e-6, 15.0e-6),
     "claude-3-5-haiku-20241022": (0.8e-6, 4.0e-6),
     "claude-3-opus-20240229": (15.0e-6, 75.0e-6),
+    MINIMAX_M27_HIGHSPEED.model_identifier: (
+        MINIMAX_M27_HIGHSPEED.cost_per_input_token or 0.0,
+        MINIMAX_M27_HIGHSPEED.cost_per_output_token or 0.0,
+    ),
 }
 
 
@@ -168,11 +173,17 @@ class AnthropicAdapter:
     def list_models(self) -> list[ModelInfo]:
         models: list[ModelInfo] = []
         for model_id, (inp_cost, out_cost) in _ANTHROPIC_PRICING.items():
+            if model_id == MINIMAX_M27_HIGHSPEED.model_identifier:
+                display_name = MINIMAX_M27_HIGHSPEED.display_name
+                context_window = MINIMAX_M27_HIGHSPEED.context_window
+            else:
+                display_name = model_id.replace("-", " ").title()
+                context_window = 200000
             models.append(
                 ModelInfo(
                     model_id=model_id,
-                    display_name=model_id.replace("-", " ").title(),
-                    context_window=200000,
+                    display_name=display_name,
+                    context_window=context_window,
                     supports_structured_output=True,
                     supports_logprobs=False,
                     cost_per_input_token=inp_cost,

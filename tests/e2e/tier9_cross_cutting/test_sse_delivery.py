@@ -11,6 +11,7 @@ disconnect using a short read timeout.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 
 import httpx
 import pytest
@@ -63,10 +64,8 @@ async def _sse_get(client: InstrumentedClient, url: str) -> tuple[int, str, str]
                 if first_chunk.strip():
                     return  # Got first event — exit via return, not break
 
-    try:
+    with contextlib.suppress(TimeoutError, httpx.ReadTimeout):
         await asyncio.wait_for(_read(), timeout=1.0)
-    except (asyncio.TimeoutError, httpx.ReadTimeout):
-        pass  # Expected: infinite stream cancelled after first event
 
     return status_code, content_type, first_chunk
 
@@ -85,19 +84,25 @@ async def test_sse_delivery(
 
     # ── Agent run SSE ─────────────────────────────────────────────────────
     with checkpoint(ctx, "agent_run_sse_content_type"):
-        status, ct, _ = await _sse_get(client, f"{BASE}/events/agent-runs/{FAKE_AGENT_RUN_ID}")
+        status, ct, _ = await _sse_get(
+            client, f"{BASE}/events/agent-runs/{FAKE_AGENT_RUN_ID}"
+        )
         assert status == 200, f"Expected 200, got {status}"
         assert "text/event-stream" in ct, f"Expected text/event-stream, got: {ct}"
 
     with checkpoint(ctx, "agent_run_sse_event_structure"):
-        status, _, chunk = await _sse_get(client, f"{BASE}/events/agent-runs/{FAKE_AGENT_RUN_ID}")
+        status, _, chunk = await _sse_get(
+            client, f"{BASE}/events/agent-runs/{FAKE_AGENT_RUN_ID}"
+        )
         assert status == 200
         assert any(m in chunk for m in ("event:", "data:", ":")), (
             f"No SSE markers in chunk: {chunk[:200]!r}"
         )
 
     with checkpoint(ctx, "agent_run_sse_has_data_lines"):
-        status, _, chunk = await _sse_get(client, f"{BASE}/events/agent-runs/{FAKE_AGENT_RUN_ID}")
+        status, _, chunk = await _sse_get(
+            client, f"{BASE}/events/agent-runs/{FAKE_AGENT_RUN_ID}"
+        )
         assert status == 200
         assert "data:" in chunk, f"Expected 'data:' lines, got: {chunk[:200]!r}"
 
@@ -108,7 +113,9 @@ async def test_sse_delivery(
         assert "text/event-stream" in ct, f"Expected text/event-stream, got: {ct}"
 
     with checkpoint(ctx, "queue_sse_event_structure"):
-        status, _, chunk = await _sse_get(client, f"{BASE}/events/queue/{FAKE_QUEUE_ID}")
+        status, _, chunk = await _sse_get(
+            client, f"{BASE}/events/queue/{FAKE_QUEUE_ID}"
+        )
         assert status == 200
         assert any(m in chunk for m in ("event:", "data:", ":")), (
             f"No SSE markers in queue chunk: {chunk[:200]!r}"
@@ -116,12 +123,16 @@ async def test_sse_delivery(
 
     # ── Workflow SSE ──────────────────────────────────────────────────────
     with checkpoint(ctx, "workflow_sse_content_type"):
-        status, ct, _ = await _sse_get(client, f"{BASE}/events/workflow/{FAKE_EXECUTION_ID}")
+        status, ct, _ = await _sse_get(
+            client, f"{BASE}/events/workflow/{FAKE_EXECUTION_ID}"
+        )
         assert status == 200, f"Expected 200, got {status}"
         assert "text/event-stream" in ct, f"Expected text/event-stream, got: {ct}"
 
     with checkpoint(ctx, "workflow_sse_event_structure"):
-        status, _, chunk = await _sse_get(client, f"{BASE}/events/workflow/{FAKE_EXECUTION_ID}")
+        status, _, chunk = await _sse_get(
+            client, f"{BASE}/events/workflow/{FAKE_EXECUTION_ID}"
+        )
         assert status == 200
         assert any(m in chunk for m in ("event:", "data:", ":")), (
             f"No SSE markers in workflow chunk: {chunk[:200]!r}"

@@ -47,15 +47,29 @@ tax_definitions:
     minuend_variant: paper_direct
     subtrahend_mode: model
     subtrahend_variant: molabel_operated
-  - tax_id: workflow_tax
-    name: Workflow Tax
+    minuend_stage: paper_model
+    subtrahend_stage: molabel_model
+  - tax_id: autorun_tax
+    name: Autorun Tax
     minuend_mode: model
     minuend_variant: molabel_operated
     subtrahend_mode: workflow
     subtrahend_variant: molabel_operated
+    minuend_stage: molabel_model
+    subtrahend_stage: workflow_autorun
+  - tax_id: review_tax
+    name: Review Tax
+    minuend_mode: workflow
+    minuend_variant: molabel_operated
+    subtrahend_mode: workflow
+    subtrahend_variant: molabel_operated
+    minuend_stage: workflow_autorun
+    subtrahend_stage: workflow_reviewed
   - tax_id: operator_tax
     name: Operator Tax
     minuend_mode: workflow
     minuend_variant: molabel_operated
     subtrahend_mode: operator
     subtrahend_variant: molabel_operated
+    minuend_stage: workflow_reviewed
+    subtrahend_stage: operator_reviewed

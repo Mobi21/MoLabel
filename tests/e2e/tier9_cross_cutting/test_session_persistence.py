@@ -41,8 +41,7 @@ async def test_session_persistence(
     client: InstrumentedClient,
     ctx: TestContext,
 ) -> None:
-    """T9-05: Session cookie persists across 10+ requests, switch works, logout → 401.
-    """
+    """T9-05: Session cookie persists, switch works, and logout returns 401."""
 
     reviewer_a_id = await _create_reviewer(client, "Session Reviewer A")
     reviewer_b_id = await _create_reviewer(client, "Session Reviewer B")

@@ -55,6 +55,27 @@ async def test_providers_list_scan_health_models_hf(
             assert body["provider_type"] == provider_type
             assert "health" in body
             assert "is_healthy" in body["health"]
+            assert "resolved_base_url" in body
+            assert "auth_ref" in body
+            assert "reachable" in body
+            assert "authenticated" in body
+            assert "model_valid" in body
+
+    with checkpoint(ctx, "health_minimax_model_identity"):
+        resp = await client.get(
+            f"{BASE}/providers/health/anthropic",
+            params={
+                "base_url": "https://api.minimax.io/anthropic",
+                "auth_ref": "ANTHROPIC_API_KEY",
+                "model_id": "MiniMax-M2.7-highspeed",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["resolved_base_url"] == "https://api.minimax.io/anthropic"
+        assert body["auth_ref"] == "ANTHROPIC_API_KEY"
+        assert body["model_id"] == "MiniMax-M2.7-highspeed"
+        assert body["model_valid"] is True
 
     for provider_type in PROVIDER_TYPES:
         with checkpoint(ctx, f"models_{provider_type}"):

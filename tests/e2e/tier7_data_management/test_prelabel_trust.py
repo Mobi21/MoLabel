@@ -28,7 +28,11 @@ async def test_prelabel_trust(client, ctx):
     # ── Checkpoint 1: Setup workspace + session ───────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-pre-label-trust-test", "workspace_name": "Pre-label Trust Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-pre-label-trust-test",
+                "workspace_name": "Pre-label Trust Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

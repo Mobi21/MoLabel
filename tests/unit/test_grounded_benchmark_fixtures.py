@@ -121,7 +121,7 @@ def test_grounded_benchmark_fixtures_are_self_consistent() -> None:
         assert bundle.metrics.tax_definitions, "Expected grounded tax definitions"
         assert bundle.baselines.baselines, "Expected baseline entries"
         assert bundle.operator is not None, "Expected operator checklist"
-        assert bundle.operator.current_labeling_engine == "MiniMax 2.7"
+        assert bundle.operator.current_labeling_engine == "MiniMax 2.7 highspeed"
         assert bundle.operator.label_quality_weight > 0
         assert bundle.operator.checklist_weight > 0
         assert bundle.operator.blocking_check_ids

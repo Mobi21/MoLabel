@@ -8,3 +8,5 @@
 - Use `molabel workspace detect` before mutating local canonical artifacts.
 - Treat the GUI as the inspection and manual-review layer, not the primary automation surface.
 - The primary command families are `session`, `dataset`, `task-schema`, `prompt`, `workflow`, `queue`, `review`, `adjudication`, `agent-run`, `quality`, `export`, `release`, and `artifact`.
+- Benchmark operators must create or confirm a reviewer session before claiming review work.
+- A grounded benchmark run is not complete until the review queue is empty and the required run artifacts are written.

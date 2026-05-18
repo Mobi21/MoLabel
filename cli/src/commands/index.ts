@@ -5,6 +5,8 @@ import { registerBenchmarkCommands } from './benchmark.js'
 import { registerAdjudicationCommands } from './adjudication.js'
 import { registerAgentRunCommands } from './agent-run.js'
 import { registerArtifactCommands } from './artifact.js'
+import { registerAuditCommands } from './audit.js'
+import { registerCodebookCommands } from './codebook.js'
 import { registerCoreCommands } from './core.js'
 import { registerDatasetCommands } from './dataset.js'
 import { registerExportCommands } from './export.js'
@@ -15,13 +17,17 @@ import { registerQualityCommands } from './quality.js'
 import { registerQueueCommands } from './queue.js'
 import { registerReleaseCommands } from './release.js'
 import { registerReviewCommands } from './review.js'
+import { registerRunCommands } from './run.js'
 import { registerSessionCommands } from './session.js'
 import { registerSkillCommands } from './skill.js'
 import { registerTaskSchemaCommands } from './task-schema.js'
 import { registerWorkflowCommands } from './workflow.js'
 import { registerWorkspaceCommands } from './workspace.js'
 
-export function registerCommands(program: Command, runtime: CliRuntimeOptions): void {
+export function registerCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
   registerCoreCommands(program, runtime)
   registerSessionCommands(program, runtime)
   registerWorkspaceCommands(program, runtime)
@@ -40,5 +46,8 @@ export function registerCommands(program: Command, runtime: CliRuntimeOptions): 
   registerExportCommands(program, runtime)
   registerReleaseCommands(program, runtime)
   registerArtifactCommands(program, runtime)
+  registerAuditCommands(program, runtime)
+  registerRunCommands(program, runtime)
+  registerCodebookCommands(program, runtime)
   registerSkillCommands(program, runtime)
 }

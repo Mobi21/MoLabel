@@ -30,7 +30,11 @@ async def test_rollback_partial(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-rollback-partial-test", "workspace_name": "Rollback Partial Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-rollback-partial-test",
+                "workspace_name": "Rollback Partial Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

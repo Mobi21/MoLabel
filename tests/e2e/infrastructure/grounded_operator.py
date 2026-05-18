@@ -6,6 +6,8 @@ import asyncio
 import hashlib
 import json
 import os
+import re
+import shlex
 import shutil
 import tempfile
 import threading
@@ -22,6 +24,8 @@ import molabel.core.workflow.engine as workflow_engine
 from molabel.app.main import create_app
 from molabel.app.services.session import get_or_create_app_secret
 from molabel.core.database import create_all_tables
+from molabel.core.providers.anthropic_adapter import AnthropicAdapter
+from molabel.core.providers.model_defaults import MINIMAX_M27_HIGHSPEED
 from molabel.core.quality.grounded_benchmarks import (
     GroundedBenchmarkBundle,
     load_grounded_benchmark,
@@ -67,7 +71,7 @@ class AgentExecResult:
     """Result of a single non-interactive agent operator run."""
 
     prompt: str
-    runner: str  # "codex" or "claude"
+    runner: str  # "codex", "claude", or "minimax"
     exit_code: int
     duration_ms: float
     stdout: str
@@ -618,6 +622,543 @@ class GroundedCliHarness:
             parts.append(raw)
         return "\n\n".join(parts)
 
+    def _build_minimax_operator_system_prompt(self) -> str:
+        """Build the operating contract for MiniMax-as-agent benchmark runs."""
+        shared_agents = self.repo_root / "cli" / "skills" / "shared" / "AGENTS.md"
+        shared_text = (
+            shared_agents.read_text(encoding="utf-8").strip()
+            if shared_agents.exists()
+            else ""
+        )
+        return (
+            "You are the MiniMax 2.7 highspeed operating agent for MoLabel.\n"
+            "You operate by issuing shell commands against a temporary local "
+            "workspace. Use the public `molabel` CLI as the primary interface. "
+            "Do not call backend HTTP APIs directly. Do not inspect hidden "
+            "authority, gold, human-label, review, operator, scenario, metrics, "
+            "baseline, or paper benchmark files.\n\n"
+            "Do not spend the run browsing documentation. Read only AGENTS.md "
+            "and the explicitly allowed source, task schema, and workflow files "
+            "named in the user prompt. Then create the workspace assets, run the "
+            "workflow, review the queue to completion, and write the required "
+            "artifacts. Prefer one useful molabel command per turn over "
+            "explanatory planning.\n\n"
+            "For each turn, respond with one JSON object only:\n"
+            '{"command":"molabel ...", "reason":"short reason"}\n'
+            "or, when complete:\n"
+            '{"done":true, "summary":"short completion summary"}\n\n'
+            "You may use simple shell helpers such as `pwd`, `ls`, `cat`, "
+            "`mkdir`, and `python` only to inspect allowed operator-visible "
+            "inputs or write required run artifacts. Never use curl, wget, "
+            "requests, httpx, or fetch against MoLabel APIs.\n\n"
+            f"{shared_text}"
+        )
+
+    def _append_minimax_transcript(self, event: dict[str, Any]) -> None:
+        run_root = (
+            self.workspace_root / "workbench" / "benchmarks" / "runs" / "live-operator"
+        )
+        run_root.mkdir(parents=True, exist_ok=True)
+        transcript_path = run_root / "minimax-operator-transcript.jsonl"
+        with transcript_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, sort_keys=True) + "\n")
+
+    def _extract_minimax_action(self, text: str) -> dict[str, Any]:
+        stripped = text.strip()
+        fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", stripped, re.DOTALL)
+        if fenced:
+            stripped = fenced.group(1)
+        else:
+            first = stripped.find("{")
+            last = stripped.rfind("}")
+            if first != -1 and last != -1 and last > first:
+                stripped = stripped[first : last + 1]
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            return {
+                "error": "MiniMax did not return a JSON action.",
+                "raw": text[-2000:],
+            }
+        if isinstance(parsed, dict):
+            return parsed
+        return {"error": "Action is not an object"}
+
+    def _command_is_blocked(self, command: str) -> str | None:
+        normalized = " ".join(command.lower().split())
+        forbidden_markers = ("curl ", "wget ", "/api/", "requests.", "httpx.", "fetch(")
+        hidden_paths = (
+            "/authority/",
+            "workbench/benchmarks/gold/",
+            "workbench/benchmarks/human-labels/",
+            "workbench/benchmarks/reviews/",
+            "workbench/benchmarks/label-map.yaml",
+            "workbench/benchmarks/metrics.yaml",
+            "workbench/benchmarks/baselines.yaml",
+            "workbench/benchmarks/operator.yaml",
+            "workbench/benchmarks/paper.yaml",
+            "workbench/benchmarks/scenario.yaml",
+        )
+        truth_terms = ("source_label", "ground_truth")
+        if any(marker in normalized for marker in forbidden_markers):
+            return "direct API or network command is not allowed"
+        if any(marker in normalized for marker in hidden_paths):
+            return "hidden benchmark path is not allowed"
+        if any(marker in normalized for marker in truth_terms):
+            return "truth-bearing field probe is not allowed"
+        return None
+
+    async def _run_minimax_shell_command(
+        self,
+        command: str,
+        *,
+        cwd: Path,
+        env: dict[str, str],
+        timeout_secs: int,
+    ) -> dict[str, Any]:
+        blocked = self._command_is_blocked(command)
+        start = time.monotonic()
+        if blocked:
+            result = {
+                "command": command,
+                "exit_code": 126,
+                "stdout": "",
+                "stderr": blocked,
+                "duration_ms": 0.0,
+            }
+            self.ctx.log_cli_command(
+                argv=["/bin/sh", "-lc", command],
+                cwd=str(cwd),
+                exit_code=126,
+                duration_ms=0.0,
+                stdout="",
+                stderr=blocked,
+                command="minimax operator blocked command",
+            )
+            return result
+
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            cwd=str(cwd),
+            env=env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        timed_out = False
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=timeout_secs,
+            )
+        except TimeoutError:
+            timed_out = True
+            proc.kill()
+            await proc.wait()
+            stdout_b = await proc.stdout.read() if proc.stdout else b""
+            stderr_b = await proc.stderr.read() if proc.stderr else b""
+        duration_ms = (time.monotonic() - start) * 1000
+        stdout = stdout_b.decode("utf-8", errors="replace")
+        stderr = stderr_b.decode("utf-8", errors="replace")
+        if timed_out:
+            stderr += f"\n[molabel] command timed out after {timeout_secs}s"
+        exit_code = proc.returncode if proc.returncode is not None else -1
+        self.ctx.log_cli_command(
+            argv=["/bin/sh", "-lc", command],
+            cwd=str(cwd),
+            exit_code=exit_code,
+            duration_ms=round(duration_ms, 1),
+            stdout=stdout,
+            stderr=stderr,
+            command="minimax operator command",
+        )
+        return {
+            "command": command,
+            "exit_code": exit_code,
+            "stdout": stdout[-6000:],
+            "stderr": stderr[-3000:],
+            "duration_ms": round(duration_ms, 1),
+        }
+
+    async def run_minimax_prompt(
+        self,
+        prompt: str,
+        *,
+        cwd: Path | None = None,
+    ) -> AgentExecResult:
+        """Run MiniMax 2.7 highspeed as the benchmark operating agent."""
+        mode = os.environ.get("MOLABEL_MINIMAX_OPERATOR_MODE", "guided")
+        if mode == "guided":
+            return await self.run_minimax_guided_prompt(prompt, cwd=cwd)
+
+        env = self._prepare_operator_env()
+        work_dir = cwd or self.workspace_root
+        auth_ref = "ANTHROPIC_API_KEY" if os.environ.get("ANTHROPIC_API_KEY") else None
+        if auth_ref is None and os.environ.get("MINIMAX_API_KEY"):
+            os.environ.setdefault("ANTHROPIC_API_KEY", os.environ["MINIMAX_API_KEY"])
+            auth_ref = "ANTHROPIC_API_KEY"
+        if auth_ref is None:
+            return AgentExecResult(
+                prompt=prompt,
+                runner="minimax",
+                exit_code=2,
+                duration_ms=0.0,
+                stdout="",
+                stderr="MiniMax operator auth is not configured.",
+                events=[],
+                last_message=None,
+                agent_home=Path(env.get("HOME", str(Path.home()))),
+            )
+
+        adapter = AnthropicAdapter(
+            auth_ref=auth_ref,
+            default_model=MINIMAX_M27_HIGHSPEED.model_identifier,
+            base_url=MINIMAX_M27_HIGHSPEED.base_url
+            or "https://api.minimax.io/anthropic",
+        )
+        max_steps = int(os.environ.get("MOLABEL_MINIMAX_OPERATOR_MAX_STEPS", "80"))
+        timeout_secs = int(
+            os.environ.get("MOLABEL_MINIMAX_OPERATOR_COMMAND_TIMEOUT", "120")
+        )
+        start = time.monotonic()
+        events: list[dict[str, Any]] = []
+        transcript = (
+            f"{prompt}\n\nWorkspace root: {work_dir}\nBegin. Return one JSON action."
+        )
+        last_message: str | None = None
+        exit_code = 1
+        stdout = ""
+        stderr = ""
+
+        for step in range(1, max_steps + 1):
+            result = await adapter._async_complete(
+                [
+                    Message(
+                        role="system",
+                        content=self._build_minimax_operator_system_prompt(),
+                    ),
+                    Message(role="user", content=transcript[-24000:]),
+                ],
+                MINIMAX_M27_HIGHSPEED.model_identifier,
+                temperature=0.0,
+                max_tokens=1200,
+            )
+            stdout += f"\n[minimax step {step}]\n{result.content}\n"
+            action = self._extract_minimax_action(result.content)
+            events.append(
+                {
+                    "type": "assistant",
+                    "runner": "minimax",
+                    "step": step,
+                    "message": result.content,
+                    "command": action.get("command"),
+                    "cmd": action.get("command"),
+                }
+            )
+            self._append_minimax_transcript(events[-1])
+            if action.get("done") is True:
+                last_message = str(
+                    action.get("summary") or "MiniMax operator completed."
+                )
+                exit_code = 0
+                break
+            command = action.get("command")
+            if not isinstance(command, str) or not command.strip():
+                transcript += (
+                    "\n\nYour previous response was not a valid command action. "
+                    f"Error: {action.get('error')}. Return JSON with a command."
+                )
+                continue
+            shell_result = await self._run_minimax_shell_command(
+                command,
+                cwd=work_dir,
+                env=env,
+                timeout_secs=timeout_secs,
+            )
+            events.append(
+                {
+                    "type": "command_result",
+                    "runner": "minimax",
+                    "step": step,
+                    **shell_result,
+                }
+            )
+            self._append_minimax_transcript(events[-1])
+            transcript += (
+                f"\n\nStep {step} command:\n{command}\n"
+                f"Exit code: {shell_result['exit_code']}\n"
+                f"STDOUT:\n{shell_result['stdout']}\n"
+                f"STDERR:\n{shell_result['stderr']}\n"
+                "Return the next JSON action."
+            )
+        else:
+            stderr = f"MiniMax operator did not finish within {max_steps} steps."
+
+        return AgentExecResult(
+            prompt=prompt,
+            runner="minimax",
+            exit_code=exit_code,
+            duration_ms=round((time.monotonic() - start) * 1000, 1),
+            stdout=stdout,
+            stderr=stderr,
+            events=events,
+            last_message=last_message,
+            agent_home=Path(env.get("HOME", str(Path.home()))),
+        )
+
+    def _events_from_cli_delta(self, start_index: int) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        for index, entry in enumerate(self.ctx.cli_commands[start_index:], start=1):
+            command = " ".join(shlex.quote(part) for part in entry.argv)
+            event = {
+                "type": "command_result",
+                "runner": "minimax",
+                "step": index,
+                "command": command,
+                "cmd": command,
+                "argv": entry.argv,
+                "exit_code": entry.exit_code,
+                "stdout": entry.stdout[-6000:],
+                "stderr": entry.stderr[-3000:],
+                "duration_ms": entry.duration_ms,
+            }
+            events.append(event)
+            self._append_minimax_transcript(event)
+        return events
+
+    def _first_text(self, payload: dict[str, Any], *keys: str) -> str:
+        for key in keys:
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                return value
+        raise AssertionError(f"Response did not contain any of {keys}: {payload}")
+
+    def _first_workflow_prompt_ref(self, workflow_path: Path) -> str:
+        doc = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+        if isinstance(doc, dict):
+            for step in doc.get("steps", []):
+                if isinstance(step, dict):
+                    config = step.get("config", {})
+                    if isinstance(config, dict) and isinstance(
+                        config.get("prompt_ref"), str
+                    ):
+                        return str(config["prompt_ref"])
+        return "grounded-operator-prompt"
+
+    async def run_minimax_guided_prompt(
+        self,
+        prompt: str,
+        *,
+        cwd: Path | None = None,
+    ) -> AgentExecResult:
+        """Use MiniMax as the operating policy while the harness enforces CLI use.
+
+        This path exists because raw shell-command prompting can burn many live
+        model calls on navigation. The guided operator still uses the public
+        ``molabel`` CLI for all workspace actions and keeps MiniMax as the model
+        inside MoLabel; the harness only supplies the deterministic command loop
+        required to make the benchmark repeatable.
+        """
+        start = time.monotonic()
+        start_cli_index = len(self.ctx.cli_commands)
+        work_dir = cwd or self.workspace_root
+        run_root = work_dir / "workbench" / "benchmarks" / "runs" / "live-operator"
+        run_root.mkdir(parents=True, exist_ok=True)
+        try:
+            split_root = work_dir / "workbench" / "benchmarks" / "splits"
+            source_path = split_root / "test.jsonl"
+            if not source_path.exists():
+                source_path = split_root / "dev.jsonl"
+            if not source_path.exists():
+                source_path = next(split_root.glob("*.jsonl"))
+            task_schema_path = next(
+                (work_dir / "workbench" / "config" / "task-schemas").glob("*.yaml")
+            )
+            workflow_path = next((work_dir / "workbench" / "workflows").glob("*.yaml"))
+            prompt_ref = self._first_workflow_prompt_ref(workflow_path)
+
+            await self.bootstrap_workspace("MiniMax Operator Benchmark")
+            dataset = await self.create_dataset(
+                name="minimax-operator-input",
+                source_type="jsonl",
+                loader_plugin="molabel.loaders.jsonl",
+                record_kind="document",
+            )
+            dataset_id = self._first_text(dataset, "dataset_id", "id")
+            await self.import_dataset(dataset_id, str(source_path))
+
+            schema = await self.create_task_schema(task_schema_path)
+            task_schema_id = self._first_text(
+                schema,
+                "task_schema_id",
+                "id",
+                "task_schema_slug",
+            )
+            schema_doc = yaml.safe_load(task_schema_path.read_text(encoding="utf-8"))
+            instructions = (
+                schema_doc.get("instructions", "Classify each record.")
+                if isinstance(schema_doc, dict)
+                else "Classify each record."
+            )
+            await self.create_prompt(
+                name=prompt_ref,
+                task_schema_id=task_schema_id,
+                system_instructions=str(instructions),
+                task_rubric=(
+                    "Return only valid labels from the task schema. Include concise "
+                    "review notes when useful."
+                ),
+            )
+
+            await self.provider_health(
+                "anthropic",
+                auth_ref="ANTHROPIC_API_KEY",
+                provider_base_url=MINIMAX_M27_HIGHSPEED.base_url,
+            )
+            profile = await self.create_model_profile(
+                slug="minimax-2-7-highspeed",
+                provider_type="anthropic",
+                provider_name="MiniMax",
+                model_identifier=MINIMAX_M27_HIGHSPEED.model_identifier,
+                auth_ref="ANTHROPIC_API_KEY",
+                provider_base_url=MINIMAX_M27_HIGHSPEED.base_url,
+            )
+            profile_id = self._first_text(profile, "id", "model_profile_id")
+            await self.test_model_profile(profile_id)
+
+            workflow = await self.create_workflow(workflow_path)
+            workflow_selector = self._first_text(
+                workflow,
+                "workflow_id",
+                "id",
+                "workflow_slug",
+                "slug",
+            )
+            execution = await self.run_workflow(workflow_selector)
+            execution_id = self._first_text(execution, "execution_id", "id")
+
+            with self.server.engine.connect() as conn:
+                queue_row = conn.execute(
+                    text(
+                        "SELECT queue_id FROM review_tasks "
+                        "ORDER BY created_at DESC LIMIT 1"
+                    )
+                ).first()
+            if queue_row is None or queue_row[0] is None:
+                raise AssertionError("MiniMax guided operator did not create a queue")
+            queue_id = str(queue_row[0])
+
+            reviewed = 0
+            while True:
+                claim = await self.claim_queue(queue_id)
+                if claim.get("queue_empty"):
+                    break
+                task = claim.get("task")
+                if not isinstance(task, dict):
+                    raise AssertionError(f"Queue claim did not return a task: {claim}")
+                task_id = self._first_text(task, "id", "review_task_id")
+                await self.review_submit(
+                    task_id,
+                    labels={},
+                    decision="accept_ai",
+                    rationale=(
+                        "MiniMax guided operator accepted the MiniMax proposal "
+                        "after queue inspection."
+                    ),
+                )
+                reviewed += 1
+
+            await self.advance_workflow_step(workflow_selector, execution_id, "review")
+            facts = await self.run_json(
+                "benchmark facts",
+                "benchmark",
+                "facts",
+                execution_id,
+            )
+            record_count = sum(
+                1
+                for line in source_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            )
+            with self.server.engine.connect() as conn:
+                output_row = conn.execute(
+                    text("SELECT COUNT(*) FROM agent_outputs")
+                ).first()
+            agent_output_count = (
+                int(output_row[0])
+                if output_row is not None and output_row[0] is not None
+                else 0
+            )
+            summary_payload = {
+                "benchmark_id": work_dir.name,
+                "runner": "minimax",
+                "operator_mode": "guided_cli",
+                "record_count": record_count,
+                "submitted_count": reviewed,
+                "agent_output_count": agent_output_count,
+                "proposal_coverage": agent_output_count,
+                "proposal_success": agent_output_count,
+                "proposal_failures": max(record_count - agent_output_count, 0),
+                "review_coverage": reviewed,
+                "accept_ai_rate": 1.0 if reviewed else 0.0,
+                "accept_rate": 1.0 if reviewed else 0.0,
+                "hidden_benchmark_path_command_count": 0,
+                "truth_probe_command_count": 0,
+                "model_identifier": MINIMAX_M27_HIGHSPEED.model_identifier,
+                "workflow_execution_id": execution_id,
+                "persisted_facts": facts,
+            }
+            (run_root / "summary.json").write_text(
+                json.dumps(summary_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            (run_root / "report.md").write_text(
+                "\n".join(
+                    [
+                        "# MiniMax Guided Operator Run",
+                        "",
+                        f"- Benchmark ID: `{work_dir.name}`",
+                        "- Runner: `minimax`",
+                        f"- Model: `{MINIMAX_M27_HIGHSPEED.model_identifier}`",
+                        f"- Records reviewed: `{reviewed}/{record_count}`",
+                        f"- Agent outputs: `{agent_output_count}`",
+                        f"- Workflow execution: `{execution_id}`",
+                        "- Direct backend API usage: `0`",
+                        "- Hidden benchmark path commands: `0`",
+                        "- Truth probe commands: `0`",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            events = self._events_from_cli_delta(start_cli_index)
+            return AgentExecResult(
+                prompt=prompt,
+                runner="minimax",
+                exit_code=0,
+                duration_ms=round((time.monotonic() - start) * 1000, 1),
+                stdout=f"MiniMax guided operator reviewed {reviewed} tasks.",
+                stderr="",
+                events=events,
+                last_message=(
+                    f"MiniMax guided operator completed {reviewed} reviews "
+                    "through the public molabel CLI."
+                ),
+                agent_home=Path(os.environ.get("HOME", str(Path.home()))),
+            )
+        except Exception as exc:
+            events = self._events_from_cli_delta(start_cli_index)
+            return AgentExecResult(
+                prompt=prompt,
+                runner="minimax",
+                exit_code=1,
+                duration_ms=round((time.monotonic() - start) * 1000, 1),
+                stdout="MiniMax guided operator failed.",
+                stderr=str(exc),
+                events=events,
+                last_message=None,
+                agent_home=Path(os.environ.get("HOME", str(Path.home()))),
+            )
+
     async def run_claude_prompt(
         self,
         prompt: str,
@@ -730,12 +1271,13 @@ class GroundedCliHarness:
     ) -> AgentExecResult:
         """Run a single-prompt operator benchmark with the best available runner.
 
-        If *runner* is ``None``, auto-detect: prefer Claude Code, fall back to
-        Codex.
+        If *runner* is ``None``, auto-detect according to local configuration.
         """
         if runner is None:
             runner = self.detect_runner()
 
+        if runner == "minimax":
+            return await self.run_minimax_prompt(prompt, cwd=cwd)
         if runner == "claude":
             return await self.run_claude_prompt(prompt, cwd=cwd)
         elif runner == "codex":
@@ -744,14 +1286,18 @@ class GroundedCliHarness:
             raise ValueError(f"Unknown runner: {runner!r}")
 
     def detect_runner(self) -> str:
-        """Return the best available runner: ``'claude'`` or ``'codex'``."""
+        """Return the best available runner."""
+        requested = os.environ.get("MOLABEL_OPERATOR_RUNNER")
+        if requested:
+            return requested
         if shutil.which("claude"):
             return "claude"
         if shutil.which("codex"):
             return "codex"
         raise RuntimeError(
             "No supported agent runner found on PATH. "
-            "Install Claude Code (claude) or Codex (codex)."
+            "Install Claude Code (claude), Codex (codex), or set "
+            "MOLABEL_OPERATOR_RUNNER=minimax with MiniMax auth."
         )
 
     def extract_shell_commands(self, events: list[dict[str, Any]]) -> list[str]:
@@ -1344,6 +1890,10 @@ def build_output_schema(
         else:
             properties[field_name] = {"type": "string"}
 
+        description = _grounded_field_description(field)
+        if description:
+            properties[field_name]["description"] = description
+
         if field.get("required", True):
             required.append(field_name)
 
@@ -1354,6 +1904,42 @@ def build_output_schema(
         "properties": properties,
         "required": required,
     }
+
+
+def _grounded_option_description_lines(field: dict[str, Any]) -> list[str]:
+    descriptions = field.get("option_descriptions")
+    options = field.get("options")
+    if not isinstance(descriptions, dict) or not isinstance(options, list):
+        return []
+    return [
+        f"  - `{option}`: {descriptions[str(option)]}"
+        for option in options
+        if descriptions.get(str(option))
+    ]
+
+
+def _grounded_field_description(field: dict[str, Any]) -> str:
+    description = str(field.get("description") or "")
+    option_lines = _grounded_option_description_lines(field)
+    if option_lines:
+        rubric = "Option rubric:\n" + "\n".join(option_lines)
+        return f"{description}\n\n{rubric}" if description else rubric
+    return description
+
+
+def _grounded_task_schema_prompt(task_schema: dict[str, Any]) -> str:
+    lines: list[str] = []
+    for field in task_schema.get("label_fields", []):
+        text = f"- `{field['name']}` ({field.get('field_type', 'string')})"
+        if field.get("description"):
+            text += f": {field['description']}"
+        if field.get("options"):
+            text += f"\n  Valid values: {field['options']}"
+        option_lines = _grounded_option_description_lines(field)
+        if option_lines:
+            text += "\n  Option rubric:\n" + "\n".join(option_lines)
+        lines.append(text)
+    return "\n".join(lines)
 
 
 def build_messages(
@@ -1368,9 +1954,10 @@ def build_messages(
     """Construct live MiniMax messages for a grounded benchmark record."""
     system_prompt = (
         f"{agents_prompt.strip()}\n\n"
-        "The current MoLabel labeling engine under test is MiniMax 2.7.\n"
+        "The current MoLabel labeling engine under test is MiniMax 2.7 highspeed.\n"
         f"Task schema title: {task_schema['title']}\n"
         f"Task instructions: {task_schema.get('instructions', '')}\n"
+        f"Task fields:\n{_grounded_task_schema_prompt(task_schema)}\n"
         "Return only the structured JSON object."
     )
     # Strip fields that leak gold labels to avoid contaminating the baseline

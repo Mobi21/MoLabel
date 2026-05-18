@@ -380,7 +380,9 @@ function ProvidersTab() {
                                 : 'bg-muted-foreground/40'
                             }`}
                           />
-                          <span className={`text-xs font-medium ${provider.connected ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                          <span
+                            className={`text-xs font-medium ${provider.connected ? 'text-emerald-500' : 'text-muted-foreground'}`}
+                          >
                             {provider.connected
                               ? 'Connected'
                               : 'Not configured'}
@@ -395,7 +397,9 @@ function ProvidersTab() {
                   <div className="flex items-center gap-3">
                     <Switch
                       checked={enabled}
-                      onCheckedChange={() => toggleProvider(provider.id)}
+                      onCheckedChange={() => {
+                        toggleProvider(provider.id)
+                      }}
                     />
                   </div>
                 </div>
@@ -552,7 +556,9 @@ function PreferencesTab() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setTheme('dark')}
+                  onClick={() => {
+                    setTheme('dark')
+                  }}
                   className={`flex flex-1 flex-col items-center gap-2 rounded-lg border-2 p-4 transition-colors ${
                     theme === 'dark'
                       ? 'border-primary bg-primary/5'
@@ -566,7 +572,9 @@ function PreferencesTab() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setTheme('light')}
+                  onClick={() => {
+                    setTheme('light')
+                  }}
                   className={`flex flex-1 flex-col items-center gap-2 rounded-lg border-2 p-4 transition-colors ${
                     theme === 'light'
                       ? 'border-primary bg-primary/5'
@@ -783,7 +791,9 @@ function AuditLogTab() {
               type="text"
               placeholder="Search events..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+              }}
               className="max-w-[260px]"
             />
             <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
@@ -883,10 +893,30 @@ export function SettingsPage() {
 
       <Tabs defaultValue="providers" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="providers" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Providers</TabsTrigger>
-          <TabsTrigger value="reviewers" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Reviewers</TabsTrigger>
-          <TabsTrigger value="preferences" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Preferences</TabsTrigger>
-          <TabsTrigger value="audit" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Audit Log</TabsTrigger>
+          <TabsTrigger
+            value="providers"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Providers
+          </TabsTrigger>
+          <TabsTrigger
+            value="reviewers"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Reviewers
+          </TabsTrigger>
+          <TabsTrigger
+            value="preferences"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Preferences
+          </TabsTrigger>
+          <TabsTrigger
+            value="audit"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            Audit Log
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="providers">

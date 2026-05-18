@@ -167,7 +167,9 @@ export function HomePage() {
   const stats = mockDashboardStats
   const activeWorkflow = mockWorkflows[0]
   const runningAgents = mockAgentRuns.filter((a) => a.status === 'running')
-  const exportInProgress = mockExports.filter((e) => e.status === 'in-progress').length
+  const exportInProgress = mockExports.filter(
+    (e) => e.status === 'in-progress',
+  ).length
   const completionPct = Math.round(
     ((currentStepIndex + 0.6) / pipelineSteps.length) * 100,
   )

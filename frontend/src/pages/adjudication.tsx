@@ -89,7 +89,7 @@ const disagreements: DisagreementItem[] = [
     context: {
       'Scene type': 'Urban 4-way intersection',
       'Time of day': 'Dusk (18:42)',
-      'Weather': 'Overcast, light rain',
+      Weather: 'Overcast, light rain',
     },
     previousResolutions: [
       {
@@ -142,7 +142,7 @@ const disagreements: DisagreementItem[] = [
     context: {
       'Scene type': 'Residential street',
       'Object class': 'Pedestrian',
-      'Visibility': 'Partial (behind parked car)',
+      Visibility: 'Partial (behind parked car)',
     },
     previousResolutions: [
       {
@@ -213,7 +213,7 @@ const disagreements: DisagreementItem[] = [
     context: {
       'Scene type': 'T-intersection',
       'Sign count': '3 visible',
-      'Visibility': 'Clear, daytime',
+      Visibility: 'Clear, daytime',
     },
     previousResolutions: [],
   },
@@ -283,7 +283,10 @@ function DisagreementCard({
             <span className="font-mono text-xs font-medium text-muted-foreground">
               {item.recordId}
             </span>
-            <Badge variant="outline" className={`text-[10px] ${config.badgeClass}`}>
+            <Badge
+              variant="outline"
+              className={`text-[10px] ${config.badgeClass}`}
+            >
               {config.label}
             </Badge>
             {item.resolved && (
@@ -296,7 +299,9 @@ function DisagreementCard({
               </Badge>
             )}
           </div>
-          <p className="mt-1 text-sm font-medium text-foreground">{item.field}</p>
+          <p className="mt-1 text-sm font-medium text-foreground">
+            {item.field}
+          </p>
           <div className="mt-1.5 flex items-center gap-1.5 text-xs">
             <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 font-mono text-blue-600">
               <Bot className="h-3 w-3" />
@@ -319,7 +324,8 @@ function DisagreementCard({
 // ── Resolution Editor ────────────────────────────────────────────────────────
 
 function ResolutionEditor({ item }: { item: DisagreementItem }) {
-  const [resolutionType, setResolutionType] = useState<ResolutionOption>('adopt-human')
+  const [resolutionType, setResolutionType] =
+    useState<ResolutionOption>('adopt-human')
   const [rationale, setRationale] = useState('')
   const [mergedValue, setMergedValue] = useState('')
   const [reviewer, setReviewer] = useState('')
@@ -345,9 +351,7 @@ function ResolutionEditor({ item }: { item: DisagreementItem }) {
                 {priorityConfig[item.priority].label} Priority
               </Badge>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {item.dataset}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{item.dataset}</p>
           </div>
 
           {/* ── Context Section ────────────────────────────────────────────── */}
@@ -361,10 +365,7 @@ function ResolutionEditor({ item }: { item: DisagreementItem }) {
             <CardContent>
               <div className="grid grid-cols-3 gap-3">
                 {Object.entries(item.context).map(([key, value]) => (
-                  <div
-                    key={key}
-                    className="rounded-md bg-muted/50 px-3 py-2"
-                  >
+                  <div key={key} className="rounded-md bg-muted/50 px-3 py-2">
                     <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                       {key}
                     </p>
@@ -447,7 +448,9 @@ function ResolutionEditor({ item }: { item: DisagreementItem }) {
             <h3 className="mb-4 text-sm font-semibold">Resolution</h3>
             <RadioGroup
               value={resolutionType}
-              onValueChange={(v) => setResolutionType(v as ResolutionOption)}
+              onValueChange={(v) => {
+                setResolutionType(v as ResolutionOption)
+              }}
               className="space-y-3"
             >
               {/* Adopt Agent */}
@@ -473,7 +476,9 @@ function ResolutionEditor({ item }: { item: DisagreementItem }) {
                     <Textarea
                       placeholder="Rationale for adopting the agent label..."
                       value={rationale}
-                      onChange={(e) => setRationale(e.target.value)}
+                      onChange={(e) => {
+                        setRationale(e.target.value)
+                      }}
                       className="min-h-[80px] resize-none"
                     />
                   </div>
@@ -503,7 +508,9 @@ function ResolutionEditor({ item }: { item: DisagreementItem }) {
                     <Textarea
                       placeholder="Rationale for adopting the human label..."
                       value={rationale}
-                      onChange={(e) => setRationale(e.target.value)}
+                      onChange={(e) => {
+                        setRationale(e.target.value)
+                      }}
                       className="min-h-[80px] resize-none"
                     />
                   </div>
@@ -537,14 +544,18 @@ function ResolutionEditor({ item }: { item: DisagreementItem }) {
                       <Input
                         placeholder="Enter the merged/synthesized value..."
                         value={mergedValue}
-                        onChange={(e) => setMergedValue(e.target.value)}
+                        onChange={(e) => {
+                          setMergedValue(e.target.value)
+                        }}
                         className="mt-1 font-mono"
                       />
                     </div>
                     <Textarea
                       placeholder="Rationale for the merged value..."
                       value={rationale}
-                      onChange={(e) => setRationale(e.target.value)}
+                      onChange={(e) => {
+                        setRationale(e.target.value)
+                      }}
                       className="min-h-[80px] resize-none"
                     />
                   </div>
@@ -613,7 +624,9 @@ function ResolutionEditor({ item }: { item: DisagreementItem }) {
                     <Textarea
                       placeholder="Escalation notes — describe the issue and why it needs elevated review..."
                       value={escalationNotes}
-                      onChange={(e) => setEscalationNotes(e.target.value)}
+                      onChange={(e) => {
+                        setEscalationNotes(e.target.value)
+                      }}
                       className="min-h-[80px] resize-none"
                     />
                   </div>
@@ -721,8 +734,8 @@ export function AdjudicationPage() {
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             <span className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">42</span>{' '}
-              resolved today
+              <span className="font-semibold text-foreground">42</span> resolved
+              today
             </span>
           </div>
           <Separator orientation="vertical" className="h-5" />
@@ -754,7 +767,9 @@ export function AdjudicationPage() {
                   key={item.id}
                   item={item}
                   isSelected={item.id === selectedId}
-                  onSelect={() => setSelectedId(item.id)}
+                  onSelect={() => {
+                    setSelectedId(item.id)
+                  }}
                 />
               ))}
             </div>

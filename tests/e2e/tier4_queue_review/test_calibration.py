@@ -122,7 +122,8 @@ async def test_calibration_reviewer_alignment(
     with checkpoint(ctx, "calibration_api_queue"):
         # Verify API-level calibration flag
         ws_resp = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-calibration-ws", "workspace_name": "calibration-ws"}
+            "/api/v1/workspaces",
+            json={"path": "/tmp/ws-calibration-ws", "workspace_name": "calibration-ws"},
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]
@@ -143,7 +144,6 @@ async def test_calibration_reviewer_alignment(
             json={
                 "source_type": "jsonl",
                 "records": [{"text": "Calibration record."}],
-                "source_type": "jsonl",
             },
         )
         assert import_resp.status_code in (200, 201, 202)

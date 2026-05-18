@@ -1,6 +1,6 @@
-"""Single-prompt grounded operator benchmark runs against MiniMax 2.7.
+"""Single-prompt grounded operator benchmark runs against MiniMax 2.7 highspeed.
 
-This path gives the agent runner (Claude Code or Codex) only a temporary
+This path gives the agent runner (MiniMax, Claude Code, or Codex) only a temporary
 benchmark workspace, the public ``molabel`` command, the installed MoLabel
 skill, and one short prompt.  The harness then reconstructs persisted review
 outputs after the agent exits and scores those artifacts externally.  The
@@ -10,6 +10,7 @@ paper-direct model baseline remains a maintainer-side reference score.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -20,13 +21,17 @@ from molabel.core.providers.anthropic_adapter import AnthropicAdapter
 from molabel.core.providers.structured_output import StructuredOutputEnforcer
 from molabel.core.quality import (
     build_operator_diagnostics,
+    compute_named_stage_lifts,
     compute_stage_deltas,
     render_grounded_stage_report,
     score_grounded_stage,
     summarize_operator_run,
     write_run_outputs,
 )
-from molabel.core.quality.grounded_benchmarks import GroundedOperatorObservation
+from molabel.core.quality.grounded_benchmarks import (
+    GroundedOperatorObservation,
+    GroundedRunSummary,
+)
 from tests.e2e.infrastructure.assertions import checkpoint
 from tests.e2e.infrastructure.grounded_operator import (
     GroundedCliHarness,
@@ -49,6 +54,23 @@ MINIMAX_BASE_URL = os.environ.get(
 SCENARIOS = ["clinc150", "hatexplain", "feverous", "banking77", "goemotions", "scifact"]
 
 
+def _benchmark_mode() -> str:
+    mode = os.environ.get("MOLABEL_BENCHMARK_MODE", "open").strip().lower()
+    if mode not in {"open", "preset"}:
+        raise ValueError(f"Unsupported benchmark mode: {mode}")
+    return mode
+
+
+def _preset_template_id(benchmark_id: str) -> str:
+    if benchmark_id in {"clinc150", "banking77", "goemotions"}:
+        return "grounded_classification_review"
+    if benchmark_id in {"feverous", "scifact"}:
+        return "grounded_evidence_verification"
+    if benchmark_id == "hatexplain":
+        return "grounded_rationale_moderation"
+    raise ValueError(f"No preset workflow template for benchmark: {benchmark_id}")
+
+
 def _codex_auth_home() -> Path:
     return Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
 
@@ -57,6 +79,9 @@ def _detect_runner() -> str | None:
     """Return the best available runner name, or None if none found."""
     import shutil
 
+    requested = os.environ.get("MOLABEL_OPERATOR_RUNNER")
+    if requested:
+        return requested
     if shutil.which("claude"):
         return "claude"
     if shutil.which("codex"):
@@ -66,6 +91,10 @@ def _detect_runner() -> str | None:
 
 def _runner_auth_ok(runner: str) -> bool:
     """Check whether the runner has usable auth configured."""
+    if runner == "minimax":
+        return bool(
+            os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("MINIMAX_API_KEY")
+        )
     if runner == "codex":
         return (_codex_auth_home() / "auth.json").exists()
     # Claude Code uses OAuth/keychain or ANTHROPIC_API_KEY.
@@ -76,15 +105,75 @@ def _runner_auth_ok(runner: str) -> bool:
 
 def _single_prompt(bundle) -> str:
     s = bundle.scenario
+    mode = _benchmark_mode()
+    completion_contract = (
+        "A grounded operator run is not complete when the workflow first pauses. "
+        "It is complete only when the review queue is empty, the persisted "
+        "review submission count matches the benchmark record count, and both "
+        "`summary.json` and `report.md` exist under "
+        "`workbench/benchmarks/runs/live-operator`."
+    )
+    artifact_truth_contract = (
+        "Before writing `summary.json` and `report.md`, call "
+        "`molabel benchmark facts <workflow-execution-id> --json` and derive "
+        "artifact counts from that persisted response. Treat "
+        "`semantic_decision_counts` as the source of truth for accept/edit/"
+        "reject-style review outcome counts."
+    )
+    review_loop_contract = (
+        "After workflow setup, use `molabel session list-reviewers --json` and "
+        "`molabel session select <reviewer-id> --json` before any queue action. "
+        "Use `workflow execution ... --json` to find the review `queue_id`. "
+        "Then review sequentially: claim exactly one task, optionally reveal AI "
+        "for that task only, submit that exact task, continue with `next_task` "
+        "when present, and stop only when the queue is empty."
+    )
+    token_contract = (
+        "If a task exposes tokenized text, use the visible joined token text "
+        "from `record_text` as the reviewer-facing source. Keep "
+        "`rationale_token_mask` as a binary JSON array whose length exactly "
+        "matches the visible token sequence. Use only exact task-schema option "
+        "strings in multi-select fields; never submit values that are not in "
+        "the schema such as `None`."
+    )
+    if mode == "preset":
+        template_id = _preset_template_id(s.benchmark_id)
+        return (
+            "Run this grounded benchmark using molabel only.\n"
+            "This run is in preset workflow mode.\n"
+            f"Use the built-in workflow template `{template_id}` via "
+            "`molabel workflow new --template ...` as the starting scaffold.\n"
+            f"Use benchmark_id `{s.benchmark_id}` in any written run artifacts; "
+            "do not invent alternate benchmark IDs.\n"
+            "Use MiniMax 2.7 highspeed for the proposal stage.\n"
+            "Use only these benchmark inputs: "
+            f"`{s.source_path}` and `{s.task_schema_path}`.\n"
+            f"The record ID field in the source data is "
+            f"`{s.record_id_field or 'record_id'}`.\n"
+            "When creating the prompt template, use the exact workflow `prompt_ref` "
+            "value referenced by your created workflow.\n"
+            "Create the model profile with provider `anthropic`, provider name "
+            "`MiniMax`, model identifier `MiniMax-M2.7-highspeed`, auth ref "
+            "`ANTHROPIC_API_KEY`, and structured output enabled.\n"
+            "Do not inspect authority, gold, human-labels, reviews, or benchmark "
+            "config files.\n"
+            f"{review_loop_contract}\n"
+            f"{token_contract}\n"
+            f"{artifact_truth_contract}\n"
+            "Write run artifacts under workbench/benchmarks/runs/live-operator.\n"
+            f"{completion_contract}"
+        )
     return (
         "Run this grounded benchmark using molabel only.\n"
+        "This run is in open workflow mode.\n"
         f"Use benchmark_id `{s.benchmark_id}` in any written run "
         "artifacts; do not invent alternate benchmark IDs from schema "
         "or workflow names.\n"
         "When writing run artifacts, derive accept/edit/reject counts and rates "
         "from the persisted final review decisions, not from pre-review workflow "
         "summary placeholders.\n"
-        "Use MiniMax 2.7 for the proposal stage; do not use Ollama, local models, "
+        "Use MiniMax 2.7 highspeed for the proposal stage; do not use Ollama, "
+        "local models, "
         "or builtin heuristic profiles.\n"
         "Use only these inputs: "
         f"`{s.source_path}`, "
@@ -98,11 +187,15 @@ def _single_prompt(bundle) -> str:
         "value as the prompt name so the workflow resolves that prompt instead of "
         "falling back to the generic default.\n"
         "Create the model profile with provider `anthropic`, provider name "
-        "`MiniMax`, model identifier `minimax-2.7`, auth ref "
+        "`MiniMax`, model identifier `MiniMax-M2.7-highspeed`, auth ref "
         "`ANTHROPIC_API_KEY`, and structured output enabled.\n"
         "Do not inspect authority, gold, human-labels, reviews, or benchmark "
         "config files.\n"
-        f"Write run artifacts under workbench/benchmarks/runs/live-operator."
+        f"{review_loop_contract}\n"
+        f"{token_contract}\n"
+        f"{artifact_truth_contract}\n"
+        "Write run artifacts under workbench/benchmarks/runs/live-operator.\n"
+        f"{completion_contract}"
     )
 
 
@@ -224,6 +317,37 @@ def _artifact_leak_markers(text: str) -> list[str]:
     return markers
 
 
+def _summary_metric_map(summary: GroundedRunSummary) -> dict[str, float]:
+    return {metric.metric_id: metric.value for metric in summary.metrics}
+
+
+def _stage_summary_payload(summary: GroundedRunSummary) -> dict[str, Any]:
+    return {
+        "run_id": summary.run_id,
+        "stage": summary.stage,
+        "mode": summary.mode,
+        "variant": summary.variant,
+        "record_count": summary.record_count,
+        "overall_score": summary.overall_score,
+        "primary_metric_id": summary.primary_metric_id,
+        "metrics": _summary_metric_map(summary),
+    }
+
+
+def _load_cached_stage_summary(path: Path) -> GroundedRunSummary:
+    return GroundedRunSummary.model_validate(
+        json.loads(path.read_text(encoding="utf-8"))
+    )
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
 def _build_operator_run_evidence(
     *,
     ctx,
@@ -306,7 +430,7 @@ async def test_live_grounded_operator_benchmark_real_llm(
     runner = _detect_runner()
     if runner is None:
         pytest.skip(
-            "No agent runner (claude or codex) found on PATH — "
+            "No agent runner (minimax, claude, or codex) found on PATH — "
             "skipping single-prompt operator benchmark"
         )
     if not _runner_auth_ok(runner):
@@ -323,77 +447,195 @@ async def test_live_grounded_operator_benchmark_real_llm(
     operator_run_root = (
         fixture.workspace_root / "workbench" / "benchmarks" / "runs" / "live-operator"
     )
+    batch_artifact_path = os.environ.get("MOLABEL_BATCH_ARTIFACT_PATH")
+    baseline_cache_dir = os.environ.get("MOLABEL_BATCH_BASELINE_CACHE_DIR")
+    repeat_index = int(os.environ.get("MOLABEL_BENCHMARK_REPEAT_INDEX", "1"))
+    paper_direct_api_calls = 0
+    timeout_count = 0
+    adapter_error_count = 0
+    enforcer_attempts_total = 0
+    enforcer_attempts_max = 0
+    enforcer_validation_failures = 0
+    enforcer_timeout_count = 0
 
     with GroundedCliHarness(ctx, fixture.workspace_root, REPO_ROOT) as harness:
         with checkpoint(ctx, "maintainer_paper_direct_baseline"):
             paper_direct_model_summary = None
             model_operated_summary = None
             try:
-
-                async def _run_paper_direct_baseline() -> None:
-                    nonlocal paper_direct_model_summary, model_operated_summary
-                    adapter = AnthropicAdapter(
-                        auth_ref=auth_ref,
-                        default_model=(
-                            bundle.scenario.default_model_profile.model_identifier
-                        ),
-                        base_url=MINIMAX_BASE_URL,
+                cache_root = (
+                    Path(baseline_cache_dir) if baseline_cache_dir is not None else None
+                )
+                cache_payload_path = (
+                    cache_root / f"{bundle.scenario.benchmark_id}.json"
+                    if cache_root is not None
+                    else None
+                )
+                if cache_payload_path is not None and cache_payload_path.exists():
+                    cached_payload = json.loads(
+                        cache_payload_path.read_text(encoding="utf-8")
                     )
-                    enforcer = StructuredOutputEnforcer()
-                    direct_predictions: list[dict[str, Any]] = []
-                    for record in fixture.raw_records:
-                        record_id = str(
-                            record[bundle.scenario.record_id_field or "record_id"]
-                        )
-                        messages = build_messages(
-                            agents_prompt=agents_prompt,
-                            task_schema=task_schema,
-                            benchmark_name=bundle.scenario.name,
-                            description=bundle.scenario.description,
-                            record=record,
-                            record_id=record_id,
-                        )
-                        result = await asyncio.wait_for(
-                            asyncio.to_thread(
-                                enforcer.enforce,
-                                adapter,
-                                messages,
-                                bundle.scenario.default_model_profile.model_identifier,
-                                output_schema,
+                    paper_direct_model_summary = _load_cached_stage_summary(
+                        cache_payload_path.parent
+                        / cached_payload["paper_direct_model_summary_path"]
+                    )
+                    model_operated_summary = _load_cached_stage_summary(
+                        cache_payload_path.parent
+                        / cached_payload["model_operated_summary_path"]
+                    )
+                    paper_direct_api_calls = int(
+                        cached_payload.get("paper_direct_api_calls", 0)
+                    )
+                    timeout_count = int(cached_payload.get("timeout_count", 0))
+                    adapter_error_count = int(
+                        cached_payload.get("adapter_error_count", 0)
+                    )
+                    enforcer_attempts_total = int(
+                        cached_payload.get("enforcer_attempts_total", 0)
+                    )
+                    enforcer_attempts_max = int(
+                        cached_payload.get("enforcer_attempts_max", 0)
+                    )
+                    enforcer_validation_failures = int(
+                        cached_payload.get("enforcer_validation_failures", 0)
+                    )
+                    enforcer_timeout_count = int(
+                        cached_payload.get("enforcer_timeout_count", 0)
+                    )
+                    ctx.warnings.append(
+                        "Paper-direct baseline cache hit for "
+                        f"{bundle.scenario.benchmark_id}"
+                    )
+                else:
+
+                    async def _run_paper_direct_baseline() -> None:
+                        nonlocal paper_direct_model_summary, model_operated_summary
+                        nonlocal paper_direct_api_calls
+                        nonlocal timeout_count
+                        nonlocal adapter_error_count
+                        nonlocal enforcer_attempts_total
+                        nonlocal enforcer_attempts_max
+                        nonlocal enforcer_validation_failures
+                        nonlocal enforcer_timeout_count
+                        adapter = AnthropicAdapter(
+                            auth_ref=auth_ref,
+                            default_model=(
+                                bundle.scenario.default_model_profile.model_identifier
                             ),
-                            timeout=120,
+                            base_url=MINIMAX_BASE_URL,
                         )
-                        ctx.llm_calls += 1
-                        ctx.real_llm_calls += 1
-                        assert result.is_valid, (
-                            f"Structured output failed for "
-                            f"{bundle.scenario.benchmark_id} "
-                            f"record {record_id}: {result.validation_errors}"
+                        enforcer = StructuredOutputEnforcer()
+                        direct_predictions: list[dict[str, Any]] = []
+                        for record in fixture.raw_records:
+                            record_id = str(
+                                record[bundle.scenario.record_id_field or "record_id"]
+                            )
+                            messages = build_messages(
+                                agents_prompt=agents_prompt,
+                                task_schema=task_schema,
+                                benchmark_name=bundle.scenario.name,
+                                description=bundle.scenario.description,
+                                record=record,
+                                record_id=record_id,
+                            )
+                            paper_direct_api_calls += 1
+                            try:
+                                result = await asyncio.wait_for(
+                                    asyncio.to_thread(
+                                        enforcer.enforce,
+                                        adapter,
+                                        messages,
+                                        bundle.scenario.default_model_profile.model_identifier,
+                                        output_schema,
+                                    ),
+                                    timeout=120,
+                                )
+                            except TimeoutError:
+                                timeout_count += 1
+                                enforcer_timeout_count += 1
+                                raise
+                            except Exception:
+                                adapter_error_count += 1
+                                raise
+                            ctx.llm_calls += 1
+                            ctx.real_llm_calls += 1
+                            enforcer_attempts_total += result.attempts
+                            enforcer_attempts_max = max(
+                                enforcer_attempts_max,
+                                result.attempts,
+                            )
+                            if not result.is_valid:
+                                enforcer_validation_failures += 1
+                            assert result.is_valid, (
+                                f"Structured output failed for "
+                                f"{bundle.scenario.benchmark_id} "
+                                f"record {record_id}: {result.validation_errors}"
+                            )
+                            direct_predictions.append(
+                                {"record_id": record_id, "labels": result.parsed or {}}
+                            )
+
+                        paper_direct_model_summary = score_grounded_stage(
+                            bundle=bundle,
+                            predictions=direct_predictions,
+                            gold_rows=fixture.paper_gold_rows,
+                            run_id="live-paper-direct-minimax-2-7",
+                            stage="paper_model",
+                            variant="paper_direct",
+                            context_rows=fixture.raw_records,
                         )
-                        direct_predictions.append(
-                            {"record_id": record_id, "labels": result.parsed or {}}
+                        model_operated_summary = score_grounded_stage(
+                            bundle=bundle,
+                            predictions=direct_predictions,
+                            gold_rows=fixture.molabel_gold_rows,
+                            run_id="live-model-operated-minimax-2-7",
+                            stage="molabel_model",
+                            variant="molabel_operated",
+                            context_rows=fixture.raw_records,
                         )
 
-                    paper_direct_model_summary = score_grounded_stage(
-                        bundle=bundle,
-                        predictions=direct_predictions,
-                        gold_rows=fixture.paper_gold_rows,
-                        run_id="live-paper-direct-minimax-2-7",
-                        stage="paper_model",
-                        variant="paper_direct",
-                        context_rows=fixture.raw_records,
-                    )
-                    model_operated_summary = score_grounded_stage(
-                        bundle=bundle,
-                        predictions=direct_predictions,
-                        gold_rows=fixture.molabel_gold_rows,
-                        run_id="live-model-operated-minimax-2-7",
-                        stage="molabel_model",
-                        variant="molabel_operated",
-                        context_rows=fixture.raw_records,
-                    )
-
-                await asyncio.wait_for(_run_paper_direct_baseline(), timeout=300)
+                    await asyncio.wait_for(_run_paper_direct_baseline(), timeout=300)
+                    if (
+                        cache_payload_path is not None
+                        and paper_direct_model_summary is not None
+                        and model_operated_summary is not None
+                    ):
+                        paper_summary_path = (
+                            cache_payload_path.parent
+                            / f"{bundle.scenario.benchmark_id}-paper-summary.json"
+                        )
+                        model_summary_path = (
+                            cache_payload_path.parent
+                            / f"{bundle.scenario.benchmark_id}-model-summary.json"
+                        )
+                        _write_json(
+                            paper_summary_path,
+                            paper_direct_model_summary.model_dump(mode="json"),
+                        )
+                        _write_json(
+                            model_summary_path,
+                            model_operated_summary.model_dump(mode="json"),
+                        )
+                        _write_json(
+                            cache_payload_path,
+                            {
+                                "paper_direct_model_summary_path": (
+                                    paper_summary_path.name
+                                ),
+                                "model_operated_summary_path": (
+                                    model_summary_path.name
+                                ),
+                                "paper_direct_api_calls": paper_direct_api_calls,
+                                "timeout_count": timeout_count,
+                                "adapter_error_count": adapter_error_count,
+                                "enforcer_attempts_total": enforcer_attempts_total,
+                                "enforcer_attempts_max": enforcer_attempts_max,
+                                "enforcer_validation_failures": (
+                                    enforcer_validation_failures
+                                ),
+                                "enforcer_timeout_count": enforcer_timeout_count,
+                            },
+                        )
             except (TimeoutError, Exception) as exc:
                 ctx.warnings.append(f"Paper-direct baseline failed: {exc}")
 
@@ -648,7 +890,7 @@ async def test_live_grounded_operator_benchmark_real_llm(
                     check_id="uses_real_minimax_proposals",
                     passed=(
                         strategy_values == {"llm-structured-output"}
-                        and model_values == {"minimax-2.7"}
+                        and model_values == {"MiniMax-M2.7-highspeed"}
                     ),
                     details={
                         "strategies": sorted(strategy_values),
@@ -822,6 +1064,86 @@ async def test_live_grounded_operator_benchmark_real_llm(
             ),
         )
 
+        named_lifts = compute_named_stage_lifts(stage_summaries)
+        provider_pressure = {
+            "api_calls_total": paper_direct_api_calls + len(agent_outputs),
+            "api_calls_agent": len(agent_outputs),
+            "api_calls_paper_direct": paper_direct_api_calls,
+            "rate_limit_retries": 0,
+            "timeout_count": timeout_count,
+            "adapter_error_count": adapter_error_count,
+            "budget_spent_usd": 0.0,
+            "budget_exhausted": budget_exhausted,
+            "enforcer_attempts_total": enforcer_attempts_total,
+            "enforcer_attempts_max": enforcer_attempts_max,
+            "enforcer_validation_failures": enforcer_validation_failures,
+            "enforcer_timeout_count": enforcer_timeout_count,
+            "no_submission_exit": not bool(review_submissions),
+        }
+        if batch_artifact_path:
+            _write_json(
+                Path(batch_artifact_path),
+                {
+                    "benchmark_id": bundle.scenario.benchmark_id,
+                    "benchmark_name": bundle.scenario.name,
+                    "mode": _benchmark_mode(),
+                    "repeat_index": repeat_index,
+                    "summary_version": 2,
+                    "agent_exit_code": agent_result.exit_code,
+                    "agent_timed_out": agent_timed_out,
+                    "review_submission_count": len(review_submissions),
+                    "agent_output_count": len(agent_outputs),
+                    "operator_label_score": operator_label_summary.overall_score,
+                    "operator_checklist_score": checklist_metric.value,
+                    "operator_overall_score": operator_summary.overall_score,
+                    "operator_checklist_items": per_check,
+                    "thresholds": {
+                        "acceptable_operator_label_score": (
+                            bundle.operator.acceptable_operator_label_score
+                            if bundle.operator is not None
+                            else None
+                        ),
+                        "acceptable_checklist_score": (
+                            bundle.operator.acceptable_checklist_score
+                            if bundle.operator is not None
+                            else None
+                        ),
+                    },
+                    "stages": {
+                        summary.stage: _stage_summary_payload(summary)
+                        for summary in stage_summaries
+                        if summary.stage is not None
+                    },
+                    "taxes": {tax.tax_id: tax.value for tax in tax_breakdown},
+                    "named_lifts": named_lifts,
+                    "provider_pressure": provider_pressure,
+                    "artifact_truthfulness": (
+                        operator_diagnostics.artifact_truthfulness
+                    ),
+                    "truthfulness_ok": operator_diagnostics.truthfulness_ok,
+                    "diagnostics": {
+                        "accept_ai_count": operator_diagnostics.accept_ai_count,
+                        "edit_ai_count": operator_diagnostics.edit_ai_count,
+                        "correct_count": operator_diagnostics.correct_count,
+                        "reject_ai_count": operator_diagnostics.reject_ai_count,
+                        "skip_count": operator_diagnostics.skip_count,
+                        "proposal_exact_match_rate": (
+                            operator_diagnostics.proposal_exact_match_rate
+                        ),
+                        "review_exact_match_rate": (
+                            operator_diagnostics.review_exact_match_rate
+                        ),
+                        "proposal_to_review_delta": (
+                            operator_diagnostics.proposal_to_review_delta
+                        ),
+                    },
+                    "run_artifacts": {
+                        "summary_path": str(summary_path),
+                        "report_path": str(report_path),
+                    },
+                },
+            )
+
         # --- Full report output ---
         print("\n" + "=" * 72)
         print(report)
@@ -905,12 +1227,14 @@ async def test_live_grounded_operator_benchmark_real_llm(
         # Check values directly (not via per_check) so they work even if
         # a benchmark's operator.yaml hasn't declared the check yet.
         assert model_profile_count >= 1, (
-            f"BLOCKING: No MiniMax 2.7 model profile (count={model_profile_count})"
+            "BLOCKING: No MiniMax 2.7 highspeed model profile "
+            f"(count={model_profile_count})"
         )
         assert strategy_values == {"llm-structured-output"} and model_values == {
-            "minimax-2.7"
+            "MiniMax-M2.7-highspeed"
         }, (
-            "BLOCKING: Proposal stage did not use MiniMax 2.7 structured output "
+            "BLOCKING: Proposal stage did not use MiniMax 2.7 highspeed "
+            "structured output "
             f"(strategies={sorted(strategy_values)}, models={sorted(model_values)})"
         )
         assert fixture.original_hashes == hash_paths(

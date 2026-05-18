@@ -4,7 +4,7 @@ This benchmark is the first grounded explainability fixture for MoLabel. It
 now has a canonical authority pack plus a transitional reference workspace.
 
 The current MoLabel labeling engine used when this benchmark is run live is
-`MiniMax 2.7` through the Anthropic-compatible adapter path.
+`MiniMax 2.7 highspeed` through the Anthropic-compatible adapter path.
 
 ## Why This Shape
 

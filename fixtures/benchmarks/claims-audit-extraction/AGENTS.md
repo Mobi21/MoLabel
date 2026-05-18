@@ -1,12 +1,12 @@
 # AGENTS.md
 
 Use this benchmark when Codex is testing structured extraction plus downstream
-routing on messy insurance claims packets with a real MiniMax 2.7 run.
+routing on messy insurance claims packets with a real MiniMax 2.7 highspeed run.
 
 ## Operating Contract
 
 - Codex owns setup, orchestration, and evaluation.
-- MiniMax 2.7 owns the extraction decision for each record.
+- MiniMax 2.7 highspeed owns the extraction decision for each record.
 - The model must work from visible packet text only.
 - Gold labels are the authority for scoring.
 - Simulated human labels and reviews are secondary evidence, not truth.

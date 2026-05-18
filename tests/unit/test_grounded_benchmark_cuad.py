@@ -11,12 +11,7 @@ from molabel.core.quality.grounded_benchmarks import (
     score_grounded_stage,
 )
 
-ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "benchmarks-grounded"
-    / "cuad"
-)
+ROOT = Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks-grounded" / "cuad"
 
 
 def test_cuad_fixture_preserves_grounded_clause_offsets() -> None:
@@ -41,4 +36,3 @@ def test_cuad_fixture_preserves_grounded_clause_offsets() -> None:
         variant="paper_direct",
     )
     assert summary.overall_score == pytest.approx(1.0)
-

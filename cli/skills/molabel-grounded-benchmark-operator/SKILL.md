@@ -1,6 +1,6 @@
 ---
-name: "molabel-grounded-benchmark-operator"
-description: "Use when Codex should run MoLabel grounded benchmark regressions, analyze failures or score movement, localize the highest-leverage cause, and make the smallest honest fix across fixtures, reusable primitives, or product code without benchmark gaming."
+name: 'molabel-grounded-benchmark-operator'
+description: 'Use when Codex should run MoLabel grounded benchmark regressions, analyze failures or score movement, localize the highest-leverage cause, and make the smallest honest fix across fixtures, reusable primitives, or product code without benchmark gaming.'
 ---
 
 # MoLabel Grounded Benchmark Operator

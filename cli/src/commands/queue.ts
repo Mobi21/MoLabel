@@ -4,7 +4,10 @@ import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import { buildClient, getRuntimeOptions, outputMode } from './context.js'
 
-export function registerQueueCommands(program: Command, runtime: CliRuntimeOptions): void {
+export function registerQueueCommands(
+  program: Command,
+  runtime: CliRuntimeOptions,
+): void {
   const queue = program.command('queue').description('Queue operations')
 
   queue
@@ -36,17 +39,23 @@ export function registerQueueCommands(program: Command, runtime: CliRuntimeOptio
     })
 }
 
-async function runQueueStatus(options: CliRuntimeOptions, queueId: string): Promise<void> {
+async function runQueueStatus(
+  options: CliRuntimeOptions,
+  queueId: string,
+): Promise<void> {
   const client = await requireClient(options, 'queue status')
-  const response = await client.getJson<Record<string, unknown>>(
+  const response = await client.getJson(
     `/api/v1/queues/${encodeURIComponent(queueId)}/status`,
   )
   await emit(response, outputMode(options))
 }
 
-async function runQueueClaim(options: CliRuntimeOptions, queueId: string): Promise<void> {
+async function runQueueClaim(
+  options: CliRuntimeOptions,
+  queueId: string,
+): Promise<void> {
   const client = await requireClient(options, 'queue claim')
-  const response = await client.postJson<Record<string, unknown>>(
+  const response = await client.postJson(
     `/api/v1/queues/${encodeURIComponent(queueId)}/claim`,
     {},
   )
@@ -55,9 +64,7 @@ async function runQueueClaim(options: CliRuntimeOptions, queueId: string): Promi
 
 async function runQueueReviewers(options: CliRuntimeOptions): Promise<void> {
   const client = await requireClient(options, 'queue reviewers')
-  const response = await client.getJson<Record<string, unknown>>(
-    '/api/v1/mission-control/reviewers',
-  )
+  const response = await client.getJson('/api/v1/mission-control/reviewers')
   await emit(response, outputMode(options))
 }
 

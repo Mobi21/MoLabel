@@ -139,7 +139,9 @@ async def create_session(
     try:
         reviewer_uuid = uuid.UUID(body.reviewer_id)
     except ValueError:
-        raise HTTPException(status_code=422, detail="reviewer_id is not a valid UUID")
+        raise HTTPException(
+            status_code=422, detail="reviewer_id is not a valid UUID"
+        ) from None
     now = datetime.now(UTC).isoformat()
 
     with engine.connect() as conn:
@@ -223,7 +225,9 @@ async def switch_session(
     try:
         target_uuid = uuid.UUID(body.reviewer_id)
     except ValueError:
-        raise HTTPException(status_code=422, detail="reviewer_id is not a valid UUID")
+        raise HTTPException(
+            status_code=422, detail="reviewer_id is not a valid UUID"
+        ) from None
     now = datetime.now(UTC).isoformat()
 
     with engine.connect() as conn:

@@ -55,7 +55,6 @@ async def _setup_workspace_and_queue(
         json={
             "source_type": "jsonl",
             "records": [{"text": "A sample review for blind review testing."}],
-            "source_type": "jsonl",
         },
     )
     assert import_resp.status_code in (200, 201, 202)
@@ -220,7 +219,9 @@ async def test_no_agent_policy(
             assert task.get("agent_output") is None
 
             with checkpoint(ctx, "reveal_ai_errors_with_no_agent_policy"):
-                reveal_resp = await client.post(f"/api/v1/review-tasks/{task_id}/reveal-ai")
+                reveal_resp = await client.post(
+                    f"/api/v1/review-tasks/{task_id}/reveal-ai"
+                )
                 # no_agent policy means reveal is not allowed → 409
                 assert reveal_resp.status_code == 409
 

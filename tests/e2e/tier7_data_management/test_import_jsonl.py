@@ -29,7 +29,11 @@ async def test_import_jsonl(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-jsonl-import-test", "workspace_name": "JSONL Import Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-jsonl-import-test",
+                "workspace_name": "JSONL Import Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

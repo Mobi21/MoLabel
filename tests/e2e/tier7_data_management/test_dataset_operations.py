@@ -29,7 +29,11 @@ async def test_dataset_operations(client, ctx):
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
         ws = await client.post(
-            "/api/v1/workspaces", json={"path": "/tmp/ws-dataset-operations-test", "workspace_name": "Dataset Operations Test"}
+            "/api/v1/workspaces",
+            json={
+                "path": "/tmp/ws-dataset-operations-test",
+                "workspace_name": "Dataset Operations Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

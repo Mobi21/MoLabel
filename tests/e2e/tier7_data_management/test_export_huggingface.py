@@ -26,7 +26,10 @@ async def test_export_huggingface(client, ctx):
 
     # ── Checkpoint 1: Setup ───────────────────────────────────────────────────
     with checkpoint(ctx, "setup"):
-        ws = await client.post("/api/v1/workspaces", json={"path": "/tmp/ws-hf-export-test", "workspace_name": "HF Export Test"})
+        ws = await client.post(
+            "/api/v1/workspaces",
+            json={"path": "/tmp/ws-hf-export-test", "workspace_name": "HF Export Test"},
+        )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]
 

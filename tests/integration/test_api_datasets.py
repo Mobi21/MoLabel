@@ -65,9 +65,7 @@ async def test_list_datasets_with_limit(client):
 @pytest.mark.asyncio
 async def test_get_dataset_not_found(client):
     """API-008: GET /datasets/{id} returns 404 for unknown dataset."""
-    resp = await client.get(
-        "/api/v1/datasets/00000000-0000-0000-0000-000000000099"
-    )
+    resp = await client.get("/api/v1/datasets/00000000-0000-0000-0000-000000000099")
     assert resp.status_code == 404
 
 
