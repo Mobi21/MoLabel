@@ -29,7 +29,7 @@ tests/e2e/logs/
 reports/
 
 # Dev runtime state
-workbench/
+/workbench/
 *.db
 *.db-*
 *.sqlite

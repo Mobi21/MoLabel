@@ -190,9 +190,10 @@ async def test_get_agent_run_returns_failure_envelope(client, app):
     assert body["failure_envelope"]["category"] == "provider_auth"
     assert body["failure_envelope"]["retryable"] is False
     assert body["failure_envelope"]["affected_records"] == 2
-    assert "molabel provider health" in body["failure_envelope"][
-        "recommended_repair_commands"
-    ][1]
+    assert (
+        "molabel provider health"
+        in body["failure_envelope"]["recommended_repair_commands"][1]
+    )
 
 
 @pytest.mark.asyncio
