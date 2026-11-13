@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -1933,7 +1934,7 @@ class TestSnapshotPathTraversal:
         assert result.file_path is not None
         full_path = tmp_path / result.file_path
         # File must be under the snapshots directory.
-        assert "workbench/snapshots" in result.file_path
+        assert "workbench/snapshots" in Path(result.file_path).as_posix()
         # Must not contain path traversal.
         assert ".." not in result.file_path
         assert full_path.exists()

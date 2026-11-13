@@ -419,7 +419,11 @@ async def test_selector_resolve_and_artifact_round_trip(client, app, tmp_path):
     assert resolve_resp.status_code == 200
     resolved = resolve_resp.json()
     assert resolved["resolved"] is True
-    assert resolved["resolved_path"].endswith("workbench/workflows/demo.yaml")
+    assert (
+        Path(resolved["resolved_path"])
+        .as_posix()
+        .endswith("workbench/workflows/demo.yaml")
+    )
 
     read_resp = await client.post(
         "/api/v1/cli/artifacts/read",
@@ -487,8 +491,10 @@ async def test_artifact_write_creates_new_task_schema_at_canonical_path(
     )
     assert write_resp.status_code == 200
     body = write_resp.json()
-    assert body["resolved_path"].endswith(
-        "workbench/config/task-schemas/sentiment-demo-v2.yaml"
+    assert (
+        Path(body["resolved_path"])
+        .as_posix()
+        .endswith("workbench/config/task-schemas/sentiment-demo-v2.yaml")
     )
     assert (
         tmp_path / "workbench" / "config" / "task-schemas" / "sentiment-demo-v2.yaml"
