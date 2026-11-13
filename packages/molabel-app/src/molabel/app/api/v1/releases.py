@@ -323,8 +323,7 @@ def _benchmark_certification_gates(
             GateResult(
                 gate_id=f"benchmark:{run_id}",
                 gate_name=(
-                    f"Benchmark Certification: "
-                    f"{summary.get('benchmark_id') or run_id}"
+                    f"Benchmark Certification: {summary.get('benchmark_id') or run_id}"
                 ),
                 plugin="molabel.release.certification",
                 status=status,

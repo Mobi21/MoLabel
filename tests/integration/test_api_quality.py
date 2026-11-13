@@ -370,9 +370,7 @@ class TestReleaseCreate:
                     "stage": "operator_reviewed",
                     "record_count": 16,
                     "overall_score": 1.0,
-                    "metrics": [
-                        {"metric_id": "operator_checklist", "value": 1.0}
-                    ],
+                    "metrics": [{"metric_id": "operator_checklist", "value": 1.0}],
                     "diagnostics": {"blocking_failures": []},
                 }
             ),
@@ -442,17 +440,12 @@ class TestReleaseDetail:
         created = create_resp.json()
         with _db.connect() as conn:
             conn.execute(
-                text(
-                    "UPDATE releases SET release_metadata = :metadata "
-                    "WHERE id = :id"
-                ),
+                text("UPDATE releases SET release_metadata = :metadata WHERE id = :id"),
                 {"metadata": "{}", "id": created["release_id"]},
             )
             conn.commit()
 
-        detail_resp = await auth_client.get(
-            f"/api/v1/releases/{created['release_id']}"
-        )
+        detail_resp = await auth_client.get(f"/api/v1/releases/{created['release_id']}")
         assert detail_resp.status_code == 200
         body = detail_resp.json()
         assert body["proof_manifest"]["release_id"] == created["release_id"]
