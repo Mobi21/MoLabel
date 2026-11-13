@@ -397,12 +397,7 @@ function compactWorkflowOverrides(
 } {
   return Object.fromEntries(
     Object.entries(overrides).filter(([, value]) => value !== undefined),
-  ) as {
-    name?: string
-    slug?: string
-    description?: string
-    filePath?: string
-  }
+  )
 }
 
 function buildWorkflowCreateBody(

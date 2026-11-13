@@ -23,7 +23,7 @@ async function captureCliJson(
       typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'),
     )
     return true
-  }) as typeof process.stdout.write
+  })
 
   try {
     const result = await runCli(argv)
