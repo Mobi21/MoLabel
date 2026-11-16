@@ -424,6 +424,41 @@ describe('ReviewPage', () => {
     })
   })
 
+  it('keeps a JSON null through an edit of another field', async () => {
+    const calls = serve('show_agent_outputs', {
+      ...EXTRACTION,
+      proposal: { intent: 'refund', entities: null },
+    })
+    renderReview()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+    expect(screen.getByRole('textbox', { name: 'entities' })).toHaveValue(
+      'null',
+    )
+
+    press('2')
+    press('Enter', { ctrlKey: true })
+
+    expect(await submitted(calls)).toEqual(
+      expect.objectContaining({
+        decision: 'edit',
+        labels: { intent: 'bug', entities: null },
+      }),
+    )
+  })
+
+  it('accepts a proposal whose required JSON field holds null', async () => {
+    const proposal = { intent: 'refund', entities: null }
+    const calls = serve('show_agent_outputs', { ...EXTRACTION, proposal })
+    renderReview()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+
+    press('Enter', { ctrlKey: true })
+
+    expect(await submitted(calls)).toEqual(
+      expect.objectContaining({ decision: 'accept', labels: proposal }),
+    )
+  })
+
   it('will not submit JSON that does not parse, and sends it parsed once it does', async () => {
     const calls = serve('show_agent_outputs', EXTRACTION)
     renderReview()

@@ -161,7 +161,7 @@ function parseValue(field: RubricField, raw: unknown): LabelValue | undefined {
     case 'number':
       return typeof raw === 'number' ? raw : undefined
     case 'json':
-      return raw === undefined || raw === null ? undefined : (raw as JsonValue)
+      return raw === undefined ? undefined : (raw as JsonValue)
   }
 }
 

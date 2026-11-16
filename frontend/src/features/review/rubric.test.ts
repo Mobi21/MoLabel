@@ -128,6 +128,26 @@ describe('a JSON field', () => {
     })
   })
 
+  it('keeps a JSON null as a value, apart from an absent field', () => {
+    const held = { intent: 'refund', entities: null }
+    expect(parseLabels(json, held)).toEqual(held)
+    expect(parseLabels(json, { intent: 'refund' })).toEqual({
+      intent: 'refund',
+    })
+    expect(missingRequired(json, parseLabels(json, held))).toEqual([])
+    expect(
+      submission(
+        json,
+        { intent: 'bug', entities: new JsonDraft('null') },
+        held,
+      ),
+    ).toEqual({
+      decision: 'edit',
+      changed: ['intent'],
+      labels: { intent: 'bug', entities: null },
+    })
+  })
+
   it('accepts when the typed JSON equals the proposal, whatever its key order', () => {
     const typed = new JsonDraft('[{"span":[0,3],"type":"PERSON","text":"Ada"}]')
     const outcome = submission(
