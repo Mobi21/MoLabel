@@ -10,5 +10,10 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "eslint.config.js"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "eslint.config.js",
+    "openapi-ts.config.ts"
+  ]
 }
