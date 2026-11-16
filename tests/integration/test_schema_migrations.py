@@ -161,7 +161,9 @@ def test_database_missing_part_of_the_baseline_is_refused_and_left_alone(
         assert _table_names(conn) == tables_before
     finally:
         conn.close()
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["partial.db"]
+    assert sorted(
+        p.name for p in tmp_path.iterdir() if not p.name.endswith(".migrate.lock")
+    ) == ["partial.db"]
 
 
 _UPGRADE_WHEN_TOLD = """

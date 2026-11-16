@@ -12,6 +12,7 @@ state and live only in the database.
 from __future__ import annotations
 
 import errno
+import hashlib
 import os
 import stat
 import uuid
@@ -26,6 +27,7 @@ from fastapi import HTTPException
 from filelock import FileLock
 from sqlalchemy import text
 
+from molabel.app.server_state import server_data_dir
 from molabel.app.workspace_paths import WorkspacePathError, resolve_in_workspace
 from molabel.core.manifest import (
     DatasetManifestEntry,
@@ -223,8 +225,13 @@ def workspace_lock(root: Path) -> FileLock:
 
     Take it before any database write, so writers wait for each other in one
     order and a rollback in ``workspace_files`` can only undo its own writes.
+    The lock file lives in the server data directory, keyed by the resolved
+    root, so the workspace holds only canonical files.
     """
-    return FileLock(resolve_in_workspace(root, f".{MANIFEST_FILENAME}.lock"))
+    key = os.path.normcase(str(root.resolve())).encode("utf-8")
+    locks = server_data_dir() / "locks"
+    locks.mkdir(parents=True, exist_ok=True)
+    return FileLock(locks / f"workspace-{hashlib.sha256(key).hexdigest()}.lock")
 
 
 @contextmanager
