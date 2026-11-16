@@ -9,7 +9,8 @@ is frozen at exactly that schema, and then upgraded like any other.
 from __future__ import annotations
 
 import logging
-import shutil
+import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -47,9 +48,14 @@ def _sqlite_file(engine: Engine) -> Path | None:
 
 
 def _backup(db_path: Path) -> Path:
+    """Copy the database through SQLite, so rows still in the WAL are included."""
     ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup_path = db_path.with_suffix(f".backup.{ts}.sqlite")
-    shutil.copy2(db_path, backup_path)
+    with (
+        closing(sqlite3.connect(db_path)) as source,
+        closing(sqlite3.connect(backup_path)) as target,
+    ):
+        source.backup(target)
     logger.info("Database backed up to %s", backup_path)
     return backup_path
 

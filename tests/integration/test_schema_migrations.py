@@ -101,3 +101,33 @@ def test_database_created_before_alembic_is_stamped_and_upgraded(
     conn.close()
     assert kept == ([("kept",)] if routes_created_audit_events else [])
 
+
+def _table_names(conn: sqlite3.Connection) -> set[str]:
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+    return {row[0] for row in rows}
+
+
+def test_backup_of_a_wal_database_holds_its_uncheckpointed_tables(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = tmp_path / "legacy.db"
+    writer = sqlite3.connect(db_path)
+    writer.execute("PRAGMA journal_mode=WAL")
+    writer.execute("PRAGMA wal_autocheckpoint=0")
+    writer.executescript(
+        (LEGACY_FIXTURES / "pre-alembic-create-all.sql").read_text(encoding="utf-8")
+    )
+    writer.commit()
+    legacy_tables = _table_names(writer)
+    try:
+        _start_server(monkeypatch, db_path)
+    finally:
+        writer.close()
+
+    backups = list(tmp_path.glob("legacy.backup.*.sqlite"))
+    assert len(backups) == 1
+    backup = sqlite3.connect(backups[0])
+    try:
+        assert _table_names(backup) == legacy_tables
+    finally:
+        backup.close()
