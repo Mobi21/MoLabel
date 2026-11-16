@@ -1384,9 +1384,13 @@ def submit_correction(
                 SELECT id, record_id, task_schema_id, task_schema_version,
                        reviewer_id, source, decision, labels, rationale,
                        ai_was_revealed, workspace_id
-                FROM review_events
-                WHERE review_task_id = :task_id
-                ORDER BY created_at DESC
+                FROM review_events AS e
+                WHERE e.review_task_id = :task_id
+                  AND NOT EXISTS (
+                      SELECT 1 FROM review_events AS s
+                      WHERE s.supersedes_event_id = e.id
+                  )
+                ORDER BY e.created_at DESC
                 LIMIT 1
                 """
             ),

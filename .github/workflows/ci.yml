@@ -42,7 +42,7 @@ jobs:
         run: cd frontend && npm ci
 
       - name: Type check
-        run: cd frontend && npx tsc --noEmit
+        run: cd frontend && npx tsc -b
 
       - name: Tests
         run: cd frontend && npm run test -- --run
@@ -53,6 +53,29 @@ jobs:
       # TODO: Lighthouse CI (non-blocking, SC-012)
       # - name: Lighthouse
       #   run: cd frontend && npx lhci autorun || true
+
+  cli:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check and build
+        run: npm run build
+
+      - name: Tests
+        run: npm test
 
   openapi-sync:
     runs-on: ubuntu-latest

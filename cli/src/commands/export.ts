@@ -167,7 +167,7 @@ async function runExportDownload(
   const contentType = response.headers.get('content-type') ?? ''
   if (contentType.includes('application/json')) {
     await emit(
-      (await response.json()) as Record<string, unknown>,
+      await response.json(),
       outputMode(options),
     )
     return

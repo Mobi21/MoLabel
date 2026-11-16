@@ -10,6 +10,7 @@ from molabel.core.quality.grounded_benchmarks import (
     load_jsonl,
 )
 from tests.e2e.infrastructure.grounded_operator import prepare_grounded_operator_fixture
+from tests.fixture_data import requires_benchmark_fixtures
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GROUNDED_ROOT = REPO_ROOT / "fixtures" / "benchmarks-grounded"
@@ -63,6 +64,7 @@ def _raw_record_ids(
     raise AssertionError(f"Unsupported grounded raw format: {raw_format}")
 
 
+@requires_benchmark_fixtures
 def test_grounded_benchmark_fixtures_are_self_consistent() -> None:
     scenario_paths = sorted(GROUNDED_ROOT.glob("*/workbench/benchmarks/scenario.yaml"))
     assert scenario_paths, (
@@ -179,6 +181,7 @@ def test_grounded_benchmark_fixtures_are_self_consistent() -> None:
                 assert str(row["record_id"]) in raw_ids
 
 
+@requires_benchmark_fixtures
 def test_operator_fixture_workspace_is_redacted() -> None:
     source_root = GROUNDED_ROOT / "clinc150"
     fixture = prepare_grounded_operator_fixture(source_root)

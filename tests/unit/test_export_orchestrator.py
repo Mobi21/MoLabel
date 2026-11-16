@@ -213,7 +213,7 @@ class TestPathContract:
         contract = PathContract(base_dir=Path("out"))
         vp = contract.versioned_path("p", "d", "csv")
         assert vp.suffix == ".csv"
-        assert "p/d/csv/" in str(vp)
+        assert "p/d/csv/" in vp.as_posix()
 
 
 # ---------------------------------------------------------------------------

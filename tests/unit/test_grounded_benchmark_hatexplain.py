@@ -7,6 +7,7 @@ from molabel.core.quality.grounded_benchmarks import (
     load_grounded_benchmark,
     load_jsonl,
 )
+from tests.fixture_data import requires_benchmark_fixtures
 
 ROOT = (
     Path(__file__).resolve().parents[2]
@@ -20,6 +21,7 @@ def _majority_label(votes: list[str]) -> str:
     return Counter(votes).most_common(1)[0][0]
 
 
+@requires_benchmark_fixtures
 def test_hatexplain_grounded_fixture_contract() -> None:
     bundle = load_grounded_benchmark(ROOT)
     scenario = bundle.scenario
@@ -52,6 +54,7 @@ def test_hatexplain_grounded_fixture_contract() -> None:
     assert bundle.label_map.record_id_field == "post_id"
 
 
+@requires_benchmark_fixtures
 def test_hatexplain_grounded_artifacts_align() -> None:
     raw_rows = load_jsonl(ROOT / "data" / "raw" / "dataset.jsonl")
     split_rows = load_jsonl(ROOT / "workbench" / "benchmarks" / "splits" / "test.jsonl")

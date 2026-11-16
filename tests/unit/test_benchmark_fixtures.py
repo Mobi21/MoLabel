@@ -6,6 +6,8 @@ from pathlib import Path
 
 import yaml
 
+from tests.fixture_data import requires_benchmark_fixtures
+
 BENCHMARKS_ROOT = Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks"
 
 
@@ -43,6 +45,7 @@ def _raw_record_ids(workspace_root: Path, scenario: dict) -> set[str]:
     raise AssertionError(f"Unsupported raw format: {raw_format}")
 
 
+@requires_benchmark_fixtures
 def test_benchmark_fixture_workspaces_are_self_consistent() -> None:
     scenario_paths = sorted(
         BENCHMARKS_ROOT.glob("*/workbench/benchmarks/scenario.yaml")
