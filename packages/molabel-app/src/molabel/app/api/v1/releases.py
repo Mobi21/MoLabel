@@ -109,63 +109,6 @@ class ReleaseApproval(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _ensure_release_tables(engine) -> None:
-    """Create release/audit tables when lightweight test DBs omit migrations."""
-
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS releases ("
-                "id TEXT PRIMARY KEY, "
-                "release_slug TEXT, "
-                "version TEXT, "
-                "name TEXT, "
-                "description TEXT, "
-                "status TEXT, "
-                "export_bundle_ids TEXT NOT NULL, "
-                "validation_run_ids TEXT, "
-                "dataset_snapshot_id TEXT, "
-                "quality_summary TEXT, "
-                "signed_off_by TEXT, "
-                "signed_off_at TEXT, "
-                "release_metadata TEXT, "
-                "manifest_path TEXT, "
-                "workspace_id TEXT, "
-                "created_at TEXT, "
-                "released_at TEXT, "
-                "revoked_at TEXT)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_releases_workspace_id "
-                "ON releases(workspace_id)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS audit_events ("
-                "id TEXT PRIMARY KEY, "
-                "workspace_id TEXT, "
-                "event_type TEXT, "
-                "actor TEXT, "
-                "actor_name TEXT, "
-                "object_type TEXT, "
-                "object_id TEXT, "
-                "summary TEXT, "
-                "details TEXT, "
-                "created_at TEXT)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_audit_events_workspace_id "
-                "ON audit_events(workspace_id)"
-            )
-        )
-        conn.commit()
-
-
 def _json_loads(value: Any, default: Any) -> Any:
     if value is None:
         return default
@@ -530,7 +473,6 @@ async def list_releases(
     Returns a paginated list of releases, optionally filtered by status.
     """
     engine = get_engine(request)
-    _ensure_release_tables(engine)
     query = (
         "SELECT id, release_slug, version, name, description, status, "
         "export_bundle_ids, validation_run_ids, dataset_snapshot_id, "
@@ -563,7 +505,6 @@ async def create_release(
     Validation gates are evaluated if specified.
     """
     engine = get_engine(request)
-    _ensure_release_tables(engine)
     release_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     validation_report = _validation_report(
@@ -636,7 +577,6 @@ async def create_release(
 
 
 def _get_release_detail(engine, release_id: str) -> ReleaseDetail:
-    _ensure_release_tables(engine)
     with engine.connect() as conn:
         row = conn.execute(
             text(

@@ -13,7 +13,8 @@ from molabel.app.api.v1.workflows import (
     _select_agent_runner,
     _WorkflowDataLoader,
 )
-from molabel.core.database import create_all_tables, get_engine
+from molabel.core.database import get_engine
+from molabel.core.migration_runner import upgrade_database
 from molabel.core.providers.model_defaults import MINIMAX_M27_HIGHSPEED
 
 
@@ -59,7 +60,7 @@ def _insert_model_profile(
 
 def _build_engine(tmp_path):
     engine = get_engine(tmp_path / "workflow-runner-selection.db")
-    create_all_tables(engine)
+    upgrade_database(engine)
     return engine
 
 

@@ -6,6 +6,7 @@ from molabel.core.models.agent_output import AgentOutput
 from molabel.core.models.agent_run import AgentRun
 from molabel.core.models.artifact import Artifact
 from molabel.core.models.audit_entry import AuditEntry
+from molabel.core.models.audit_event import AuditEvent
 from molabel.core.models.correction_batch import CorrectionBatch
 from molabel.core.models.cost_record import CostRecord
 from molabel.core.models.dataset import Dataset
@@ -36,6 +37,7 @@ __all__ = [
     "AgentRun",
     "Artifact",
     "AuditEntry",
+    "AuditEvent",
     "CorrectionBatch",
     "CostRecord",
     "Dataset",

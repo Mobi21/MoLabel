@@ -17,7 +17,7 @@ from sqlmodel import Session, create_engine
 
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
-from molabel.core.database import create_all_tables
+from molabel.core.migration_runner import upgrade_database
 from molabel.core.models import Dataset, DatasetSnapshot, Record
 
 TEST_SECRET = "test-secret-for-cli-tests"
@@ -31,7 +31,7 @@ def app(tmp_path):
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    create_all_tables(engine)
+    upgrade_database(engine)
     application.state.engine = engine
     application.state.app_secret = TEST_SECRET
     application.state.test_workspace_root = tmp_path

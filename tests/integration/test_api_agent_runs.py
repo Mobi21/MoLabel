@@ -17,7 +17,7 @@ from sqlmodel import create_engine
 
 from molabel.app.api.v1.agent_runs import router as agent_runs_router
 from molabel.app.main import create_app
-from molabel.core.database import create_all_tables
+from molabel.core.migration_runner import upgrade_database
 
 
 @pytest.fixture()
@@ -31,7 +31,7 @@ def app(tmp_path):
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    create_all_tables(engine)
+    upgrade_database(engine)
     application.state.engine = engine
     application.state.app_secret = "agent-runs-test-secret"
     return application

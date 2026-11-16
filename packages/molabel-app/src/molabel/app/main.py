@@ -26,7 +26,7 @@ from molabel.app.api.v1 import router as v1_router
 from molabel.app.schemas import ErrorDetail, ErrorResponse, HealthResponse
 from molabel.app.server_state import server_db_url
 from molabel.app.services.session import get_or_create_app_secret
-from molabel.core.database import create_all_tables
+from molabel.core.migration_runner import upgrade_database
 
 # ---------------------------------------------------------------------------
 # Network binding configuration (SE-012)
@@ -93,7 +93,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     SE-007: Claim expiry background task.
     """
     engine = _create_engine_from_env()
-    create_all_tables(engine)
+    upgrade_database(engine)
     app.state.engine = engine
     app.state.app_secret = get_or_create_app_secret()
 

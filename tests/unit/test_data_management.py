@@ -23,7 +23,8 @@ import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import create_engine
 
-from molabel.core.database import create_all_tables, get_session
+from molabel.core.database import get_session
+from molabel.core.migration_runner import upgrade_database
 from molabel.core.types import ReviewEventSource, TrustLevel
 
 # ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ def db_engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    create_all_tables(engine)
+    upgrade_database(engine)
     return engine
 
 

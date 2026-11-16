@@ -7,13 +7,14 @@ import uuid
 from sqlalchemy import text
 from sqlmodel import Session, select
 
-from molabel.core.database import create_all_tables, get_engine
+from molabel.core.database import get_engine
+from molabel.core.migration_runner import upgrade_database
 from molabel.core.models.review_event import ReviewEvent
 
 
 def test_orm_loads_review_event_with_pre_rename_decision(tmp_path) -> None:
     engine = get_engine(tmp_path / "events.db")
-    create_all_tables(engine)
+    upgrade_database(engine)
     with engine.connect() as conn:
         conn.execute(text("PRAGMA foreign_keys=OFF"))
         conn.execute(

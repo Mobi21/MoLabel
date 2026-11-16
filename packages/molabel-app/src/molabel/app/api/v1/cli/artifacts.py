@@ -405,21 +405,6 @@ def _record_audit_event(
     with engine.connect() as conn:
         conn.execute(
             text(
-                "CREATE TABLE IF NOT EXISTS audit_events ("
-                "id TEXT PRIMARY KEY, "
-                "workspace_id TEXT, "
-                "event_type TEXT, "
-                "actor TEXT, "
-                "actor_name TEXT, "
-                "object_type TEXT, "
-                "object_id TEXT, "
-                "summary TEXT, "
-                "details TEXT, "
-                "created_at TEXT)"
-            )
-        )
-        conn.execute(
-            text(
                 "INSERT INTO audit_events ("
                 "id, workspace_id, event_type, actor, actor_name, object_type, "
                 "object_id, summary, details, created_at"

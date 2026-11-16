@@ -1,7 +1,7 @@
 """Tier 9 — Cross-Cutting: Database Migration (T9-12).
 
 Tests:
-    T9-12: create_all_tables() on a fresh in-memory SQLite database creates
+    T9-12: upgrade_database() on a fresh in-memory SQLite database creates
            all expected tables; verify table existence and foreign key pragmas.
 """
 
@@ -10,13 +10,13 @@ from __future__ import annotations
 import pytest
 from sqlmodel import SQLModel, create_engine
 
-from molabel.core.database import create_all_tables
+from molabel.core.migration_runner import upgrade_database
 from tests.e2e.infrastructure.assertions import checkpoint
 from tests.e2e.infrastructure.client import InstrumentedClient
 from tests.e2e.infrastructure.logging_config import TestContext
 from tests.e2e.infrastructure.parallel import INDEPENDENT
 
-# All 28 tables expected after create_all_tables()
+# All 28 tables expected after upgrade_database()
 EXPECTED_TABLES = {
     "workspaces",
     "datasets",
@@ -80,27 +80,27 @@ async def test_db_migration(
     client: InstrumentedClient,
     ctx: TestContext,
 ) -> None:
-    """T9-12: create_all_tables() on fresh SQLite creates all 28 expected tables."""
+    """T9-12: upgrade_database() on fresh SQLite creates all 28 expected tables."""
 
-    with checkpoint(ctx, "create_all_tables_on_fresh_db"):
+    with checkpoint(ctx, "upgrade_database_on_fresh_db"):
         # Use a separate in-memory engine (not the test app's engine)
         engine = create_engine("sqlite:///:memory:", echo=False)
         # Should not raise
-        create_all_tables(engine)
+        upgrade_database(engine)
 
     with checkpoint(ctx, "all_expected_tables_exist"):
         engine = create_engine("sqlite:///:memory:", echo=False)
-        create_all_tables(engine)
+        upgrade_database(engine)
         actual = _get_tables(engine)
         missing = EXPECTED_TABLES - actual
         assert not missing, (
-            f"create_all_tables() is missing tables: {sorted(missing)}\n"
+            f"upgrade_database() is missing tables: {sorted(missing)}\n"
             f"Tables found: {sorted(actual)}"
         )
 
     with checkpoint(ctx, "no_unexpected_tables"):
         engine = create_engine("sqlite:///:memory:", echo=False)
-        create_all_tables(engine)
+        upgrade_database(engine)
         actual = _get_tables(engine)
         actual - EXPECTED_TABLES
         # There may be extra tables added in the future — warn rather than fail
@@ -112,21 +112,21 @@ async def test_db_migration(
 
     with checkpoint(ctx, "table_count_at_least_28"):
         engine = create_engine("sqlite:///:memory:", echo=False)
-        create_all_tables(engine)
+        upgrade_database(engine)
         actual = _get_tables(engine)
         assert len(actual) >= 28, (
             f"Expected at least 28 tables, got {len(actual)}: {sorted(actual)}"
         )
 
-    with checkpoint(ctx, "idempotent_create_all_tables"):
-        # Calling create_all_tables twice must not raise
+    with checkpoint(ctx, "idempotent_upgrade_database"):
+        # Calling upgrade_database twice must not raise
         engine = create_engine("sqlite:///:memory:", echo=False)
-        create_all_tables(engine)
+        upgrade_database(engine)
         count_first = len(_get_tables(engine))
-        create_all_tables(engine)
+        upgrade_database(engine)
         count_second = len(_get_tables(engine))
         assert count_first == count_second, (
-            f"Second call to create_all_tables() changed table count: "
+            f"Second call to upgrade_database() changed table count: "
             f"{count_first} -> {count_second}"
         )
 
@@ -134,7 +134,7 @@ async def test_db_migration(
         from sqlalchemy import inspect
 
         engine = create_engine("sqlite:///:memory:", echo=False)
-        create_all_tables(engine)
+        upgrade_database(engine)
         inspector = inspect(engine)
         ws_cols = {col["name"] for col in inspector.get_columns("workspaces")}
         required_cols = {"id", "workspace_name", "root_path", "core_version"}
@@ -147,7 +147,7 @@ async def test_db_migration(
         from sqlalchemy import inspect
 
         engine = create_engine("sqlite:///:memory:", echo=False)
-        create_all_tables(engine)
+        upgrade_database(engine)
         inspector = inspect(engine)
         rp_cols = {col["name"] for col in inspector.get_columns("reviewer_profiles")}
         required_cols = {"id", "display_name", "is_active", "is_operator"}
@@ -160,7 +160,7 @@ async def test_db_migration(
         from sqlalchemy import inspect
 
         engine = create_engine("sqlite:///:memory:", echo=False)
-        create_all_tables(engine)
+        upgrade_database(engine)
         inspector = inspect(engine)
         ds_cols = {col["name"] for col in inspector.get_columns("datasets")}
         required_cols = {"id", "workspace_id", "dataset_name"}
@@ -183,7 +183,7 @@ async def test_db_migration(
         from sqlalchemy import inspect
 
         engine = create_engine("sqlite:///:memory:", echo=False)
-        create_all_tables(engine)
+        upgrade_database(engine)
         inspector = inspect(engine)
         ar_cols = {col["name"] for col in inspector.get_columns("agent_runs")}
         required_cols = {"id", "workspace_id", "status"}

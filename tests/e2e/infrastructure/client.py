@@ -57,7 +57,7 @@ class E2EClient:
 
         from molabel.app.main import create_app
         from molabel.app.services.session import get_or_create_app_secret
-        from molabel.core.database import create_all_tables
+        from molabel.core.migration_runner import upgrade_database
 
         self.app = create_app()
 
@@ -68,7 +68,7 @@ class E2EClient:
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
         )
-        create_all_tables(engine)
+        upgrade_database(engine)
         self.app.state.engine = engine
         self.app.state.app_secret = get_or_create_app_secret()
 
