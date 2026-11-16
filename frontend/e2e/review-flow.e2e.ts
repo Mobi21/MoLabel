@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { readSeed, type Seed } from './env'
 
 /*
@@ -55,6 +55,22 @@ async function openQueue(page: Page, title: string) {
   expect(index).toBeGreaterThanOrEqual(0)
   for (let i = 0; i < index; i++) await page.keyboard.press('j')
   await page.keyboard.press('Enter')
+}
+
+/** At the bottom of the page, the key legend leaves the field uncovered. */
+async function expectClearOfLegend(page: Page, field: Locator) {
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight)
+  })
+  await expect(field).toBeInViewport()
+  const box = await field.boundingBox()
+  const legend = await page
+    .locator('footer[aria-label="Keyboard shortcuts"]')
+    .boundingBox()
+  if (!box || !legend) throw new Error('field or legend has no box')
+  expect(box.y + box.height).toBeLessThanOrEqual(legend.y)
+  await field.click({ timeout: 5_000 })
+  await expect(field).toBeFocused()
 }
 
 /** Review every item the queue hands this reviewer, by keyboard alone. */
@@ -215,4 +231,23 @@ test('a blind queue keeps the AI proposal out of the page until reveal', async (
   await page.keyboard.press('s')
   await expect(heading.filter({ hasText: skipped })).toHaveCount(0)
   await expect(heading).toBeVisible()
+})
+
+test('at phone width the key legend never covers the note or the rationale', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await signIn(page, 'Reviewer 1')
+  await openQueue(page, 'Ticket triage, blind')
+  await expect(page.locator('#item-heading')).toBeVisible()
+  await expectClearOfLegend(page, page.getByRole('textbox', { name: /^Note/ }))
+  await snap(page, 'phone-review')
+
+  await page.goto(`/queues/${seed.queues.overlap}/adjudication`)
+  await expect(page.locator('#disagreement-heading')).toBeVisible()
+  await expectClearOfLegend(
+    page,
+    page.getByRole('textbox', { name: /^Rationale/ }),
+  )
+  await snap(page, 'phone-adjudication')
 })

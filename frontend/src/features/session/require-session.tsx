@@ -13,7 +13,7 @@ export function RequireSession() {
   if (me.isError) return <Navigate to="/sign-in" replace />
 
   return (
-    <div className="flex min-h-screen flex-col pb-24">
+    <div className="flex min-h-screen flex-col pb-(--legend-height)">
       <header className="border-b border-rule bg-paper/90 backdrop-blur-sm">
         <div className="mx-auto flex h-12 max-w-[1400px] items-center gap-4 px-6">
           <Link

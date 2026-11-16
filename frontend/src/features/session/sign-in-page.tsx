@@ -105,7 +105,7 @@ export function SignInPage() {
   useKeymap(bindings)
 
   return (
-    <div className="flex min-h-screen flex-col pb-16">
+    <div className="flex min-h-screen flex-col pb-(--legend-height)">
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 py-16">
         <p className="font-mono text-xs tracking-[0.2em] text-faint uppercase">
           MoLabel · review desk

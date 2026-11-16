@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import type { Binding } from '@/lib/keymap'
 
@@ -20,10 +21,34 @@ export function Kbd({
   )
 }
 
-/** The keys a screen answers to, rendered from the same bindings that handle them. */
+/**
+ * The keys a screen answers to, rendered from the same bindings that handle
+ * them. It wraps to more lines on a narrow screen, so it publishes its height
+ * as --legend-height, which the layouts reserve below their content.
+ */
 export function KeyLegend({ bindings }: { bindings: readonly Binding[] }) {
+  const footer = useRef<HTMLElement>(null)
+  useLayoutEffect(() => {
+    const element = footer.current
+    if (!element) return
+    const root = document.documentElement
+    const publish = () => {
+      root.style.setProperty(
+        '--legend-height',
+        `${String(element.offsetHeight)}px`,
+      )
+    }
+    publish()
+    const observer = new ResizeObserver(publish)
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--legend-height')
+    }
+  }, [])
   return (
     <footer
+      ref={footer}
       aria-label="Keyboard shortcuts"
       className="fixed inset-x-0 bottom-0 z-10 border-t border-rule bg-paper/95 backdrop-blur-sm"
     >
