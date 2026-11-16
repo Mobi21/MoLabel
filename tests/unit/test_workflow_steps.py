@@ -7,6 +7,8 @@ output steps (WF-018 through WF-020), and control steps (WF-021 through WF-034).
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from molabel.core.agents.agent_run_orchestrator import AgentRunBatchResult
@@ -15,6 +17,7 @@ from molabel.core.workflow.context import (
     WorkflowContext,
 )
 from molabel.core.workflow.steps.agent_steps import (
+    OFFLINE_SMOKE_RUN_NOTE,
     AgentCompareExecutor,
     AgentRunExecutor,
 )
@@ -369,6 +372,35 @@ class TestAgentRun:
 
 
 class TestAgentCompare:
+    @pytest.mark.parametrize(
+        ("providers", "offline"),
+        [
+            ({"m1": "offline", "m2": "offline"}, True),
+            ({"m1": "offline", "m2": "anthropic"}, False),
+        ],
+    )
+    def test_a_comparison_of_offline_models_is_an_offline_smoke_run(
+        self, providers: dict[str, str], offline: bool
+    ) -> None:
+        class Runner:
+            def run(self, **kwargs: Any) -> dict[str, Any]:
+                return {
+                    "agent_run_id": kwargs["agent_run_id"],
+                    "completed_records": 5,
+                    "provider_type": providers[kwargs["config"]["model"]],
+                }
+
+        result = AgentCompareExecutor().execute(
+            "compare",
+            {"models": list(providers), "prompt_ref": "p.yaml"},
+            _ctx_with_records(),
+            {"agent_runner": Runner()},
+        )
+
+        assert result.output is not None
+        assert result.output.summary["offline_smoke_run"] is offline
+        assert result.output.warnings == ([OFFLINE_SMOKE_RUN_NOTE] if offline else [])
+
     def test_basic_compare(self) -> None:
         executor = AgentCompareExecutor()
         ctx = _ctx_with_records()

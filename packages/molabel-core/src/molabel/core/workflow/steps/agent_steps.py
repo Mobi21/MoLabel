@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from molabel.core.agents.agent_run_orchestrator import AgentRunBatchResult
+from molabel.core.types import ProviderType
 from molabel.core.workflow.context import (
     AgentOutputRef,
     RecordSet,
@@ -21,6 +22,12 @@ from molabel.core.workflow.context import (
 from molabel.core.workflow.steps.base import StepExecutor, StepResult
 
 logger = logging.getLogger(__name__)
+
+OFFLINE_SMOKE_RUN_NOTE = (
+    "Every compared model ran on the offline provider, so this is an offline "
+    "smoke run. Each model is the same keyword heuristic, and their agreement "
+    "says nothing about how real models compare."
+)
 
 
 class AgentRunExecutor(StepExecutor):
@@ -183,7 +190,8 @@ class AgentCompareExecutor(StepExecutor):
 
     Runs multiple models/agents on the same record set and collects
     comparison outputs. Produces per-model agent runs and a comparison
-    summary.
+    summary. When the agent runner reports that every model ran on the
+    offline provider, the summary sets offline_smoke_run.
     """
 
     def validate(
@@ -225,6 +233,7 @@ class AgentCompareExecutor(StepExecutor):
             run_id = str(uuid.uuid4())
             success_count = 0
             failure_count = 0
+            provider_type = None
 
             if agent_service is not None:
                 try:
@@ -240,6 +249,11 @@ class AgentCompareExecutor(StepExecutor):
                     )
                     success_count = normalized.completed_records
                     failure_count = normalized.failed_records
+                    provider_type = (
+                        result.get("provider_type")
+                        if isinstance(result, Mapping)
+                        else getattr(result, "provider_type", None)
+                    )
                 except Exception as e:
                     failure_count = len(input_record_ids)
                     logger.warning("Agent compare: model '%s' failed: %s", model_id, e)
@@ -261,6 +275,7 @@ class AgentCompareExecutor(StepExecutor):
                     "agent_run_id": run_id,
                     "success_count": success_count,
                     "failure_count": failure_count,
+                    "provider_type": provider_type,
                 }
             )
 
@@ -279,6 +294,10 @@ class AgentCompareExecutor(StepExecutor):
             services,
         )
         context.metrics["compare.inter_model_agreement"] = inter_model_agreement
+        offline_smoke_run = all(
+            model["provider_type"] == ProviderType.offline
+            for model in per_model_results
+        )
 
         return StepResult(
             success=True,
@@ -291,7 +310,9 @@ class AgentCompareExecutor(StepExecutor):
                     "records_processed": len(input_record_ids),
                     "per_model_results": per_model_results,
                     "inter_model_agreement": inter_model_agreement,
+                    "offline_smoke_run": offline_smoke_run,
                 },
+                warnings=[OFFLINE_SMOKE_RUN_NOTE] if offline_smoke_run else [],
             ),
         )
 

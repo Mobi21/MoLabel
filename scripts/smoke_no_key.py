@@ -1,7 +1,8 @@
 """No-key end-to-end smoke test: import, offline pre-label, review, export.
 
 It then creates the agent_comparison template, which leaves a model unset,
-once with no model and once on the offline provider, and runs it to review.
+once with no model and once on the offline provider. It runs the offline one
+to review and checks that it is marked an offline smoke run.
 
 Starts the real backend with uvicorn on a temporary data directory, with
 every provider key unset, and drives the built CLI (cli/dist/bin/molabel.js)
@@ -327,6 +328,18 @@ def run_comparison(molabel: Cli) -> None:
     check(
         execution["status"] == "paused" and execution["current_step_id"] == "review",
         "the offline comparison runs to review",
+    )
+    detail = molabel(
+        "workflow", "execution", workflow["workflow_slug"], execution["execution_id"]
+    )
+    compared = next(
+        state["result"]
+        for state in detail["step_states"]
+        if state["step_type"] == "agent_compare"
+    )
+    check(
+        compared["summary"]["offline_smoke_run"] is True and compared["warnings"],
+        "the comparison is marked an offline smoke run",
     )
 
 

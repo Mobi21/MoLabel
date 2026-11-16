@@ -106,7 +106,7 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 **`agent_compare`**
 
 - Inputs: reads `record_sets[active_record_set_id]`; reads `config.models` (list of model profile IDs); reads `config.prompt_ref`
-- Outputs: appends multiple entries to `agent_run_ids` (one per model); writes `agent_outputs` for each; writes `record_sets[step_id]`; sets `active_record_set_id`; writes `step_outputs[step_id]` with comparison summary (per-model accuracy, agreement matrix, cost comparison); writes `metrics["compare.inter_model_agreement"]`
+- Outputs: appends multiple entries to `agent_run_ids` (one per model); writes `agent_outputs` for each; writes `record_sets[step_id]`; sets `active_record_set_id`; writes `step_outputs[step_id]` with comparison summary (per-model accuracy, agreement matrix, cost comparison); writes `metrics["compare.inter_model_agreement"]`. When the agent runner reports that every compared model ran on the offline provider, the summary sets `offline_smoke_run: true` and the step result's `warnings` note that the comparison measures one heuristic against itself
 - Side effects: creates multiple `agent_runs` rows; creates `agent_outputs` rows; writes audit entry; acquires dataset-level indexing lock
 
 #### Human Steps

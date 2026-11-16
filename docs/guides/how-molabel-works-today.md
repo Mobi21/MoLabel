@@ -273,6 +273,12 @@ No template ships a model MoLabel cannot resolve. A template can leave a model
 unset instead, as `agent_comparison` does for the model it compares. Creating
 it then needs `--model <id>` or `--provider offline`, and fails with
 `TEMPLATE_MODEL_REQUIRED` without either.
+With `--provider offline`, every compared model runs on the offline provider,
+so `agent_comparison` compares one keyword heuristic with copies of itself and
+its agreement is high by construction. Such a run is an offline smoke run, not
+a model comparison. When every compared model ran on the offline provider, the
+`agent_compare` step's summary sets `offline_smoke_run: true` and its result's
+`warnings` say so.
 `cli/README.md` describes the heuristic, and `scripts/smoke_no_key.py` runs
 import, offline pre-label, review, and export with no key in CI.
 

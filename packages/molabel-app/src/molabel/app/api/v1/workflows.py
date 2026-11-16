@@ -1628,6 +1628,7 @@ class _LlmAgentRunner:
             "batch_count": 1 if record_ids else 0,
             "event_count": completed,
             "error_summary": error_summary,
+            "provider_type": provider_type,
         }
 
     def _label_record(

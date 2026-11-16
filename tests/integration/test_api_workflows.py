@@ -1727,6 +1727,39 @@ async def test_a_compared_model_left_unset_fails_before_any_call(
     assert hosted_calls == []
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("agent_config", "offline"),
+    [
+        (
+            {
+                "models": ["claude-sonnet-4-20250514", "gpt-4o"],
+                "provider_type": "offline",
+            },
+            True,
+        ),
+        ({"models": ["offline-heuristic", "claude-sonnet-4-20250514"]}, False),
+    ],
+    ids=["every-model-offline", "one-hosted-model"],
+)
+async def test_a_comparison_of_offline_models_is_marked_a_smoke_run(
+    client, app, tmp_path, usable_providers, agent_config, offline
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+
+    started = await _execute_sentiment_workflow(
+        client, app, tmp_path, workspace_id, agent_config, "agent_compare"
+    )
+    execution = await client.get(
+        f"/api/v1/workflows/{started.json()['workflow_definition_id']}"
+        f"/executions/{started.json()['execution_id']}"
+    )
+
+    compare = _step_results(execution.json())["agent_label"]
+    assert compare["summary"]["offline_smoke_run"] is offline
+    assert any("offline smoke run" in w for w in compare["warnings"]) is offline
+
+
 SENTIMENT_RECORDS = {
     "r1": "A positive review.",
     "r2": "A negative review.",
