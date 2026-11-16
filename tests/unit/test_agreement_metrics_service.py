@@ -292,3 +292,53 @@ def test_cohen_kappa_tells_two_humans_apart_by_rater_id() -> None:
     # p_o = 7/10. A says yes 5 times, B 6 times: p_e = 0.5 * 0.6 + 0.5 * 0.4 = 0.5.
     assert result.overall.cohen_kappa == pytest.approx((0.7 - 0.5) / (1 - 0.5))
     assert result.overall.null_reasons == {}
+
+
+def test_null_labels_are_missing_values() -> None:
+    units = [("a", "a", None), ("a", "b", None), ("b", "b", "b"), ("a", None, None)]
+
+    result = AgreementMetricsService().analyze(
+        [
+            AgreementRecord(
+                record_id=f"u{index}",
+                annotations=[
+                    AgreementAnnotation(
+                        source="human", rater_id=rater, labels={"code": value}
+                    )
+                    for rater, value in zip(("r1", "r2", "r3"), unit, strict=True)
+                ],
+            )
+            for index, unit in enumerate(units)
+        ],
+        analysis_type="inter_annotator",
+    )
+
+    # Pairable units are [a a], [a b] and [b b b]. The last unit keeps one value.
+    assert result.overall.comparisons == 1 + 1 + 3
+    assert result.overall.agreements == 1 + 0 + 3
+    # n = 7 with a = 3, b = 4. Only [a b] mismatches: alpha = 1 - 6 * 2 / (49 - 25).
+    assert result.overall.krippendorff_alpha == pytest.approx(0.5)
+    assert "fleiss_kappa" in result.overall.null_reasons
+
+
+def test_null_agent_label_is_not_a_human_agent_pair() -> None:
+    result = AgreementMetricsService().analyze(
+        [
+            _record("r1", {"sentiment": "positive"}, {"sentiment": None}),
+            _record("r2", {"sentiment": "positive"}, {"sentiment": "positive"}),
+            _record("r3", {"sentiment": "negative"}, {"sentiment": "negative"}),
+        ],
+        analysis_type="human_agent",
+    )
+
+    assert result.human_agent is not None
+    assert result.human_agent.comparisons == 2
+    assert result.human_agent.percent_agreement == pytest.approx(1.0)
+    assert result.confusion_matrix == {
+        "positive": {"positive": 1},
+        "negative": {"negative": 1},
+    }
+    assert set(result.human_agent_by_field["sentiment"].by_label_value) == {
+        "positive",
+        "negative",
+    }

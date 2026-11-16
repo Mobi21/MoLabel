@@ -14,7 +14,10 @@ into strings. Values are compared as nominal categories, so two values agree
 only when the strings are equal.
 
 - An annotation that lacks the field is a missing value for that unit.
-- An explicit null label becomes the string `__null__` and counts as a value.
+- An explicit null label is a missing value too, the way Krippendorff (2011)
+  treats a unit that a coder left blank. It never pairs with another value. A
+  "none" answer that should count as agreement must be an option in the task
+  schema, such as `none`.
 - A unit with fewer than two values cannot be paired. The service leaves it out
   of every metric.
 

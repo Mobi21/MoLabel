@@ -1,9 +1,9 @@
 """Agreement metrics for grouped annotations.
 
 A unit is one field of one record, and its values are the canonical labels the
-annotations in scope gave that field. An annotation without the field is a
-missing value. A unit with fewer than two values cannot be paired and is left
-out. Values are compared as nominal categories.
+annotations in scope gave that field. An annotation without the field, or with
+a null label, is a missing value. A unit with fewer than two values cannot be
+paired and is left out. Values are compared as nominal categories.
 
 ``comparisons`` and ``agreements`` count value pairs within units, and
 ``percent_agreement`` is their ratio. The chance-corrected coefficients are:
@@ -139,6 +139,10 @@ class AgreementAnnotation(BaseModel):
     @property
     def rater(self) -> str:
         return self.rater_id or self.source
+
+    def value(self, field: str) -> str | None:
+        label = self.labels.get(field)
+        return None if label is None else _canonical_label(label)
 
 
 class AgreementRecord(BaseModel):
@@ -361,10 +365,10 @@ class AgreementMetricsService:
         for record in records:
             for field in fields:
                 unit = [
-                    (annotation.rater, _canonical_label(annotation.labels[field]))
+                    (annotation.rater, value)
                     for annotation in record.annotations
-                    if field in annotation.labels
-                    and (source_filter is None or annotation.source in source_filter)
+                    if (source_filter is None or annotation.source in source_filter)
+                    and (value := annotation.value(field)) is not None
                 ]
                 if len(unit) >= 2:
                     units.append(unit)
@@ -386,16 +390,16 @@ class AgreementMetricsService:
         for record in records:
             for field in fields:
                 human_values = [
-                    _canonical_label(annotation.labels[field])
+                    value
                     for annotation in record.annotations
-                    if field in annotation.labels
-                    and _is_human_source(annotation.source)
+                    if _is_human_source(annotation.source)
+                    and (value := annotation.value(field)) is not None
                 ]
                 agent_values = [
-                    _canonical_label(annotation.labels[field])
+                    value
                     for annotation in record.annotations
-                    if field in annotation.labels
-                    and _is_agent_source(annotation.source)
+                    if _is_agent_source(annotation.source)
+                    and (value := annotation.value(field)) is not None
                 ]
                 if not human_values or not agent_values:
                     continue
