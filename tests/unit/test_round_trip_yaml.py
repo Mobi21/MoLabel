@@ -67,3 +67,9 @@ def test_a_mapping_key_keeps_its_requested_kind() -> None:
 
     assert list(value["x"]) == [1]
     assert type(next(iter(value["x"]))) is int
+
+
+def test_a_next_line_character_survives_in_values_and_keys() -> None:
+    data = {"text": "before\u0085after", "\u0085key": 1, "plain": "café"}
+
+    assert yaml.safe_load(dump_yaml(data)) == data

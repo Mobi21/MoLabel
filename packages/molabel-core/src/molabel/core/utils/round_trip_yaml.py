@@ -104,12 +104,13 @@ def dump_yaml(data: Mapping[str, Any], previous: str | None = None) -> str:
     sequence indentation. Keys *data* lacks are removed and new keys go at
     the end. The result always reads back with PyYAML as exactly *data*:
     each candidate is checked, and when the merged and fresh renders both
-    fail, *data* is written with a plain PyYAML dump.
+    fail, *data* is written with a plain PyYAML dump that escapes non-ASCII,
+    so characters such as U+0085 survive.
     """
     for candidate in (_merged(data, previous), _render(data, 4, 2)):
         if candidate is not None and _reads_back(candidate, data):
             return candidate
-    return pyyaml.safe_dump(dict(data), sort_keys=False, allow_unicode=True)
+    return pyyaml.safe_dump(dict(data), sort_keys=False, allow_unicode=False)
 
 
 def _merged(data: Mapping[str, Any], previous: str | None) -> str | None:
