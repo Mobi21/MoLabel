@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
+import yaml
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
@@ -28,6 +29,7 @@ from molabel.core.providers import (
 from molabel.core.providers.base import ProviderError
 from molabel.core.providers.detection import DiscoveredProvider, ProviderDetector
 from molabel.core.types import CompletionResult, HealthStatus
+from molabel.core.workflow.templates import get_template_yaml, list_templates
 
 TEST_SECRET = "workflow-test-secret"
 
@@ -978,6 +980,42 @@ async def test_an_unresolvable_model_fails_before_any_step_runs(
     assert _execution_count(app.state.engine, workspace_id) == 0
     assert _agent_run_profiles(app.state.engine, workspace_id) == []
     assert hosted_calls == []
+
+
+def _models_templates_ship():
+    for template in list_templates():
+        definition = yaml.safe_load(get_template_yaml(template["id"]))
+        for step in definition["steps"]:
+            config = step.get("config") or {}
+            models = {
+                "agent_run": [config.get("model")],
+                "agent_compare": config.get("models") or [],
+            }.get(step["type"], [])
+            settings = {
+                key: config[key]
+                for key in ("provider_type", "provider_name", "base_url", "auth_ref")
+                if key in config
+            }
+            for model in models:
+                if model is not None:
+                    yield pytest.param(
+                        {"model": model, **settings}, id=f"{template['id']}:{model}"
+                    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("agent_config", list(_models_templates_ship()))
+async def test_every_model_a_template_ships_runs(
+    client, app, tmp_path, hosted_calls, agent_config
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+
+    resp = await _execute_sentiment_workflow(
+        client, app, tmp_path, workspace_id, agent_config
+    )
+
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["error_summary"] is None
 
 
 PINNING_STEPS = [

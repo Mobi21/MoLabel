@@ -91,6 +91,13 @@ works. A step that pins a profile id in `model` or `model_profile_id` runs on
 that profile, so next to `provider_type: offline` it must be an offline one.
 `--model <id>` replaces the template's model with a different one instead.
 
+A template can leave a model unset for you to choose. `agent_comparison`
+compares `claude-sonnet-4-20250514` and `gpt-4o` with a model you name, so
+creating it needs `--model <id>` or `--provider offline`. Without either,
+`workflow create` fails with `HTTP_400` before it creates anything, and
+`details.error.code` is `TEMPLATE_MODEL_REQUIRED`. `--provider offline` runs
+every model the comparison names on the offline provider.
+
 For a field with options, the provider picks the first option, in schema
 order, that the record text contains as a whole word or phrase, ignoring case.
 When no option matches, it picks the first option. A multi-select field gets

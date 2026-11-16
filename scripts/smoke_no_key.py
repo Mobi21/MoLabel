@@ -1,5 +1,8 @@
 """No-key end-to-end smoke test: import, offline pre-label, review, export.
 
+It then creates the agent_comparison template, which leaves a model unset,
+once with no model and once on the offline provider, and runs it to review.
+
 Starts the real backend with uvicorn on a temporary data directory, with
 every provider key unset, and drives the built CLI (cli/dist/bin/molabel.js)
 through the whole flow. Prints each command and its exit code, and exits 1 on
@@ -296,6 +299,37 @@ def run_flow(molabel: Cli, workspace: Path) -> Path:
     return export_path
 
 
+def run_comparison(molabel: Cli) -> None:
+    unbound = molabel(
+        "workflow", "create", "--template", "agent_comparison", expect_exit=1
+    )["error"]
+    check(
+        unbound["code"] == "HTTP_400"
+        and unbound["details"]["error"]["code"] == "TEMPLATE_MODEL_REQUIRED",
+        "agent_comparison with no model fails at create with TEMPLATE_MODEL_REQUIRED",
+    )
+    check(
+        "--model <id>" in unbound["message"]
+        and "--provider offline" in unbound["message"],
+        "the error names --model <id> and --provider offline",
+    )
+
+    workflow = molabel(
+        "workflow", "create", "--template", "agent_comparison", "--provider", "offline"
+    )
+    compare = next(s for s in workflow["steps"] if s["step_type"] == "agent_compare")
+    check(
+        set(compare["config"]["models"]) == {"offline-heuristic"}
+        and compare["config"]["provider_type"] == "offline",
+        "every compared model is bound to the offline provider",
+    )
+    execution = molabel("workflow", "run", workflow["workflow_slug"])
+    check(
+        execution["status"] == "paused" and execution["current_step_id"] == "review",
+        "the offline comparison runs to review",
+    )
+
+
 def main() -> int:
     if not CLI.is_file():
         print(f"FAIL: {CLI} is missing. Run `npm ci && npm run build` in cli/.")
@@ -333,6 +367,7 @@ def main() -> int:
                 cwd=workspace,
             )
             export_path = run_flow(molabel, workspace)
+            run_comparison(molabel)
             check(
                 export_path.resolve().is_relative_to(workspace.resolve()),
                 "the export stays inside the workspace",

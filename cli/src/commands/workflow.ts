@@ -126,7 +126,10 @@ function registerWorkflowCreateCommand(
         .choices(['offline'])
         .conflicts('model'),
     )
-    .option('--model <id>', "Model ID that replaces the template's agent model")
+    .option(
+      '--model <id>',
+      "Model ID that replaces the template's agent model, or fills one it leaves unset",
+    )
     .option('--workspace-id <id>', 'Workspace ID override')
     .option('--name <name>')
     .option('--slug <slug>')
