@@ -1955,6 +1955,260 @@ async def test_two_reviewers_give_a_cohen_kappa_on_a_live_workflow(
     assert sentiment["cohen_kappa"] == pytest.approx((3 / 5 - 7 / 25) / (18 / 25))
 
 
+NEWER_RUN = {"positive": "negative", "negative": "neutral", "neutral": "positive"}
+
+
+async def _start_three_record_review(
+    client, app, tmp_path, *, policy, reviewers, overlap_count, after_review
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    tokens = [_seed_reviewer(app.state.engine, workspace_id) for _ in range(reviewers)]
+    task_schema_id = _seed_task_schema(app.state.engine, workspace_id)
+    with app.state.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE task_schemas SET blind_review_policy = :p WHERE id = :id"),
+            {"p": policy, "id": str(task_schema_id)},
+        )
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "reviews.jsonl").write_text(
+        "".join(
+            json.dumps({"id": record_id, "text": SENTIMENT_RECORDS[record_id]}) + "\n"
+            for record_id in ("r1", "r2", "r3")
+        ),
+        encoding="utf-8",
+    )
+    workflow_id = _seed_workflow(
+        app.state.engine,
+        workspace_id,
+        agent_config={"provider_type": "offline", "prompt_ref": "prompts/default.yaml"},
+        review_config={"overlap_count": overlap_count},
+        after_review=after_review,
+    )
+    started = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={tokens[0]}"},
+    )
+    assert started.json()["current_step_id"] == "review", started.text
+    with app.state.engine.connect() as conn:
+        (queue_id,) = conn.execute(
+            text("SELECT DISTINCT queue_id FROM review_tasks WHERE workspace_id = :w"),
+            {"w": str(workspace_id)},
+        ).one()
+    advance_path = (
+        f"/api/v1/workflows/{workflow_id}/executions/"
+        f"{started.json()['execution_id']}/steps/review/advance"
+    )
+    return workspace_id, tokens, queue_id, advance_path
+
+
+async def _claim(client, queue_id, token):
+    claim = await client.post(
+        f"/api/v1/queues/{queue_id}/claim",
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+    assert claim.status_code == 200, claim.text
+    return claim.json()["task"]
+
+
+async def _accept(client, task, token, labels):
+    submitted = await client.post(
+        f"/api/v1/review-tasks/{task['id']}/submit",
+        json={"decision": "accept", "labels": labels, "auto_claim_next": False},
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+    assert submitted.status_code == 200, submitted.text
+
+
+def _finish_a_newer_agent_run(app, workspace_id, monkeypatch):
+    with app.state.engine.begin() as conn:
+        external_ids = dict(
+            conn.execute(
+                text("SELECT id, external_id FROM records WHERE workspace_id = :w"),
+                {"w": str(workspace_id)},
+            ).all()
+        )
+        monkeypatch.setattr(
+            _LlmAgentRunner,
+            "_label_record",
+            lambda self, *, record_id, **_: (
+                {"sentiment": NEWER_RUN[OFFLINE_SENTIMENT[external_ids[record_id]]]},
+                {},
+                0.9,
+                0,
+                0,
+                0,
+            ),
+        )
+        _LlmAgentRunner(conn, workspace_id=str(workspace_id)).run(
+            record_ids=list(external_ids), config={"model": "offline-heuristic"}
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("policy", ["hide_agent_outputs_by_default", "no_agent"])
+async def test_an_accept_on_a_blind_task_counts_the_labels_the_reviewer_sent(
+    client, app, tmp_path, policy
+):
+    _, tokens, queue_id, advance_path = await _start_three_record_review(
+        client,
+        app,
+        tmp_path,
+        policy=policy,
+        reviewers=2,
+        overlap_count=2,
+        after_review=[
+            {
+                "step_id": "agreement",
+                "step_type": "agreement_analysis",
+                "config": {"analysis_type": "inter_annotator"},
+            },
+            {
+                "step_id": "quality",
+                "step_type": "quality_check",
+                "config": {"min_agreement": 0.8},
+            },
+        ],
+    )
+    sent = [
+        dict(OFFLINE_SENTIMENT),
+        {"r1": "negative", "r2": "neutral", "r3": "positive"},
+    ]
+    for token, labels in zip(tokens, sent, strict=True):
+        while (task := await _claim(client, queue_id, token)) is not None:
+            assert task["agent_output"] is None
+            await _accept(
+                client,
+                task,
+                token,
+                {"sentiment": labels[task["record_external_id"]]},
+            )
+
+    advanced = await client.post(
+        advance_path, headers={"Cookie": f"molabel_session={tokens[0]}"}
+    )
+
+    assert advanced.status_code == 200, advanced.text
+    results = _step_results(advanced.json())
+    sentiment = results["agreement"]["summary"]["fields"]["sentiment"]
+    # Every unit mismatches, so D_o = 1. n = 6 with two of each label:
+    # D_e = (36 - 3 * 4) / 30 = 4/5, and alpha = 1 - 1 / (4/5) = -1/4.
+    assert sentiment["krippendorff_alpha"] == pytest.approx(-0.25)
+    assert results["quality"]["summary"]["passed"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("policy", "reveal"),
+    [("show_agent_outputs", False), ("hide_agent_outputs_by_default", True)],
+)
+@pytest.mark.parametrize("sends_labels", [True, False])
+async def test_an_accept_counts_the_proposal_the_reviewer_saw(
+    client, app, tmp_path, monkeypatch, policy, reveal, sends_labels
+):
+    workspace_id, (token,), queue_id, advance_path = await _start_three_record_review(
+        client,
+        app,
+        tmp_path,
+        policy=policy,
+        reviewers=1,
+        overlap_count=1,
+        after_review=[
+            {
+                "step_id": "agreement",
+                "step_type": "agreement_analysis",
+                "config": {"analysis_type": "human_agent"},
+            }
+        ],
+    )
+    _finish_a_newer_agent_run(app, workspace_id, monkeypatch)
+
+    while (task := await _claim(client, queue_id, token)) is not None:
+        if reveal:
+            revealed = await client.post(
+                f"/api/v1/review-tasks/{task['id']}/reveal-ai",
+                headers={"Cookie": f"molabel_session={token}"},
+            )
+            assert revealed.status_code == 200, revealed.text
+            task = revealed.json()["task"]
+        shown = task["agent_output"]["labels"]
+        assert shown == {
+            "sentiment": NEWER_RUN[OFFLINE_SENTIMENT[task["record_external_id"]]]
+        }
+        await _accept(client, task, token, shown if sends_labels else {})
+
+    advanced = await client.post(
+        advance_path, headers={"Cookie": f"molabel_session={token}"}
+    )
+
+    assert advanced.status_code == 200, advanced.text
+    summary = _step_results(advanced.json())["agreement"]["summary"]
+    sentiment = summary["human_agent_fields"]["sentiment"]
+    # The reviewer took the newer run's label on every record, and the
+    # workflow's own run disagrees with that label on all three.
+    assert (sentiment["comparisons"], sentiment["agreements"]) == (3, 0)
+
+
+@pytest.mark.asyncio
+async def test_an_accept_with_no_labels_and_no_proposal_shown_gives_no_value(
+    client, app, tmp_path
+):
+    _, (token,), queue_id, advance_path = await _start_three_record_review(
+        client,
+        app,
+        tmp_path,
+        policy="hide_agent_outputs_by_default",
+        reviewers=1,
+        overlap_count=1,
+        after_review=[
+            {
+                "step_id": "agreement",
+                "step_type": "agreement_analysis",
+                "config": {"analysis_type": "human_agent"},
+            }
+        ],
+    )
+    while (task := await _claim(client, queue_id, token)) is not None:
+        assert task["agent_output"] is None
+        await _accept(client, task, token, {})
+
+    advanced = await client.post(
+        advance_path, headers={"Cookie": f"molabel_session={token}"}
+    )
+
+    assert advanced.status_code == 200, advanced.text
+    summary = _step_results(advanced.json())["agreement"]["summary"]
+    assert summary["human_agent"] is None
+    assert summary["human_agent_fields"] == {}
+
+
+@pytest.mark.asyncio
+async def test_advance_says_an_overlap_queue_needs_more_reviewers(
+    client, app, tmp_path
+):
+    _, tokens, queue_id, advance_path = await _start_three_record_review(
+        client,
+        app,
+        tmp_path,
+        policy="show_agent_outputs",
+        reviewers=2,
+        overlap_count=3,
+        after_review=[],
+    )
+    for token in tokens:
+        while (task := await _claim(client, queue_id, token)) is not None:
+            await _accept(client, task, token, {"sentiment": "neutral"})
+
+    advanced = await client.post(
+        advance_path, headers={"Cookie": f"molabel_session={tokens[0]}"}
+    )
+
+    assert advanced.status_code == 409
+    assert "3 copies need 3 distinct reviewers; 2 have submitted" in (
+        advanced.json()["error"]["message"]
+    )
+
+
 @pytest.mark.asyncio
 async def test_a_workflow_with_no_agreement_records_fails_the_gate(
     client, app, tmp_path

@@ -26,7 +26,6 @@ def _event(
     reviewer: str = "alice",
     record: str = "r1",
     labels: dict[str, Any] | None = None,
-    proposal: dict[str, Any] | None = None,
     supersedes: str | None = None,
     minute: int = 0,
 ) -> ReviewEventLabels:
@@ -36,7 +35,6 @@ def _event(
         reviewer_id=reviewer,
         decision=decision,
         labels=SUBMITTED if labels is None else labels,
-        proposal_labels=PROPOSAL if proposal is None else proposal,
         supersedes_event_id=supersedes,
         created_at=T0 + timedelta(minutes=minute),
     )
@@ -58,20 +56,10 @@ def _rated(
 
 
 @pytest.mark.parametrize(
-    ("decision", "expected"),
-    [
-        ("accept", PROPOSAL),
-        ("edit", SUBMITTED),
-        (None, SUBMITTED),
-        ("accept_ai", PROPOSAL),
-        ("edit_ai", SUBMITTED),
-        ("correct", SUBMITTED),
-    ],
+    "decision", ["accept", "edit", None, "accept_ai", "edit_ai", "correct"]
 )
-def test_a_decision_rates_the_labels_it_stands_for(
-    decision: str | None, expected: dict[str, Any]
-) -> None:
-    assert _rated([_event("e1", decision)]) == {"r1": [("human", "alice", expected)]}
+def test_a_decision_rates_the_labels_the_event_stores(decision: str | None) -> None:
+    assert _rated([_event("e1", decision)]) == {"r1": [("human", "alice", SUBMITTED)]}
 
 
 @pytest.mark.parametrize("decision", ["reject", "reject_ai", "skip"])
@@ -79,19 +67,18 @@ def test_reject_and_skip_give_no_value(decision: str) -> None:
     assert _rated([_event("e1", decision)]) == {}
 
 
-def test_accept_without_a_proposal_rates_the_labels_the_reviewer_sent() -> None:
-    event = ReviewEventLabels(
-        event_id="e1",
-        record_id="r1",
-        reviewer_id="alice",
-        decision="accept",
-        labels=SUBMITTED,
-        proposal_labels=None,
-        supersedes_event_id=None,
-        created_at=T0,
-    )
+@pytest.mark.parametrize("decision", ["accept", "edit", None])
+def test_an_event_with_no_labels_gives_no_value(decision: str | None) -> None:
+    assert _rated([_event("e1", decision, labels={})]) == {}
 
-    assert _rated([event]) == {"r1": [("human", "alice", SUBMITTED)]}
+
+def test_an_event_with_no_labels_withdraws_the_value_it_corrects() -> None:
+    events = [
+        _event("e1", "edit", minute=0),
+        _event("e2", "accept", labels={}, supersedes="e1", minute=1),
+    ]
+
+    assert _rated(events) == {}
 
 
 def test_the_head_of_a_correction_chain_counts() -> None:
@@ -138,7 +125,7 @@ def test_each_reviewer_and_each_agent_run_is_a_rater() -> None:
 
     assert _rated(events, proposals) == {
         "r1": [
-            ("human", "alice", PROPOSAL),
+            ("human", "alice", SUBMITTED),
             ("human", "bob", SUBMITTED),
             ("agent", "run-1", PROPOSAL),
         ],
