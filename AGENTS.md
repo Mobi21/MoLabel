@@ -28,7 +28,7 @@ This is a uv workspace monorepo with three Python packages, a TypeScript CLI, an
 ## The Agent Interface Is The CLI
 
 - Agents operate MoLabel through `molabel`, not through raw HTTP calls to the backend.
-- Every command prints exactly one JSON document to stdout and exits 0 or 1. On exit 1, branch on `error.code`. `cli/README.md` defines the contract and `cli/tests/json-contract.test.ts` enforces it.
+- Every command prints exactly one JSON document to stdout and exits 0 or 1, except `--help`, `--version` and `--raw`, which print plain text. On exit 1, branch on `error.code`. `cli/README.md` defines the contract and `cli/tests/json-contract.test.ts` enforces it.
 - `molabel manifest --json` lists the commands. `molabel doctor` checks environment health and `molabel status` shows workspace and backend status.
 - `molabel skill install --flavor codex` or `--flavor claude-code` installs the bundled skills from `cli/skills/`.
 - The CLI reaches the backend through its own HTTP client in `cli/src/client/`, configured by `MOLABEL_BASE_URL` or `--base-url`.

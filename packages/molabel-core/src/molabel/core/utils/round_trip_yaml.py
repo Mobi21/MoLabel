@@ -6,6 +6,7 @@ import io
 from collections.abc import Mapping
 from typing import Any
 
+import yaml as pyyaml
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.representer import RoundTripRepresenter
@@ -42,8 +43,34 @@ def _round_trip_yaml() -> YAML:
     return yaml
 
 
+def _kind(value: Any) -> type:
+    for kind in (bool, int, float, str):
+        if isinstance(value, kind):
+            return kind
+    return type(value)
+
+
 def _same(old: Any, new: Any) -> bool:
-    return isinstance(old, bool) == isinstance(new, bool) and old == new
+    """Equal, and of the same scalar kind at every depth (``True`` is not ``1``)."""
+    if isinstance(old, Mapping) and isinstance(new, Mapping):
+        return old.keys() == new.keys() and all(_same(old[k], new[k]) for k in new)
+    if isinstance(old, list) and isinstance(new, list):
+        return len(old) == len(new) and all(map(_same, old, new))
+    return _kind(old) is _kind(new) and old == new
+
+
+def _shares_nodes(node: Any, seen: set[int] | None = None) -> bool:
+    """Whether *node* uses anchors, aliases or merge keys, which a merge corrupts."""
+    seen = set() if seen is None else seen
+    if not isinstance(node, CommentedMap | CommentedSeq):
+        return False
+    if id(node) in seen or node.anchor.value is not None:
+        return True
+    if isinstance(node, CommentedMap) and getattr(node, "merge", None):
+        return True
+    seen.add(id(node))
+    children = node.values() if isinstance(node, CommentedMap) else node
+    return any(_shares_nodes(child, seen) for child in children)
 
 
 def _merge(old: Any, new: Any) -> Any:
@@ -71,22 +98,30 @@ def dump_yaml(data: Mapping[str, Any], previous: str | None = None) -> str:
 
     *previous* is the text of the file being replaced. Keys and list items
     that *data* still has keep their comments, order, quoting and the file's
-    indentation. Keys *data* lacks are removed and new keys go at the end.
-    A *previous* that does not parse is replaced outright.
+    sequence indentation. Keys *data* lacks are removed and new keys go at
+    the end. *previous* is replaced outright when it does not parse, when it
+    uses anchors, aliases or merge keys, or when the merged text would not
+    read back as *data*.
     """
+    fresh = _render(data, 4, 2)
+    if previous is None:
+        return fresh
+    try:
+        loaded, indent, block_seq_indent = load_yaml_guess_indent(
+            previous, yaml=_round_trip_yaml()
+        )
+    except YAMLError:
+        return fresh
+    if loaded is None or _shares_nodes(loaded):
+        return fresh
+    if indent is None or block_seq_indent is None:
+        indent, block_seq_indent = 4, 2
+    merged = _render(_merge(loaded, data), indent, block_seq_indent)
+    return merged if _same(pyyaml.safe_load(merged), data) else fresh
+
+
+def _render(document: Any, sequence_indent: int, offset: int) -> str:
     yaml = _round_trip_yaml()
-    document: Any = data
-    sequence_indent, offset = 4, 2
-    if previous is not None:
-        try:
-            loaded, indent, block_seq_indent = load_yaml_guess_indent(
-                previous, yaml=yaml
-            )
-        except YAMLError:
-            loaded, indent, block_seq_indent = None, None, None
-        document = _merge(loaded, data)
-        if indent is not None and block_seq_indent is not None:
-            sequence_indent, offset = indent, block_seq_indent
     yaml.indent(mapping=2, sequence=sequence_indent, offset=offset)
     stream = io.StringIO()
     yaml.dump(document, stream)
