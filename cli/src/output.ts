@@ -1,5 +1,3 @@
-import { writeFile } from 'node:fs/promises'
-
 import type { OutputMode } from './types.js'
 
 export function emit(value: unknown, mode: OutputMode): Promise<void> {
@@ -15,10 +13,6 @@ export function emit(value: unknown, mode: OutputMode): Promise<void> {
 
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`)
   return Promise.resolve()
-}
-
-export async function emitToFile(path: string, value: unknown): Promise<void> {
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
 }
 
 function formatText(value: unknown): string {
