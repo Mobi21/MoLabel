@@ -21,6 +21,11 @@ This directory now has two kinds of docs:
   artifacts it scores, which metric is primary, and which task semantics must
   not be flattened away.
 
+- [Agreement Metrics](guides/agreement-metrics.md)
+  The formula behind percent agreement, Cohen's kappa, Fleiss' kappa and
+  Krippendorff's alpha, when each one is null, and the published examples the
+  tests check.
+
 ## Canonical References
 
 - [Product Requirements](prd/agentic-data-operations-workbench-prd.md)

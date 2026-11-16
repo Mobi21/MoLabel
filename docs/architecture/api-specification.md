@@ -2133,6 +2133,12 @@ class QualityTrendPoint(BaseModel):
 
 Detailed agreement metrics.
 
+This endpoint does not compute metrics yet. It returns null for every metric, 0
+for `sample_size` and empty maps. `AgreementMetricsService` in molabel-core
+computes the metrics today, through the `agreement_analysis` workflow step.
+[Agreement metrics](../guides/agreement-metrics.md) gives each formula and the
+cases that make a metric null.
+
 **Query params:** `workspace_id` (required), `dataset_id` (optional), `task_schema_id` (optional)
 
 **Response:** `200 OK`
@@ -2146,9 +2152,9 @@ class AgreementMetrics(BaseModel):
     confusion_matrices: dict[str, list[list[int]]]  # field -> matrix
 
 class AgreementDetail(BaseModel):
-    cohens_kappa: float | None
-    percent_agreement: float | None
-    krippendorffs_alpha: float | None
+    cohens_kappa: float | None          # Cohen's kappa for two raters, each with its own marginals
+    percent_agreement: float | None     # matching value pairs / all value pairs within units
+    krippendorffs_alpha: float | None   # Krippendorff's alpha, nominal difference, n(n-1) expected term
     sample_size: int
 
 class ReviewerAgreement(BaseModel):

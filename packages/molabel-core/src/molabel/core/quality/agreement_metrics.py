@@ -19,7 +19,7 @@ out. Values are compared as nominal categories.
 The ``human_agent`` summary pairs each human value in a unit with each agent
 value. Every pair is a two-rater unit, with the human side and the agent as
 the raters. A metric the data leave undefined is None, and ``null_reasons``
-says why.
+says why. ``docs/guides/agreement-metrics.md`` gives the formulas.
 """
 
 from __future__ import annotations
