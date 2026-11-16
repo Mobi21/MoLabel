@@ -1,19 +1,55 @@
-"""Agreement metrics service for QA-001 and QA-002.
+"""Agreement metrics for grouped annotations.
 
-The service operates on grouped records containing one or more annotation
-payloads per record. It computes overall agreement metrics and human-agent
-breakdowns by field and label value.
+A unit is one field of one record, and its values are the canonical labels the
+annotations in scope gave that field. An annotation without the field is a
+missing value. A unit with fewer than two values cannot be paired and is left
+out. Values are compared as nominal categories.
+
+``comparisons`` and ``agreements`` count value pairs within units, and
+``percent_agreement`` is their ratio. The chance-corrected coefficients are:
+
+- ``krippendorff_alpha``. Krippendorff's alpha with the nominal metric, built
+  from the coincidence matrix of pairable values (Krippendorff 2011).
+- ``fleiss_kappa``. Fleiss' kappa (Fleiss 1971), defined only when every unit
+  holds the same number of values.
+- ``cohen_kappa``. Cohen's kappa (Cohen 1960) for exactly two raters, each with
+  its own marginals. Raters are told apart by annotation source, so it needs one
+  value from each of the same two sources in every unit.
+
+The ``human_agent`` summary pairs each human value in a unit with each agent
+value. Every pair is a two-rater unit, with the human side and the agent as
+the raters. A metric the data leave undefined is None, and ``null_reasons``
+says why.
 """
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
 from molabel.core.utils.canonical import canonical_label_value as _canonical_label
+
+Rating = tuple[str, str]
+"""A (rater, canonical value) pair. The rater is the annotation source."""
+
+NO_PAIRABLE_VALUES = "No unit has two or more values to compare."
+SINGLE_CATEGORY = (
+    "Every compared value is the same label, so chance alone predicts full "
+    "agreement and the coefficient is 0/0."
+)
+SHARED_SOURCE = (
+    "Cohen's kappa needs one value from each of two raters per unit. Raters are "
+    "told apart by annotation source, and a unit holds two values from one source."
+)
+
+
+@dataclass(frozen=True)
+class _Undefined:
+    reason: str
 
 
 def _is_human_source(source: str) -> bool:
@@ -24,14 +60,71 @@ def _is_agent_source(source: str) -> bool:
     return source == "agent"
 
 
-def _safe_kappa(observed_agreement: float, expected_agreement: float) -> float:
-    """Compute a kappa-style coefficient with sensible edge-case handling."""
-    if observed_agreement >= 1.0 and expected_agreement >= 1.0:
-        return 1.0
-    denominator = 1.0 - expected_agreement
-    if denominator <= 0.0:
-        return 1.0 if observed_agreement >= 1.0 else 0.0
-    return (observed_agreement - expected_agreement) / denominator
+def _sum_of_squares(counts: Counter[str]) -> int:
+    return sum(count * count for count in counts.values())
+
+
+def _krippendorff_alpha_nominal(units: Sequence[Sequence[str]]) -> float | _Undefined:
+    """1 - (n - 1) * sum of o_ck over c != k / sum of n_c * n_k over c != k."""
+    totals: Counter[str] = Counter()
+    mismatched_coincidences = 0.0
+    for values in units:
+        counts = Counter(values)
+        totals.update(counts)
+        size = len(values)
+        mismatched_coincidences += (size * size - _sum_of_squares(counts)) / (size - 1)
+    if len(totals) < 2:
+        return _Undefined(SINGLE_CATEGORY)
+    n = sum(totals.values())
+    expected_mismatches = n * n - _sum_of_squares(totals)
+    return 1.0 - (n - 1) * mismatched_coincidences / expected_mismatches
+
+
+def _fleiss_kappa(units: Sequence[Sequence[str]]) -> float | _Undefined:
+    """(P - P_e) / (1 - P_e) with every unit rated the same number of times."""
+    sizes = {len(values) for values in units}
+    if len(sizes) > 1:
+        return _Undefined(
+            "Fleiss' kappa needs the same number of values in every unit, and "
+            f"units hold {min(sizes)} to {max(sizes)}. Use krippendorff_alpha."
+        )
+    raters = sizes.pop()
+    totals: Counter[str] = Counter()
+    matched_pairs = 0
+    for values in units:
+        counts = Counter(values)
+        totals.update(counts)
+        matched_pairs += _sum_of_squares(counts) - raters
+    if len(totals) < 2:
+        return _Undefined(SINGLE_CATEGORY)
+    ratings = len(units) * raters
+    observed = matched_pairs / (ratings * (raters - 1))
+    expected = sum((count / ratings) ** 2 for count in totals.values())
+    return (observed - expected) / (1.0 - expected)
+
+
+def _cohen_kappa(units: Sequence[Sequence[Rating]]) -> float | _Undefined:
+    """(p_o - p_e) / (1 - p_e), with p_e from each rater's own marginals."""
+    for unit in units:
+        if len({rater for rater, _ in unit}) < len(unit):
+            return _Undefined(SHARED_SOURCE)
+    raters = sorted({rater for unit in units for rater, _ in unit})
+    if len(raters) != 2:
+        return _Undefined(
+            "Cohen's kappa is defined for exactly two raters, and the values come "
+            f"from {len(raters)} sources ({', '.join(raters)}). Use fleiss_kappa "
+            "or krippendorff_alpha."
+        )
+    first, second = raters
+    pairs = [(by_rater[first], by_rater[second]) for by_rater in map(dict, units)]
+    first_counts = Counter(value for value, _ in pairs)
+    second_counts = Counter(value for _, value in pairs)
+    if len(first_counts.keys() | second_counts.keys()) < 2:
+        return _Undefined(SINGLE_CATEGORY)
+    n = len(pairs)
+    observed = sum(a == b for a, b in pairs) / n
+    expected = sum(first_counts[c] * second_counts[c] for c in first_counts) / (n * n)
+    return (observed - expected) / (1.0 - expected)
 
 
 class AgreementAnnotation(BaseModel):
@@ -69,14 +162,61 @@ class AgreementFieldBreakdown(BaseModel):
 
 
 class AgreementMetricSummary(BaseModel):
-    """Aggregate agreement metrics for a population of labels."""
+    """Aggregate agreement metrics for a population of labels.
+
+    A metric the data leave undefined is None, and ``null_reasons`` maps its
+    field name to the reason.
+    """
 
     comparisons: int = 0
     agreements: int = 0
-    percent_agreement: float = 0.0
-    cohen_kappa: float = 0.0
-    fleiss_kappa: float = 0.0
-    krippendorff_alpha: float = 0.0
+    percent_agreement: float | None = None
+    cohen_kappa: float | None = None
+    fleiss_kappa: float | None = None
+    krippendorff_alpha: float | None = None
+    null_reasons: dict[str, str] = Field(default_factory=dict)
+
+
+_METRIC_FIELDS = (
+    "percent_agreement",
+    "cohen_kappa",
+    "fleiss_kappa",
+    "krippendorff_alpha",
+)
+
+
+def _summarize(units: Sequence[Sequence[Rating]]) -> AgreementMetricSummary:
+    if not units:
+        return AgreementMetricSummary(
+            null_reasons=dict.fromkeys(_METRIC_FIELDS, NO_PAIRABLE_VALUES)
+        )
+    values = [[value for _, value in unit] for unit in units]
+    comparisons = sum(len(unit) * (len(unit) - 1) // 2 for unit in values)
+    agreements = sum(
+        count * (count - 1) // 2 for unit in values for count in Counter(unit).values()
+    )
+    metrics: dict[str, float | _Undefined] = {
+        "percent_agreement": agreements / comparisons,
+        "cohen_kappa": _cohen_kappa(units),
+        "fleiss_kappa": _fleiss_kappa(values),
+        "krippendorff_alpha": _krippendorff_alpha_nominal(values),
+    }
+    return AgreementMetricSummary.model_validate(
+        {
+            "comparisons": comparisons,
+            "agreements": agreements,
+            **{
+                name: metric
+                for name, metric in metrics.items()
+                if not isinstance(metric, _Undefined)
+            },
+            "null_reasons": {
+                name: metric.reason
+                for name, metric in metrics.items()
+                if isinstance(metric, _Undefined)
+            },
+        }
+    )
 
 
 class AgreementAnalysisResult(BaseModel):
@@ -140,11 +280,12 @@ class AgreementMetricsService:
                 warnings=warnings,
             )
 
-        overall = self._compute_metric_summary(
-            normalized_records,
-            field_names,
-            source_filter=overall_source_filter,
-            warnings=warnings,
+        overall = _summarize(
+            self._units(
+                normalized_records,
+                field_names,
+                source_filter=overall_source_filter,
+            )
         )
 
         human_agent_summary: AgreementMetricSummary | None = None
@@ -198,87 +339,25 @@ class AgreementMetricsService:
             return {"human", "import"}
         return None
 
-    def _compute_metric_summary(
-        self,
+    @staticmethod
+    def _units(
         records: Sequence[AgreementRecord],
         fields: Sequence[str],
         *,
         source_filter: set[str] | None,
-        warnings: list[str],
-    ) -> AgreementMetricSummary:
-        comparisons = 0
-        agreements = 0
-        label_counts: Counter[str] = Counter()
-        endpoint_counts: Counter[str] = Counter()
-        item_agreement_rates: list[float] = []
-        item_label_counts: Counter[str] = Counter()
-
+    ) -> list[list[Rating]]:
+        units: list[list[Rating]] = []
         for record in records:
             for field in fields:
-                values = [
-                    _canonical_label(annotation.labels[field])
+                unit = [
+                    (annotation.source, _canonical_label(annotation.labels[field]))
                     for annotation in record.annotations
                     if field in annotation.labels
                     and (source_filter is None or annotation.source in source_filter)
                 ]
-                if len(values) < 2:
-                    continue
-
-                counts = Counter(values)
-                item_pairs = len(values) * (len(values) - 1) // 2
-                item_agreements = sum(
-                    count * (count - 1) // 2 for count in counts.values()
-                )
-
-                comparisons += item_pairs
-                agreements += item_agreements
-                item_agreement_rates.append(item_agreements / item_pairs)
-
-                for label, count in counts.items():
-                    item_label_counts[label] += count
-                    label_counts[label] += count
-                    endpoint_counts[label] += count * (len(values) - 1)
-
-        percent_agreement = agreements / comparisons if comparisons else 0.0
-        total_endpoints = sum(endpoint_counts.values())
-        cohen_expected = (
-            sum((count / total_endpoints) ** 2 for count in endpoint_counts.values())
-            if total_endpoints
-            else 0.0
-        )
-        total_labels = sum(item_label_counts.values())
-        fleiss_expected = (
-            sum((count / total_labels) ** 2 for count in item_label_counts.values())
-            if total_labels
-            else 0.0
-        )
-        krippendorff_expected = fleiss_expected
-
-        fleiss_observed = (
-            sum(item_agreement_rates) / len(item_agreement_rates)
-            if item_agreement_rates
-            else 0.0
-        )
-        krippendorff_observed = percent_agreement
-
-        if comparisons == 0:
-            return AgreementMetricSummary()
-
-        summary = AgreementMetricSummary(
-            comparisons=comparisons,
-            agreements=agreements,
-            percent_agreement=percent_agreement,
-            cohen_kappa=_safe_kappa(percent_agreement, cohen_expected),
-            fleiss_kappa=_safe_kappa(fleiss_observed, fleiss_expected),
-            krippendorff_alpha=_safe_kappa(
-                krippendorff_observed,
-                krippendorff_expected,
-            ),
-        )
-
-        if not label_counts:
-            warnings.append("Agreement analysis had no label values to compare.")
-        return summary
+                if len(unit) >= 2:
+                    units.append(unit)
+        return units
 
     def _compute_human_agent_breakdown(
         self,
@@ -289,12 +368,9 @@ class AgreementMetricsService:
         dict[str, AgreementFieldBreakdown],
         dict[str, dict[str, int]],
     ]:
-        overall_comparisons = 0
-        overall_agreements = 0
+        pair_units: list[list[Rating]] = []
         field_breakdowns: dict[str, AgreementFieldBreakdown] = {}
-        confusion_matrix: dict[str, dict[str, int]] = defaultdict(dict)
-        endpoint_counts: Counter[str] = Counter()
-        label_counts: Counter[str] = Counter()
+        confusion_matrix: dict[str, dict[str, int]] = {}
 
         for record in records:
             for field in fields:
@@ -318,25 +394,17 @@ class AgreementMetricsService:
                     AgreementFieldBreakdown(),
                 )
 
-                item_agreements = 0
                 for human_value in human_values:
                     for agent_value in agent_values:
-                        overall_comparisons += 1
-                        breakdown.comparisons += 1
-                        endpoint_counts[human_value] += 1
-                        endpoint_counts[agent_value] += 1
-                        label_counts[human_value] += 1
-                        label_counts[agent_value] += 1
-
-                        if human_value == agent_value:
-                            overall_agreements += 1
-                            breakdown.agreements += 1
-                            item_agreements += 1
-
-                        confusion_matrix.setdefault(human_value, {})
-                        confusion_matrix[human_value][agent_value] = (
-                            confusion_matrix[human_value].get(agent_value, 0) + 1
+                        pair_units.append(
+                            [("human", human_value), ("agent", agent_value)]
                         )
+                        breakdown.comparisons += 1
+                        if human_value == agent_value:
+                            breakdown.agreements += 1
+
+                        row = confusion_matrix.setdefault(human_value, {})
+                        row[agent_value] = row.get(agent_value, 0) + 1
 
                         if human_value == agent_value:
                             bucket = breakdown.by_label_value.setdefault(
@@ -373,37 +441,4 @@ class AgreementMetricsService:
                         value_breakdown.agreements / value_breakdown.comparisons
                     )
 
-        total_endpoints = sum(endpoint_counts.values())
-        expected_agreement = (
-            sum((count / total_endpoints) ** 2 for count in endpoint_counts.values())
-            if total_endpoints
-            else 0.0
-        )
-        observed_agreement = (
-            overall_agreements / overall_comparisons if overall_comparisons else 0.0
-        )
-        overall = AgreementMetricSummary(
-            comparisons=overall_comparisons,
-            agreements=overall_agreements,
-            percent_agreement=observed_agreement,
-            cohen_kappa=_safe_kappa(observed_agreement, expected_agreement),
-            fleiss_kappa=_safe_kappa(observed_agreement, expected_agreement),
-            krippendorff_alpha=_safe_kappa(observed_agreement, expected_agreement),
-        )
-        if not label_counts:
-            return (
-                overall,
-                field_breakdowns,
-                {
-                    human: dict(agent_counts)
-                    for human, agent_counts in confusion_matrix.items()
-                },
-            )
-        return (
-            overall,
-            field_breakdowns,
-            {
-                human: dict(agent_counts)
-                for human, agent_counts in confusion_matrix.items()
-            },
-        )
+        return _summarize(pair_units), field_breakdowns, confusion_matrix
