@@ -73,7 +73,6 @@ The `molabel` namespace is shared across `molabel-core`, `molabel-app`, and `mol
 - API endpoints return Pydantic models (enables OpenAPI codegen)
 - Use explicit imports (no wildcard imports)
 - Keep plugin interfaces as Python protocols or abstract base classes
-- Real-time updates use SSE (Server-Sent Events), not WebSocket
 - Workflow definitions are YAML files (file-backed, version-controllable)
 - Agent prompts are YAML files under `workbench/prompts/` with auto-versioning
 
@@ -104,6 +103,6 @@ Fixture workspaces in `fixtures/` provide sample project data for tests.
 - Do not use wildcard imports
 - Do not import Python modules from the frontend (use REST API only)
 - Do not add heavyweight frontend state management beyond Zustand
-- Do not use WebSocket (use SSE for real-time updates)
+- Do not use WebSocket. A feature that needs server push uses SSE.
 - Do not store workflow definitions only in the database (they must be YAML files)
 - Do not bypass the OpenAPI codegen pipeline for API calls

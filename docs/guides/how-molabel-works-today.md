@@ -62,8 +62,7 @@ application with a single `/api/v1` router tree. It exposes domains including:
 - queue, review, corrections, and adjudication,
 - providers and model/runtime profiles,
 - quality, exports, releases, and audit,
-- CLI-oriented endpoints under `/api/v1/cli`,
-- SSE events for real-time updates.
+- CLI-oriented endpoints under `/api/v1/cli`.
 
 The backend is the system of operational coordination. It is not meant to be
 the everyday human authoring surface.

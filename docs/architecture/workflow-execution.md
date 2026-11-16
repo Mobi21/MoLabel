@@ -115,7 +115,7 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 
 - Inputs: reads `record_sets[active_record_set_id]`; reads `config.sample_strategy` and `config.sample_size` (optional, to review a subset); reads `config.task_schema_id`; reads `config.breakpoint` (defaults to `true`)
 - Outputs: appends to `review_queue_ids`; writes `record_sets[step_id]` (records that were reviewed); sets `active_record_set_id`; writes `step_outputs[step_id]` with review summary (reviewed count, accept/edit/reject counts, avg time per record); writes `metrics["review.coverage"]`, `metrics["review.accept_ai_rate"]`
-- Side effects: creates `review_tasks` rows in SQLite; review events are written as reviewers complete work (append-only `review_events` table); emits SSE events for queue progress; step remains in `running` state until all queue items are completed or the operator advances
+- Side effects: creates `review_tasks` rows in SQLite; review events are written as reviewers complete work (append-only `review_events` table); step remains in `running` state until all queue items are completed or the operator advances
 - Blocking: this step always pauses the workflow. It transitions from `running` to `waiting_for_human` and resumes only when the queue is fully processed or the operator explicitly advances.
 
 **`human_triage`**
@@ -463,8 +463,7 @@ When a step fails:
 1. The step is marked `failed` with the error message, stack trace (truncated to 2000 chars), and timestamp.
 2. The workflow execution transitions to `paused` state.
 3. All `pending` and `ready` steps remain in their current state (not cancelled).
-4. An SSE event is emitted: `{"type": "workflow_step_failed", "step_id": "...", "error": "..."}`.
-5. The error is visible in mission control with the step name, error summary, and a "View details" link.
+4. The error is visible in mission control with the step name, error summary, and a "View details" link.
 
 ### Operator Recovery Actions
 

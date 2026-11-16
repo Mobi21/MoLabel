@@ -14,7 +14,6 @@ from molabel.app.api.v1.cli import router as cli_router
 from molabel.app.api.v1.corrections import router as corrections_router
 from molabel.app.api.v1.costs import router as costs_router
 from molabel.app.api.v1.datasets import router as datasets_router
-from molabel.app.api.v1.events import router as events_router
 from molabel.app.api.v1.exports import router as exports_router
 from molabel.app.api.v1.label_mappings import router as label_mappings_router
 from molabel.app.api.v1.model_profiles import router as model_profiles_router
@@ -70,6 +69,3 @@ router.include_router(audit_router)
 router.include_router(plugins_router)
 router.include_router(costs_router)
 router.include_router(cli_router)
-
-# SSE event streams
-router.include_router(events_router)

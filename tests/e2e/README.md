@@ -39,7 +39,7 @@ uv run python -m tests.e2e --tier 2
 # 6  Quality Metrics        (agreement, delta analysis, readiness)
 # 7  Data Management        (import/export, snapshots, label mapping)
 # 8  Resilience             (malformed input, timeouts, concurrency)
-# 9  Cross-Cutting          (auth, audit trail, SSE, cost tracking)
+# 9  Cross-Cutting          (auth, audit trail, cost tracking)
 ```
 
 ### By scenario ID
@@ -94,7 +94,7 @@ Tests are grouped into three xdist groups:
 |---|---|---|
 | `independent` | `@INDEPENDENT` | Tier 1, 2, 7, 8 — own in-memory DB each |
 | `shared_workspace` | `@SHARED_WORKSPACE` | Tier 3, 5, 6 — read-only shared fixtures |
-| `sequential` | `@SEQUENTIAL` | Tier 4, some Tier 9 — concurrent/SSE semantics |
+| `sequential` | `@SEQUENTIAL` | Tier 4, some Tier 9 — concurrent semantics |
 
 The default `-n 4 --dist loadgroup` flag respects these groups automatically.
 
@@ -153,7 +153,7 @@ tests/e2e/
   tier6_quality/               Quality metrics & agreement
   tier7_data_management/       Import / export / snapshots
   tier8_resilience/            Edge cases & failure modes
-  tier9_cross_cutting/         Auth, audit, SSE, costs
+  tier9_cross_cutting/         Auth, audit, costs
   logs/                        Generated reports (gitignored)
 ```
 

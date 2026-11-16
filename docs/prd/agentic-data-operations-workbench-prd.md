@@ -14,7 +14,7 @@ The product is no longer GUI-first.
 The primary operating surface is:
 
 - the `molabel` CLI,
-- the backend REST and SSE API behind that CLI,
+- the backend REST API behind that CLI,
 - and bundled agent skills that teach coding agents how to operate the system safely.
 
 The GUI remains important, but its role is different:
@@ -130,8 +130,7 @@ The backend remains the canonical business-logic layer.
 The CLI operates through:
 
 - existing `/api/v1/*` routes,
-- additive `/api/v1/cli/*` routes,
-- and SSE event streams for long-running and observable operations.
+- and additive `/api/v1/cli/*` routes.
 
 The product does not expose a separate first-class Python SDK at this stage.
 

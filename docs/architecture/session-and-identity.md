@@ -290,16 +290,6 @@ The mission control display includes:
 | Jordan (green) | Idle | sentiment-v1 | 31 | 0.8/min | — (claim expired) |
 | Sam (orange) | Active | sentiment-v1 | 52 | 1.5/min | record-0501 |
 
-### SSE Event Streams
-
-Real-time updates for multi-session coordination use Server-Sent Events:
-
-- **Queue events** (`/api/v1/events/queue/{queue_id}`): emitted when items are claimed, submitted, skipped, or expired. Reviewers subscribed to a queue see updated counts and queue position. Notifications (e.g., claim expiry, queue completion) are delivered through this stream.
-- **Workflow events** (`/api/v1/events/workflow/{execution_id}`): emitted for workflow state changes and step completions. Operators see real-time dashboard updates.
-- **Provider events** (`/api/v1/events/providers`): emitted for provider status changes (availability, errors, model updates).
-
-SSE connections are authenticated via the session cookie. A connection for a reviewer who is not logged in is rejected with HTTP 401.
-
 ## Queue Assignment Ordering
 
 Items in a review queue are assigned based on priority and creation time:
