@@ -384,7 +384,7 @@ def _with_offline_model(config: dict[str, Any]) -> dict[str, Any]:
     if _normalize_provider_type(config.get("provider_type")) != ProviderType.offline:
         return config
     selected = str(config.get("model") or config.get("model_profile_id") or "").strip()
-    if _is_profile_id(selected):
+    if _profile_id(selected) is not None:
         return config
     return {**config, "model": OFFLINE_MODEL_ID}
 
@@ -793,12 +793,12 @@ def _normalize_provider_type(value: Any) -> str | None:
     return normalized or None
 
 
-def _is_profile_id(value: str) -> bool:
+def _profile_id(value: str) -> str | None:
+    """``value`` as a profile id in canonical UUID form, or None if not a UUID."""
     try:
-        uuid.UUID(value)
+        return str(uuid.UUID(value))
     except ValueError:
-        return False
-    return True
+        return None
 
 
 def _infer_profile_defaults(
@@ -996,22 +996,24 @@ def _ensure_model_profile(
     ``UnresolvedModelError``.
     """
     requested_provider = _normalize_provider_type(provider_type)
+    pinned_id = _profile_id(model_identifier)
     rows = conn.execute(
         text(
             "SELECT id, provider_type FROM model_profiles "
             "WHERE workspace_id IN (:wid, :shared) "
-            "AND (id = :model OR model_identifier = :model "
+            "AND (id = :pinned_id OR model_identifier = :model "
             "OR model_profile_slug = :model) "
-            "ORDER BY workspace_id = :wid DESC, id = :model DESC, created_at DESC"
+            "ORDER BY workspace_id = :wid DESC, created_at DESC"
         ),
         {
             "wid": workspace_id,
             "shared": str(SHARED_PROFILE_WORKSPACE),
+            "pinned_id": pinned_id,
             "model": model_identifier,
         },
     ).fetchall()
     pinned_provider = next(
-        (provider for pid, provider in rows if pid == model_identifier), None
+        (provider for pid, provider in rows if pid == pinned_id), None
     )
     if pinned_provider is not None:
         if requested_provider not in (None, pinned_provider):
@@ -1026,7 +1028,7 @@ def _ensure_model_profile(
                 f"{pinned_provider}, which MoLabel cannot run"
             )
         else:
-            return model_identifier
+            return pinned_id
         raise UnresolvedModelError(
             message, model=model_identifier, provider_type=requested_provider
         )
@@ -1035,7 +1037,7 @@ def _ensure_model_profile(
             continue
         if requested_provider is None or existing_provider == requested_provider:
             return str(existing_id)
-    if _is_profile_id(model_identifier):
+    if pinned_id is not None:
         raise UnresolvedModelError(
             f"No model profile has id {model_identifier}, and no profile "
             "MoLabel can run has it as its model",

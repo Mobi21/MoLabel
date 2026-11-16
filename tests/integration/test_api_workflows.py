@@ -1143,6 +1143,48 @@ async def test_a_model_name_shaped_like_a_profile_id_runs_as_that_model(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("agent_step_type", "pin_key"), PINNING_STEPS)
+@pytest.mark.parametrize(
+    "spell",
+    [
+        str.upper,
+        lambda profile_id: uuid.UUID(profile_id).hex,
+        lambda profile_id: f"{{{profile_id}}}",
+        lambda profile_id: uuid.UUID(profile_id).urn,
+    ],
+    ids=["uppercase", "unhyphenated", "braced", "urn"],
+)
+async def test_a_pinned_profile_id_runs_its_profile_in_any_uuid_spelling(
+    client, app, tmp_path, hosted_calls, agent_step_type, pin_key, spell
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    profile_id = _seed_model_profile(
+        app.state.engine,
+        workspace_id,
+        provider_type="anthropic",
+        model="claude-sonnet-4-20250514",
+    )
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        _pinning(pin_key, spell(profile_id)),
+        agent_step_type,
+    )
+
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["error_summary"] is None
+    run_count = 2 if agent_step_type == "agent_compare" else 1
+    assert (
+        _agent_run_profiles(app.state.engine, workspace_id)
+        == [(profile_id, "anthropic", str(workspace_id))] * run_count
+    )
+    assert hosted_calls == [("anthropic", "claude-sonnet-4-20250514")] * 3 * run_count
+
+
+@pytest.mark.asyncio
 async def test_execute_workflow_reaches_review_queue(client, app, tmp_path):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     token = _seed_reviewer(app.state.engine, workspace_id)
