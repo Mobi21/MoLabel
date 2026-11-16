@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  keyedValue,
   missingRequired,
   parseLabels,
-  pickValue,
+  pickKey,
   rubricFields,
   submission,
 } from './rubric'
@@ -64,22 +65,35 @@ describe('submission', () => {
   })
 })
 
-describe('pickValue', () => {
+describe('pickKey', () => {
   it('sets the nth option on a choice and yes or no on a bool', () => {
-    expect(pickValue(intent, {}, 3)).toEqual({ intent: 'shipping' })
-    expect(pickValue(urgent, {}, 1)).toEqual({ urgent: true })
-    expect(pickValue(urgent, {}, 2)).toEqual({ urgent: false })
+    expect(pickKey(intent, {}, 3)).toEqual({ intent: 'shipping' })
+    expect(pickKey(urgent, {}, 1)).toEqual({ urgent: true })
+    expect(pickKey(urgent, {}, 2)).toEqual({ urgent: false })
   })
 
   it('toggles a multi-select option, keeping option order', () => {
-    const both = pickValue(tags, { tags: ['account'] }, 1)
+    const both = pickKey(tags, { tags: ['account'] }, 1)
     expect(both).toEqual({ tags: ['billing', 'account'] })
-    expect(pickValue(tags, both ?? {}, 2)).toEqual({ tags: ['billing'] })
+    expect(pickKey(tags, both ?? {}, 2)).toEqual({ tags: ['billing'] })
   })
 
   it('ignores a key past the last option', () => {
-    expect(pickValue(intent, {}, 5)).toBeNull()
-    expect(pickValue(urgent, {}, 3)).toBeNull()
+    expect(pickKey(intent, {}, 5)).toBeNull()
+    expect(pickKey(urgent, {}, 3)).toBeNull()
+  })
+})
+
+describe('keyedValue', () => {
+  it('keys the digit that is the value on a numeric scale', () => {
+    const [score] = rubricFields([
+      { name: 'score', field_type: 'numeric', scale_min: 3, scale_max: 7 },
+    ])
+    if (score === undefined) throw new Error('no field')
+    expect(keyedValue(score, 1)).toBeUndefined()
+    expect(keyedValue(score, 3)).toBe(3)
+    expect(keyedValue(score, 7)).toBe(7)
+    expect(keyedValue(score, 8)).toBeUndefined()
   })
 })
 

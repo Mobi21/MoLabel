@@ -1,9 +1,10 @@
 import { Kbd } from '@/components/key-legend'
 import { cn } from '@/lib/utils'
 import {
+  choices,
   formatValue,
   isList,
-  keyedValues,
+  keyFor,
   pickValue,
   withoutField,
   type LabelValue,
@@ -33,7 +34,10 @@ function isPicked(field: RubricField, labels: Labels, value: LabelValue) {
   return current === value
 }
 
-/** The task schema's fields as a rubric; the active field answers to 1 to 9. */
+/**
+ * The task schema's fields as a rubric. Every value is a button or an input;
+ * the keys 1 to 9 are shortcuts on the active field.
+ */
 export function RubricForm({
   fields,
   labels,
@@ -48,7 +52,7 @@ export function RubricForm({
     <ol className="divide-y divide-rule border-y border-rule">
       {fields.map((field, index) => {
         const isActive = index === active
-        const values = keyedValues(field)
+        const values = choices(field)
         const descriptions =
           field.kind === 'choice' || field.kind === 'multi'
             ? field.descriptions
@@ -96,10 +100,12 @@ export function RubricForm({
               </p>
             )}
 
-            {field.kind === 'number' && values.length === 0 ? (
+            {field.kind === 'number' && (
               <input
                 type="number"
                 aria-label={field.name}
+                min={field.min ?? undefined}
+                max={field.max ?? undefined}
                 disabled={disabled}
                 value={
                   typeof labels[field.name] === 'number'
@@ -118,7 +124,8 @@ export function RubricForm({
                 }}
                 className="mt-2 w-32 rounded-[3px] border border-rule bg-paper px-2.5 py-1 font-mono text-sm"
               />
-            ) : field.kind === 'text' ? (
+            )}
+            {field.kind === 'text' ? (
               <textarea
                 ref={(element) => {
                   textRef?.(field.name, element)
@@ -141,47 +148,55 @@ export function RubricForm({
                 className="mt-2 w-full resize-y rounded-[3px] border border-rule bg-paper px-2.5 py-1.5 text-sm placeholder:text-faint"
               />
             ) : (
-              <div
-                role="group"
-                aria-label={field.name}
-                className="mt-2 flex flex-wrap gap-1.5"
-              >
-                {values.map((value, valueIndex) => {
-                  const picked = isPicked(field, labels, value)
-                  const text = formatValue(value)
-                  return (
-                    <button
-                      key={text}
-                      type="button"
-                      disabled={disabled}
-                      aria-pressed={picked}
-                      title={descriptions[text]}
-                      onClick={() => {
-                        onActivate(index)
-                        const next = pickValue(field, labels, valueIndex + 1)
-                        if (next) onChange(next)
-                      }}
-                      className={cn(
-                        'flex items-center gap-2 rounded-[3px] border px-2 py-1 text-sm transition-colors',
-                        picked
-                          ? 'border-ink bg-ink text-paper'
-                          : 'border-rule bg-paper hover:border-ink-soft',
-                      )}
-                    >
-                      {isActive && (
-                        <Kbd
-                          className={cn(
-                            picked && 'border-ink-soft bg-ink-soft text-paper',
-                          )}
-                        >
-                          {String(valueIndex + 1)}
-                        </Kbd>
-                      )}
-                      {text}
-                    </button>
-                  )
-                })}
-              </div>
+              values.length > 0 && (
+                <div
+                  role="group"
+                  aria-label={field.name}
+                  className="mt-2 flex flex-wrap gap-1.5"
+                >
+                  {values.map((value) => {
+                    const picked = isPicked(field, labels, value)
+                    const text = formatValue(value)
+                    const key = keyFor(field, value)
+                    return (
+                      <button
+                        key={text}
+                        type="button"
+                        disabled={disabled}
+                        aria-pressed={picked}
+                        aria-keyshortcuts={
+                          isActive && key !== null ? String(key) : undefined
+                        }
+                        title={descriptions[text]}
+                        onClick={() => {
+                          onActivate(index)
+                          onChange(pickValue(field, labels, value))
+                        }}
+                        className={cn(
+                          'flex items-center gap-2 rounded-[3px] border px-2 py-1 text-sm transition-colors',
+                          picked
+                            ? 'border-ink bg-ink text-paper'
+                            : 'border-rule bg-paper hover:border-ink-soft',
+                        )}
+                      >
+                        {isActive && key !== null && (
+                          <span aria-hidden>
+                            <Kbd
+                              className={cn(
+                                picked &&
+                                  'border-ink-soft bg-ink-soft text-paper',
+                              )}
+                            >
+                              {String(key)}
+                            </Kbd>
+                          </span>
+                        )}
+                        {text}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
             )}
           </li>
         )

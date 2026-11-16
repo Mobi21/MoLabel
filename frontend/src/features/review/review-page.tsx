@@ -32,7 +32,7 @@ import {
   formatValue,
   missingRequired,
   parseLabels,
-  pickValue,
+  pickKey,
   rubricFields,
   submission,
   type Labels,
@@ -341,7 +341,7 @@ function ReviewItem({
       match: digitKey,
       run: (event) => {
         if (field === undefined || isSkipped) return
-        const next = pickValue(field, form, Number(event.key))
+        const next = pickKey(field, form, Number(event.key))
         if (next === null) return
         change(next)
         if (field.kind === 'choice' || field.kind === 'bool') {

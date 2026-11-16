@@ -21,7 +21,7 @@ import { RecordView } from '@/features/review/record-view'
 import {
   formatValue,
   missingRequired,
-  pickValue,
+  pickKey,
   rubricFields,
   type Labels,
   type RubricField,
@@ -330,7 +330,7 @@ function Resolver({
       match: digitKey,
       run: (event) => {
         if (field === undefined || resolved) return
-        const next = pickValue(field, labels, Number(event.key))
+        const next = pickKey(field, labels, Number(event.key))
         if (next) setLabels(next)
       },
       disabled: resolved !== null,

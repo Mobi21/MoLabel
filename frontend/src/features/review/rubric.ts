@@ -22,25 +22,64 @@ export type RubricField =
   | (FieldBase & { kind: 'number'; min: number | null; max: number | null })
   | (FieldBase & { kind: 'text' })
 
-/** The keys 1 to 9 pick these values, in order, on a field. */
-export function keyedValues(field: RubricField): readonly LabelValue[] {
+/** A numeric scale shows a button per value up to this many values, as 0 to 10. */
+const MAX_SCALE_BUTTONS = 11
+
+/** The values a field offers as buttons. Every one is selectable by mouse. */
+export function choices(field: RubricField): readonly LabelValue[] {
   switch (field.kind) {
     case 'choice':
     case 'multi':
-      return field.options.slice(0, 9)
+      return field.options
     case 'bool':
       return [true, false]
     case 'number': {
-      if (field.min === null || field.max === null) return []
-      const values: number[] = []
-      for (let n = Math.max(1, field.min); n <= Math.min(9, field.max); n++) {
-        if (Number.isInteger(n)) values.push(n)
+      const { min, max } = field
+      if (
+        min === null ||
+        max === null ||
+        !Number.isInteger(min) ||
+        !Number.isInteger(max) ||
+        max - min + 1 > MAX_SCALE_BUTTONS
+      ) {
+        return []
       }
-      return values
+      return Array.from({ length: max - min + 1 }, (_, i) => min + i)
     }
     case 'text':
       return []
   }
+}
+
+/** The value the key ``digit``, 1 to 9, picks on a field, if any. */
+export function keyedValue(
+  field: RubricField,
+  digit: number,
+): LabelValue | undefined {
+  switch (field.kind) {
+    case 'choice':
+    case 'multi':
+      return field.options[digit - 1]
+    case 'bool':
+      return [true, false][digit - 1]
+    case 'number':
+      return field.min !== null &&
+        field.max !== null &&
+        digit >= field.min &&
+        digit <= field.max
+        ? digit
+        : undefined
+    case 'text':
+      return undefined
+  }
+}
+
+/** The key 1 to 9 that picks ``value`` on a field, or null when none does. */
+export function keyFor(field: RubricField, value: LabelValue): number | null {
+  for (let digit = 1; digit <= 9; digit++) {
+    if (keyedValue(field, digit) === value) return digit
+  }
+  return null
 }
 
 export function rubricFields(defs: readonly LabelFieldDef[]): RubricField[] {
@@ -145,14 +184,12 @@ export function missingRequired(
     .map((field) => field.name)
 }
 
-/** Set the value key ``digit`` stands for on a field, or toggle it on a multi-select. */
+/** Set a field's value, or toggle it on a multi-select. */
 export function pickValue(
   field: RubricField,
   labels: Labels,
-  digit: number,
-): Labels | null {
-  const value = keyedValues(field)[digit - 1]
-  if (value === undefined) return null
+  value: LabelValue,
+): Labels {
   if (field.kind === 'multi' && typeof value === 'string') {
     const current = labels[field.name]
     const picked = new Set(isList(current) ? current : [])
@@ -164,6 +201,16 @@ export function pickValue(
     }
   }
   return { ...labels, [field.name]: value }
+}
+
+/** Pick the value key ``digit`` stands for, or null when it stands for none. */
+export function pickKey(
+  field: RubricField,
+  labels: Labels,
+  digit: number,
+): Labels | null {
+  const value = keyedValue(field, digit)
+  return value === undefined ? null : pickValue(field, labels, value)
 }
 
 type Decision = 'accept' | 'edit' | 'reject'
