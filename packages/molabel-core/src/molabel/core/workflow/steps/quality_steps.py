@@ -27,6 +27,8 @@ class QualityCheckExecutor(StepExecutor):
     Evaluates labels against quality thresholds: min_agreement,
     min_coverage, min_confidence. Writes pass/fail result and metrics
     to context. Does NOT block the workflow -- use conditional/gate after.
+    min_agreement compares Krippendorff's alpha, which holds for any number
+    of raters and for missing values.
     """
 
     def validate(
@@ -53,7 +55,7 @@ class QualityCheckExecutor(StepExecutor):
         min_confidence = config.get("min_confidence")
 
         # Read current metrics from context
-        current_agreement = context.metrics.get("agreement.kappa", 0.0)
+        current_agreement = context.metrics.get("agreement.krippendorff_alpha", 0.0)
         current_coverage = context.metrics.get("review.coverage", 0.0)
         current_confidence = context.metrics.get("agent.avg_confidence", 0.0)
 
@@ -83,6 +85,7 @@ class QualityCheckExecutor(StepExecutor):
             details.append(
                 {
                     "check": "min_agreement",
+                    "metric": "krippendorff_alpha",
                     "threshold": float(min_agreement),
                     "actual": current_agreement,
                     "passed": check_passed,

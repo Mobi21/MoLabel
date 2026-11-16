@@ -555,7 +555,7 @@ class TestQualityCheck:
     def test_all_pass(self) -> None:
         executor = QualityCheckExecutor()
         ctx = _ctx_with_records()
-        ctx.metrics["agreement.kappa"] = 0.95
+        ctx.metrics["agreement.krippendorff_alpha"] = 0.95
         ctx.metrics["review.coverage"] = 0.98
         ctx.metrics["agent.avg_confidence"] = 0.90
 
@@ -570,7 +570,7 @@ class TestQualityCheck:
     def test_agreement_fails(self) -> None:
         executor = QualityCheckExecutor()
         ctx = _ctx_with_records()
-        ctx.metrics["agreement.kappa"] = 0.50
+        ctx.metrics["agreement.krippendorff_alpha"] = 0.50
 
         result = executor.execute(
             "quality",

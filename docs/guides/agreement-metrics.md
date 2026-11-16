@@ -144,6 +144,18 @@ conditional predicates read a missing metric as 0.0. A loop with a `metric`
 termination keeps running while its metric is missing. The step summary keeps
 every key, with null for an undefined metric.
 
+## The quality_check gate
+
+`quality_check` compares `config.min_agreement` with
+`agreement.krippendorff_alpha`. Alpha is defined for any number of raters and
+handles missing values, so the gate works for three or more reviewers. Earlier
+versions compared it with `agreement.kappa`. That is Cohen's kappa, which is
+null with three or more raters, so those workflows always failed the gate.
+
+Configs keep the `min_agreement` key, and its threshold now applies to alpha.
+A missing alpha reads as 0.0. The check's entry in the step's `details` names
+the coefficient as `metric: krippendorff_alpha`.
+
 ## Level of measurement
 
 All three coefficients use the nominal difference: two values either match or

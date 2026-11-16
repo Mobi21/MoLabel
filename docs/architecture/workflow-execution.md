@@ -143,7 +143,7 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 
 **`quality_check`**
 
-- Inputs: reads `record_sets[active_record_set_id]`; reads `metrics` for current quality state; reads `config.min_agreement`, `config.min_coverage`, `config.min_confidence` (optional thresholds)
+- Inputs: reads `record_sets[active_record_set_id]`; reads `metrics` for current quality state; reads `config.min_agreement`, `config.min_coverage`, `config.min_confidence` (optional thresholds). `min_agreement` is compared with `metrics["agreement.krippendorff_alpha"]`, not Cohen's kappa
 - Outputs: writes `step_outputs[step_id]` with pass/fail result and details; writes `metrics["quality.agreement"]`, `metrics["quality.coverage"]`, `metrics["quality.confidence"]`; writes `variables["quality.passed"]` as boolean
 - Side effects: creates a `validation_runs` row in SQLite with the quality report; writes audit entry
 - Note: this step does NOT block the workflow — it writes metrics and a pass/fail signal. Use a `conditional` step after it to branch on the result, or a `gate` step to require human approval.
