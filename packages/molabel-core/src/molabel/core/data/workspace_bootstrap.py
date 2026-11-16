@@ -7,6 +7,7 @@ scans files, infers metadata, and surfaces missing requirements.
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -14,8 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
+from sqlalchemy import text
 
-from molabel.core.database import create_all_tables, get_engine, get_session
 from molabel.core.manifest import (
     WorkspaceManifest,
     detect_conflicts,
@@ -113,7 +114,7 @@ class WorkspaceBootstrapper:
         self,
         folder: Path,
         *,
-        db_path: Path | None = None,
+        engine: Any,
         workspace_name: str | None = None,
     ) -> BootstrapResult:
         """Bootstrap a workspace rooted at *folder*.
@@ -122,20 +123,14 @@ class WorkspaceBootstrapper:
         ----------
         folder:
             Absolute path to the workspace root directory.
-        db_path:
-            Path for the SQLite database. Defaults to
-            ``folder / workbench / molabel.db``.
+        engine:
+            The server database. A workspace has no database of its own; its
+            rows live in the server database, keyed by workspace id.
         workspace_name:
             Optional override for the workspace display name.
         """
         folder = folder.resolve()
-        if db_path is None:
-            db_path = folder / "workbench" / "molabel.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
         detection = self.detect_project(folder)
-        engine = get_engine(db_path)
-        create_all_tables(engine)
 
         if detection.detection_mode == "manifest":
             return self._bootstrap_from_manifest(
@@ -329,27 +324,31 @@ class WorkspaceBootstrapper:
         root_path: str,
         manifest_path: str,
     ) -> None:
-        from molabel.core.models.workspace import Workspace
-
-        with get_session(engine) as session:
-            existing = session.get(Workspace, ws_id)
-            if existing:
-                existing.workspace_name = ws_name
-                existing.root_path = root_path
-                existing.manifest_path = manifest_path
-                existing.updated_at = datetime.now(UTC)
-                session.add(existing)
-            else:
-                ws = Workspace(
-                    id=ws_id,
-                    workspace_name=ws_name,
-                    workspace_slug=_slugify(ws_name),
-                    core_version=_CORE_VERSION,
-                    root_path=root_path,
-                    manifest_path=manifest_path,
-                )
-                session.add(ws)
-            session.commit()
+        now = datetime.now(UTC).isoformat()
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO workspaces "
+                    "(id, workspace_name, workspace_slug, core_version, root_path, "
+                    "manifest_path, created_at, updated_at) "
+                    "VALUES (:id, :name, :slug, :version, :root_path, :manifest, "
+                    ":now, :now) "
+                    "ON CONFLICT(id) DO UPDATE SET "
+                    "workspace_name = excluded.workspace_name, "
+                    "root_path = excluded.root_path, "
+                    "manifest_path = excluded.manifest_path, "
+                    "updated_at = excluded.updated_at"
+                ),
+                {
+                    "id": str(ws_id),
+                    "name": ws_name,
+                    "slug": _slugify(ws_name),
+                    "version": _CORE_VERSION,
+                    "root_path": root_path,
+                    "manifest": manifest_path,
+                    "now": now,
+                },
+            )
 
     def _upsert_dataset(
         self,
@@ -363,35 +362,51 @@ class WorkspaceBootstrapper:
         canonical_id_strategy: str = "source_record_id",
         indexing_mode: str = "projection",
     ) -> None:
-        from molabel.core.models.dataset import Dataset
-
-        with get_session(engine) as session:
-            from sqlmodel import select
-
-            stmt = select(Dataset).where(
-                Dataset.workspace_id == workspace_id,
-                Dataset.dataset_slug == dataset_id,
-            )
-            existing = session.exec(stmt).first()
-            if existing:
-                existing.updated_at = datetime.now(UTC)
-                existing.health_status = DatasetHealthStatus.stale
-                session.add(existing)
-            else:
-                ds = Dataset(
-                    workspace_id=workspace_id,
-                    dataset_name=dataset_id,
-                    dataset_slug=dataset_id,
-                    source_type="local_file",
-                    source_config={"paths": source_paths},
-                    loader_plugin=loader_plugin,
-                    record_kind=record_kind,
-                    canonical_id_strategy=canonical_id_strategy,
-                    indexing_mode=indexing_mode,
-                    health_status=DatasetHealthStatus.stale,
+        now = datetime.now(UTC).isoformat()
+        with engine.begin() as conn:
+            existing = conn.execute(
+                text(
+                    "SELECT id FROM datasets "
+                    "WHERE workspace_id = :wid AND dataset_slug = :slug"
+                ),
+                {"wid": str(workspace_id), "slug": dataset_id},
+            ).first()
+            if existing is not None:
+                conn.execute(
+                    text(
+                        "UPDATE datasets SET updated_at = :now, "
+                        "health_status = :health WHERE id = :id"
+                    ),
+                    {
+                        "now": now,
+                        "health": DatasetHealthStatus.stale.value,
+                        "id": str(existing[0]),
+                    },
                 )
-                session.add(ds)
-            session.commit()
+                return
+            conn.execute(
+                text(
+                    "INSERT INTO datasets "
+                    "(id, dataset_name, dataset_slug, workspace_id, source_type, "
+                    "source_config, loader_plugin, record_kind, "
+                    "canonical_id_strategy, indexing_mode, health_status, "
+                    "created_at, updated_at) "
+                    "VALUES (:id, :slug, :slug, :wid, 'local_file', :config, "
+                    ":loader, :kind, :cid_strategy, :idx_mode, :health, :now, :now)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "slug": dataset_id,
+                    "wid": str(workspace_id),
+                    "config": json.dumps({"paths": source_paths}),
+                    "loader": loader_plugin,
+                    "kind": record_kind,
+                    "cid_strategy": canonical_id_strategy,
+                    "idx_mode": indexing_mode,
+                    "health": DatasetHealthStatus.stale.value,
+                    "now": now,
+                },
+            )
 
     # ------------------------------------------------------------------
     # Utilities

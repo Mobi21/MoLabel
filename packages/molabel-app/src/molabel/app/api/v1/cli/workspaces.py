@@ -88,46 +88,6 @@ def _detect_workspace(path: Path) -> object:
     return WorkspaceBootstrapper().detect_project(path)
 
 
-def _upsert_workspace(
-    request: Request,
-    *,
-    workspace_id: uuid.UUID,
-    workspace_name: str,
-    root_path: str,
-    manifest_path: str,
-) -> None:
-    engine = get_engine(request)
-    now = datetime.now(UTC).isoformat()
-    slug = workspace_name.lower().replace(" ", "-")
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO workspaces "
-                "(id, workspace_name, workspace_slug, core_version, root_path, "
-                "manifest_path, created_at, updated_at) "
-                "VALUES (:id, :name, :slug, :version, :root_path, :manifest, "
-                ":now, :now) "
-                "ON CONFLICT(id) DO UPDATE SET "
-                "workspace_name = excluded.workspace_name, "
-                "workspace_slug = excluded.workspace_slug, "
-                "core_version = excluded.core_version, "
-                "root_path = excluded.root_path, "
-                "manifest_path = excluded.manifest_path, "
-                "updated_at = excluded.updated_at"
-            ),
-            {
-                "id": str(workspace_id),
-                "name": workspace_name,
-                "slug": slug,
-                "version": _CORE_VERSION,
-                "root_path": root_path,
-                "manifest": manifest_path,
-                "now": now,
-            },
-        )
-        conn.commit()
-
-
 @router.get("/status", response_model=CLIStatusResponse)
 async def status(
     request: Request,
@@ -198,16 +158,9 @@ async def bootstrap_workspace(
 
     result = WorkspaceBootstrapper().bootstrap(
         workspace_path,
+        engine=get_engine(request),
         workspace_name=body.workspace_name,
     )
-    _upsert_workspace(
-        request,
-        workspace_id=result.workspace_id,
-        workspace_name=result.workspace_name,
-        root_path=result.root_path,
-        manifest_path=result.manifest_path,
-    )
-
     engine = get_engine(request)
     reviewer_id: uuid.UUID | None = None
     with engine.connect() as conn:

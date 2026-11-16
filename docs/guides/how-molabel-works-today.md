@@ -152,6 +152,20 @@ SQLite is canonical for operational coordination:
 
 SQLite is not where the canonical project definition is supposed to live.
 
+The server keeps one SQLite database for every workspace it serves. A
+workspace has no database of its own; its rows carry its `workspace_id`. The
+database and the session-signing secret (`app_secret`) live in the server data
+directory, never in the folder the server was launched from:
+
+| Platform | Server data directory |
+|---|---|
+| Linux | `$XDG_DATA_HOME/molabel`, else `~/.local/share/molabel` |
+| macOS | `~/Library/Application Support/MoLabel` |
+| Windows | `%LOCALAPPDATA%\MoLabel` |
+
+`MOLABEL_DATA_DIR` moves the whole directory. `MOLABEL_DB_URL` points the
+server at a different database and leaves the secret in the data directory.
+
 ### 4.3 Derived State
 
 Derived caches and analytics outputs can be regenerated. They are authoritative

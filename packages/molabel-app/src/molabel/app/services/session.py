@@ -18,6 +18,8 @@ import time
 import uuid
 from pathlib import Path
 
+from molabel.app.server_state import server_data_dir
+
 # ---------------------------------------------------------------------------
 # App Secret Management (SE-011)
 # ---------------------------------------------------------------------------
@@ -26,30 +28,22 @@ _SECRET_FILENAME = "app_secret"
 _SECRET_LENGTH = 64  # bytes of randomness
 
 
-def _ensure_secret_dir(base_dir: Path) -> Path:
-    """Create the secret directory if it does not exist."""
-    secret_dir = base_dir / ".molabel"
-    secret_dir.mkdir(parents=True, exist_ok=True)
-    return secret_dir
-
-
-def get_or_create_app_secret(workbench_dir: Path | None = None) -> str:
+def get_or_create_app_secret(secret_dir: Path | None = None) -> str:
     """Load the application secret from disk, generating one on first launch.
 
-    The secret is stored at ``<workbench_dir>/.molabel/app_secret``.  If the
-    file does not exist, a cryptographically random secret is generated and
-    persisted.
+    The secret is stored at ``<secret_dir>/app_secret``.  If the file does
+    not exist, a cryptographically random secret is generated and persisted.
 
     Parameters
     ----------
-    workbench_dir:
-        Root directory for the workbench.  Defaults to ``workbench/`` in
-        the current working directory.
+    secret_dir:
+        Directory that holds the secret.  Defaults to the server data
+        directory, next to the server database.
     """
-    if workbench_dir is None:
-        workbench_dir = Path("workbench")
+    if secret_dir is None:
+        secret_dir = server_data_dir()
 
-    secret_dir = _ensure_secret_dir(workbench_dir)
+    secret_dir.mkdir(parents=True, exist_ok=True)
     secret_path = secret_dir / _SECRET_FILENAME
 
     if secret_path.is_file():
