@@ -191,8 +191,9 @@ async def get_agreement_metrics(
     """Measure agreement over the review tasks in scope.
 
     Each reviewer and each agent run is one rater, and a reviewer's value is
-    the labels their counted review event stores. With one task schema in
-    scope, every label field of the schema is reported, measured or skipped.
+    the labels their counted review event stores. A scope over more than one
+    task schema answers 422; pass ``task_schema_id`` or ``queue_id``. Every
+    label field of the schema in scope is reported, measured or skipped.
     ``docs/guides/agreement-metrics.md`` gives the formulas and the rules.
     It measures only the caller's workspace, and answers 404 for any other.
     """
@@ -216,16 +217,21 @@ async def get_agreement_metrics(
         ).fetchall()
         queue_ids = sorted({str(row[0]) for row in tasks})
         schema_ids = {str(row[2]) for row in tasks}
+        if len(schema_ids) > 1:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"The scope holds {len(schema_ids)} task schemas, whose "
+                    "fields cannot be rated together; pass task_schema_id or "
+                    "queue_id"
+                ),
+            )
         records = agreement_records_from_reviews(
             queue_review_events(conn, queue_ids),
             queue_agent_proposals(conn, queue_ids),
             record_ids=[str(row[1]) for row in tasks],
         )
-        fields = (
-            _label_field_names(conn, next(iter(schema_ids)))
-            if len(schema_ids) == 1
-            else None
-        )
+        fields = _label_field_names(conn, schema_ids.pop()) if schema_ids else None
 
     service = AgreementMetricsService()
     inter_annotator = service.analyze(

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 import pytest_asyncio
+from sqlalchemy import text
 
 from tests.integration.review_flow import (
+    FIRST_REVIEWER,
     NO_PAIRS,
+    SECOND_REVIEWER,
     _as,
+    _label_all,
     _review_both,
     _start_review,
     review_app,
@@ -64,3 +70,73 @@ async def test_agreement_rates_each_reviewer_and_skips_fields_without_pairs(
         336 / 382
     )
     assert human_agent["skipped_fields"] == {"note": NO_PAIRS}
+
+
+def _copy_queue_to_new_schema(app, queue):
+    """A second queue on the same records, under a copy of the task schema."""
+    queue_id, task_schema_id = str(uuid.uuid4()), str(uuid.uuid4())
+    with app.state.engine.begin() as conn:
+
+        def copy(table, row, **changes):
+            values = {**row._mapping, **changes}
+            conn.execute(
+                text(
+                    f"INSERT INTO {table} ({', '.join(values)}) "
+                    f"VALUES ({', '.join(':' + c for c in values)})"
+                ),
+                values,
+            )
+
+        schema = conn.execute(
+            text("SELECT * FROM task_schemas WHERE id = :id"),
+            {"id": queue["task_schema_id"]},
+        ).one()
+        copy("task_schemas", schema, id=task_schema_id, task_schema_slug="copy")
+        for task in conn.execute(
+            text("SELECT * FROM review_tasks WHERE queue_id = :q"),
+            {"q": queue["queue_id"]},
+        ).all():
+            copy(
+                "review_tasks",
+                task,
+                id=str(uuid.uuid4()),
+                queue_id=queue_id,
+                task_schema_id=task_schema_id,
+                status="available",
+                claimed_by=None,
+                claimed_at=None,
+                submitted_at=None,
+                shown_agent_output_id=None,
+            )
+    return queue_id, task_schema_id
+
+
+@pytest.mark.asyncio
+async def test_agreement_over_two_task_schemas_needs_a_schema_or_queue(
+    client, app, tmp_path
+):
+    workspace_id, tokens, queue = await _start_review(client, app, tmp_path)
+    await _review_both(client, queue["queue_id"], tokens)
+    other_queue, other_schema = _copy_queue_to_new_schema(app, queue)
+    await _label_all(client, other_queue, tokens[0], FIRST_REVIEWER)
+    await _label_all(client, other_queue, tokens[1], SECOND_REVIEWER)
+
+    async def agreement(**scope):
+        return await client.get(
+            "/api/v1/quality/agreement",
+            params={"workspace_id": workspace_id, **scope},
+            headers=_as(tokens[0]),
+        )
+
+    mixed = await agreement()
+    assert mixed.status_code == 422, mixed.text
+
+    for scope in (
+        {"task_schema_id": queue["task_schema_id"]},
+        {"task_schema_id": other_schema},
+        {"queue_id": other_queue},
+    ):
+        body = (await agreement(**scope)).json()
+        assert (body["record_count"], body["reviewer_count"]) == (6, 2), scope
+        sentiment = body["inter_annotator"]["fields"]["sentiment"]
+        assert sentiment["krippendorff_alpha"] == pytest.approx(72 / 94), scope

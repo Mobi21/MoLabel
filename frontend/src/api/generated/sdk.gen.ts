@@ -2130,8 +2130,9 @@ export const getQualityDashboard = <ThrowOnError extends boolean = false>(
  * Measure agreement over the review tasks in scope.
  *
  * Each reviewer and each agent run is one rater, and a reviewer's value is
- * the labels their counted review event stores. With one task schema in
- * scope, every label field of the schema is reported, measured or skipped.
+ * the labels their counted review event stores. A scope over more than one
+ * task schema answers 422; pass ``task_schema_id`` or ``queue_id``. Every
+ * label field of the schema in scope is reported, measured or skipped.
  * ``docs/guides/agreement-metrics.md`` gives the formulas and the rules.
  * It measures only the caller's workspace, and answers 404 for any other.
  */

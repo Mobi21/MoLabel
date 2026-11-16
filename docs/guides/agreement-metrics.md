@@ -220,6 +220,11 @@ measure a queue outside any workflow, from the same review events. They run
 tasks are bound to. Each scope lists its `skipped_fields`, the fields whose
 Krippendorff's alpha is null, with the reason.
 
+The scope holds at most one task schema. Two schemas name different fields, and
+a reviewer's labels for one record under each are two values, not one. A scope
+over more than one, such as a workspace with two schemas, returns 422; pass
+`task_schema_id` or `queue_id`.
+
 ## Workflow outputs
 
 The `agreement_analysis` step's summary holds `pooled`, `fields`, `human_agent`

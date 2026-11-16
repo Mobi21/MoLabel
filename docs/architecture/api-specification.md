@@ -2156,9 +2156,9 @@ Agreement measured from the review events of the tasks in scope.
 `AgreementMetricsService` in molabel-core computes it, with the same record
 source as the `agreement_analysis` step: each reviewer and each agent run is one
 rater, and a reviewer's value is the labels their counted review event stores.
-The agent raters are the outputs the queue's tasks are bound to. With one task
-schema in scope, every label field of the schema is reported, measured or
-skipped. [Agreement metrics](../guides/agreement-metrics.md) gives each formula
+The agent raters are the outputs the queue's tasks are bound to. A scope over
+more than one task schema answers 422. Every label field of the schema in scope
+is reported, measured or skipped. [Agreement metrics](../guides/agreement-metrics.md) gives each formula
 and the cases that make a metric null.
 
 **Query params:** `workspace_id` (required), `queue_id`, `dataset_id`, `task_schema_id` (optional)

@@ -14,6 +14,7 @@ from tests.integration.review_flow import (
     _as,
     _claim,
     _external_ids,
+    _label_all,
     _review_both,
     _start_review,
     review_app,
@@ -147,19 +148,6 @@ async def test_resolve_needs_labels_that_fit_the_schema(client, app, tmp_path):
         headers=_as(tokens[0]),
     )
     assert unknown.status_code == 404
-
-
-async def _label_all(client, queue_id, token, sentiments):
-    while (task := await _claim(client, queue_id, token)) is not None:
-        submitted = await client.post(
-            f"/api/v1/review-tasks/{task['id']}/submit",
-            json={
-                "labels": {"sentiment": sentiments[task["record_external_id"]]},
-                "auto_claim_next": False,
-            },
-            headers=_as(token),
-        )
-        assert submitted.status_code == 200, submitted.text
 
 
 @pytest.mark.asyncio

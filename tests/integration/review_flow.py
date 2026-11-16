@@ -125,6 +125,20 @@ async def _review_all(client, queue_id, token, sentiments):
         assert submitted.status_code == 200, submitted.text
 
 
+async def _label_all(client, queue_id, token, sentiments):
+    """Submit labels with no decision for every task the queue hands out."""
+    while (task := await _claim(client, queue_id, token)) is not None:
+        submitted = await client.post(
+            f"/api/v1/review-tasks/{task['id']}/submit",
+            json={
+                "labels": {"sentiment": sentiments[task["record_external_id"]]},
+                "auto_claim_next": False,
+            },
+            headers=_as(token),
+        )
+        assert submitted.status_code == 200, submitted.text
+
+
 async def _review_both(client, queue_id, tokens):
     await _review_all(client, queue_id, tokens[0], FIRST_REVIEWER)
     await _review_all(client, queue_id, tokens[1], SECOND_REVIEWER)
