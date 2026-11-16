@@ -7,7 +7,7 @@ import { parse as parseYaml } from 'yaml'
 
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
-import { buildClient, getRuntimeOptions, outputMode } from './context.js'
+import { getRuntimeOptions, outputMode, requireClient } from './context.js'
 
 type JsonObject = Record<string, unknown>
 
@@ -165,7 +165,7 @@ async function runBenchmarkFacts(
   options: CliRuntimeOptions,
   workflowExecutionId: string,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'benchmark facts')
+  const client = await requireClient(options, 'benchmark facts')
   const response = await client.getJson(
     `/api/v1/cli/benchmark-run-facts/${encodeURIComponent(workflowExecutionId)}`,
   )
@@ -291,17 +291,6 @@ async function runBenchmarkCompare(
 
   const comparison = compareBenchmarkRuns(pack, baseline, candidate)
   await emit(comparison, outputMode(options))
-}
-
-async function requireBackendClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }
 
 async function loadBenchmarkPack(

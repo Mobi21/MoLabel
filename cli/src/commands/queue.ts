@@ -2,7 +2,7 @@ import type { Command } from 'commander'
 
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
-import { buildClient, getRuntimeOptions, outputMode } from './context.js'
+import { getRuntimeOptions, outputMode, requireClient } from './context.js'
 
 export function registerQueueCommands(
   program: Command,
@@ -89,15 +89,4 @@ async function runQueueReviewers(options: CliRuntimeOptions): Promise<void> {
   const client = await requireClient(options, 'queue reviewers')
   const response = await client.getJson('/api/v1/mission-control/reviewers')
   await emit(response, outputMode(options))
-}
-
-async function requireClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }

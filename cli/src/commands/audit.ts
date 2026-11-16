@@ -3,9 +3,9 @@ import type { Command } from 'commander'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
-  buildClient,
   getRuntimeOptions,
   outputMode,
+  requireClient,
   resolveWorkspaceId,
 } from './context.js'
 
@@ -55,7 +55,7 @@ async function runAuditTimeline(
   options: CliRuntimeOptions,
   query: AuditOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'audit timeline')
+  const client = await requireClient(options, 'audit timeline')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
   const response = await client.getJson(
     `/api/v1/audit${buildQuery({
@@ -78,15 +78,4 @@ function buildQuery(params: Record<string, string | undefined>): string {
   }
   const query = search.toString()
   return query ? `?${query}` : ''
-}
-
-async function requireBackendClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }

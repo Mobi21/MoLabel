@@ -5,7 +5,7 @@ import type { Command } from 'commander'
 
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
-import { buildClient, getRuntimeOptions, outputMode } from './context.js'
+import { getRuntimeOptions, outputMode, requireClient } from './context.js'
 
 type JsonObject = Record<string, unknown>
 
@@ -219,15 +219,4 @@ function readJsonObjectFromText(text: string): JsonObject {
     throw new Error('Expected a JSON object')
   }
   return parsed as JsonObject
-}
-
-async function requireClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }
