@@ -485,7 +485,9 @@ async def test_a_keyless_agent_step_fails_and_names_the_offline_switch(
     _write_demo_reviews(tmp_path)
 
     def reject_missing_key(self, **_kwargs):
-        raise ProviderError("Anthropic API error: 401 x-api-key header is required")
+        raise ProviderError(
+            "Anthropic API error: 401 x-api-key header is required", status_code=401
+        )
 
     monkeypatch.setattr(_LlmAgentRunner, "_label_record", reject_missing_key)
 
@@ -511,6 +513,54 @@ async def test_a_keyless_agent_step_fails_and_names_the_offline_switch(
             {"wid": str(workspace_id)},
         ).fetchall()
     assert [row[0] for row in adapters] == ["builtin.anthropic"]
+
+
+LOCAL_ENDPOINT = {
+    "model": "llama3.1",
+    "provider_type": "openai_compatible",
+    "base_url": "http://localhost:1234/v1",
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("step_config", "failure"),
+    [
+        (
+            LOCAL_ENDPOINT,
+            ProviderError("OpenAI API error: 500 model is not loaded", status_code=500),
+        ),
+        (
+            LOCAL_ENDPOINT,
+            ProviderError("OpenAI HTTP error: All connection attempts failed"),
+        ),
+        (
+            LOCAL_ENDPOINT,
+            ProviderError("OpenAI API error: 401 invalid token", status_code=401),
+        ),
+        (
+            {"model": "gpt-4o"},
+            ProviderError("OpenAI API error: 503 overloaded", status_code=503),
+        ),
+    ],
+    ids=["local-server-error", "local-unreachable", "local-401", "hosted-non-auth"],
+)
+async def test_a_failure_that_is_not_a_missing_key_gets_no_key_hint(
+    client, app, tmp_path, monkeypatch, hosted_calls, step_config, failure
+):
+    def fail(self, messages, model, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(OpenAIAdapter, "complete", fail)
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+
+    resp = await _execute_sentiment_workflow(
+        client, app, tmp_path, workspace_id, step_config
+    )
+
+    error_summary = resp.json()["error_summary"]
+    assert str(failure) in error_summary
+    assert "To label without an API key" not in error_summary
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -31,7 +32,7 @@ from molabel.app.utils import get_engine
 from molabel.app.workspace_config import WORKFLOW, workspace_files, workspace_folder
 from molabel.app.workspace_paths import resolve_in_workspace
 from molabel.core.agents.queue_binding import serialize_agent_output_ids
-from molabel.core.providers.base import resolve_api_key
+from molabel.core.providers.base import ProviderError, resolve_api_key
 from molabel.core.providers.detection import ProviderDetector
 from molabel.core.providers.model_defaults import (
     MINIMAX_M27_HIGHSPEED,
@@ -1223,6 +1224,13 @@ class _WorkflowDataLoader:
         return records
 
 
+def _requires_api_key(provider_type: str, base_url: str | None) -> bool:
+    """Whether the provider is a hosted API that refuses calls without a key."""
+    if provider_type == ProviderType.openai_compatible:
+        return not base_url or urlparse(base_url).hostname == "api.openai.com"
+    return provider_type in (ProviderType.anthropic, ProviderType.openrouter)
+
+
 def _missing_key_hint(auth_ref: str) -> str:
     return (
         f"{auth_ref} is not set. To label without an API key, recreate the "
@@ -1384,6 +1392,7 @@ class _LlmAgentRunner:
         completed = 0
         failed = 0
         error_summary_parts: list[str] = []
+        auth_rejected = False
 
         for record_id in record_ids:
             try:
@@ -1441,6 +1450,8 @@ class _LlmAgentRunner:
                 completed += 1
             except Exception as exc:
                 failed += 1
+                if isinstance(exc, ProviderError) and exc.status_code in (401, 403):
+                    auth_rejected = True
                 error_summary_parts.append(
                     f"record {record_id}: {type(exc).__name__}: {exc}"
                 )
@@ -1457,7 +1468,13 @@ class _LlmAgentRunner:
             if failed == 0
             else ("partially_completed" if completed > 0 else "failed")
         )
-        if completed == 0 and auth_ref and resolve_api_key(auth_ref) is None:
+        if (
+            completed == 0
+            and auth_rejected
+            and auth_ref
+            and _requires_api_key(provider_type, base_url)
+            and resolve_api_key(auth_ref) is None
+        ):
             error_summary_parts.insert(0, _missing_key_hint(auth_ref))
         error_summary = (
             "; ".join(error_summary_parts[:5]) if error_summary_parts else None
