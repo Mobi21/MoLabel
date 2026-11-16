@@ -47,7 +47,7 @@ async def test_export_csv(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-csv-export-test",
+                "path": client.workspace_dir("ws-csv-export-test"),
                 "workspace_name": "CSV Export Test",
             },
         )

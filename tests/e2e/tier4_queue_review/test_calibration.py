@@ -123,7 +123,10 @@ async def test_calibration_reviewer_alignment(
         # Verify API-level calibration flag
         ws_resp = await client.post(
             "/api/v1/workspaces",
-            json={"path": "/tmp/ws-calibration-ws", "workspace_name": "calibration-ws"},
+            json={
+                "path": client.workspace_dir("ws-calibration-ws"),
+                "workspace_name": "calibration-ws",
+            },
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]

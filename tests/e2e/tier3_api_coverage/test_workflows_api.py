@@ -31,7 +31,7 @@ async def _setup_auth_and_workspace(client: InstrumentedClient) -> str:
     client._session_cookie = login.cookies.get("molabel_session")
     ws = await client.post(
         f"{BASE}/workspaces",
-        json={"path": "/tmp/ws-wf", "workspace_name": "WF Workspace"},
+        json={"path": client.workspace_dir("ws-wf"), "workspace_name": "WF Workspace"},
     )
     assert ws.status_code == 201
     return ws.json()["workspace_id"]

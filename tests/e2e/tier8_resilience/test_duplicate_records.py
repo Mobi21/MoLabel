@@ -38,7 +38,7 @@ async def test_duplicate_records(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-duplicate-records-test",
+                "path": client.workspace_dir("ws-duplicate-records-test"),
                 "workspace_name": "Duplicate Records Test",
             },
         )

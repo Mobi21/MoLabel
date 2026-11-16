@@ -29,7 +29,7 @@ async def test_empty_dataset(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-empty-dataset-test",
+                "path": client.workspace_dir("ws-empty-dataset-test"),
                 "workspace_name": "Empty Dataset Test",
             },
         )

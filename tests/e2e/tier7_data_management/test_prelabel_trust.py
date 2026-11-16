@@ -30,7 +30,7 @@ async def test_prelabel_trust(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-pre-label-trust-test",
+                "path": client.workspace_dir("ws-pre-label-trust-test"),
                 "workspace_name": "Pre-label Trust Test",
             },
         )

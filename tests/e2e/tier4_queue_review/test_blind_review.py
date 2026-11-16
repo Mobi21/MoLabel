@@ -30,7 +30,7 @@ async def _setup_workspace_and_queue(
     ws_resp = await client.post(
         "/api/v1/workspaces",
         json={
-            "path": f"/tmp/ws-blind-review-{blind_review_policy}",
+            "path": client.workspace_dir(f"ws-blind-review-{blind_review_policy}"),
             "workspace_name": f"blind-review-{blind_review_policy}-ws",
         },
     )

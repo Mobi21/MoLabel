@@ -28,7 +28,7 @@ async def test_label_mapping(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-label-mapping-test",
+                "path": client.workspace_dir("ws-label-mapping-test"),
                 "workspace_name": "Label Mapping Test",
             },
         )

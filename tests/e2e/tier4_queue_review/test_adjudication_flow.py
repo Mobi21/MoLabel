@@ -35,7 +35,7 @@ async def test_adjudication_flow_detect_build_resolve(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-adjudication-test",
+                "path": client.workspace_dir("ws-adjudication-test"),
                 "workspace_name": "Adjudication Test",
             },
         )

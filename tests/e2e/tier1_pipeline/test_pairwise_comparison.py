@@ -44,7 +44,7 @@ async def test_full_pipeline_pairwise_comparison(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/pairwise-test",
+                "path": client.workspace_dir("pairwise-test"),
                 "workspace_name": "Pairwise Comparison WS",
             },
         )

@@ -31,7 +31,7 @@ async def _create_queue_with_n_tasks(
     ws_resp = await client.post(
         "/api/v1/workspaces",
         json={
-            "path": f"/tmp/ws-review-decisions{queue_suffix}",
+            "path": client.workspace_dir(f"ws-review-decisions{queue_suffix}"),
             "workspace_name": f"review-decisions-ws{queue_suffix}",
         },
     )

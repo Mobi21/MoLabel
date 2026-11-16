@@ -37,7 +37,7 @@ async def test_large_dataset(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-large-dataset-test",
+                "path": client.workspace_dir("ws-large-dataset-test"),
                 "workspace_name": "Large Dataset Test",
             },
         )

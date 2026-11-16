@@ -32,7 +32,7 @@ async def test_rollback_partial(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-rollback-partial-test",
+                "path": client.workspace_dir("ws-rollback-partial-test"),
                 "workspace_name": "Rollback Partial Test",
             },
         )

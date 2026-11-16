@@ -72,7 +72,7 @@ async def test_nested_json(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-nested-json-test",
+                "path": client.workspace_dir("ws-nested-json-test"),
                 "workspace_name": "Nested JSON Test",
             },
         )

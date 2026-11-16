@@ -34,7 +34,7 @@ async def test_partial_labels(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-partial-labels-test",
+                "path": client.workspace_dir("ws-partial-labels-test"),
                 "workspace_name": "Partial Labels Test",
             },
         )

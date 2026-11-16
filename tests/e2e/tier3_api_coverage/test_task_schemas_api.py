@@ -33,7 +33,10 @@ async def _setup_auth(client: InstrumentedClient) -> tuple[str, str]:
 
     ws = await client.post(
         f"{BASE}/workspaces",
-        json={"path": "/tmp/ws-schemas", "workspace_name": "Schema WS"},
+        json={
+            "path": client.workspace_dir("ws-schemas"),
+            "workspace_name": "Schema WS",
+        },
     )
     assert ws.status_code == 201
     workspace_id = ws.json()["workspace_id"]

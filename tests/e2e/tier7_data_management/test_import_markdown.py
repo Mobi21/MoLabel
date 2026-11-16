@@ -31,7 +31,7 @@ async def test_import_markdown(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-markdown-import-test",
+                "path": client.workspace_dir("ws-markdown-import-test"),
                 "workspace_name": "Markdown Import Test",
             },
         )

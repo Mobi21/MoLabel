@@ -34,7 +34,7 @@ async def test_concurrent_claims_only_one_succeeds(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-concurrent-claims-ws",
+                "path": client.workspace_dir("ws-concurrent-claims-ws"),
                 "workspace_name": "concurrent-claims-ws",
             },
         )

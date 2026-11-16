@@ -29,7 +29,7 @@ async def test_empty_filter(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-empty-filter-test",
+                "path": client.workspace_dir("ws-empty-filter-test"),
                 "workspace_name": "Empty Filter Test",
             },
         )

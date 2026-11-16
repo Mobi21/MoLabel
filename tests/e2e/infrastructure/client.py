@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
 import time
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -78,6 +80,7 @@ class E2EClient:
             timeout=30.0,
         )
         self._session_cookie: str | None = None
+        self._workspace_dirs = tempfile.TemporaryDirectory(prefix="molabel-e2e-")
 
     async def login(self, reviewer_id: str) -> None:
         """Switch the active session to the given reviewer profile."""
@@ -111,8 +114,15 @@ class E2EClient:
     async def delete(self, path: str, **kw: object) -> httpx.Response:
         return await self.request("DELETE", path, **kw)
 
+    def workspace_dir(self, name: str) -> str:
+        """A real folder to register as a workspace root; removed on close."""
+        path = Path(self._workspace_dirs.name) / name
+        path.mkdir(parents=True, exist_ok=True)
+        return str(path)
+
     async def close(self) -> None:
         await self._client.aclose()
+        self._workspace_dirs.cleanup()
 
 
 class InstrumentedClient(E2EClient):

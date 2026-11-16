@@ -35,7 +35,10 @@ async def _setup_auth(client: InstrumentedClient) -> str:
 
     ws = await client.post(
         f"{BASE}/workspaces",
-        json={"path": "/tmp/ws-datasets", "workspace_name": "DS Workspace"},
+        json={
+            "path": client.workspace_dir("ws-datasets"),
+            "workspace_name": "DS Workspace",
+        },
     )
     assert ws.status_code == 201
     return ws.json()["workspace_id"]

@@ -31,7 +31,7 @@ async def test_cost_tracking_per_output_and_aggregation(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-cost-tracking-test",
+                "path": client.workspace_dir("ws-cost-tracking-test"),
                 "workspace_name": "Cost Tracking Test",
             },
         )

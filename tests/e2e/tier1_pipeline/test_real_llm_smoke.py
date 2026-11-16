@@ -81,7 +81,7 @@ async def test_real_llm_smoke_text_classification(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/real-llm-smoke",
+                "path": client.workspace_dir("real-llm-smoke"),
                 "workspace_name": "Real LLM Smoke WS",
             },
         )

@@ -29,7 +29,7 @@ async def test_provider_timeouts(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-provider-timeout-test",
+                "path": client.workspace_dir("ws-provider-timeout-test"),
                 "workspace_name": "Provider Timeout Test",
             },
         )

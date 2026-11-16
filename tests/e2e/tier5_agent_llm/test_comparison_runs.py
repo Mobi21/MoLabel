@@ -36,7 +36,7 @@ async def test_two_model_comparison_run(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-two-model-comparison-test",
+                "path": client.workspace_dir("ws-two-model-comparison-test"),
                 "workspace_name": "Two Model Comparison Test",
             },
         )
@@ -139,7 +139,7 @@ async def test_three_model_comparison_run(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-three-model-comparison-test",
+                "path": client.workspace_dir("ws-three-model-comparison-test"),
                 "workspace_name": "Three Model Comparison Test",
             },
         )

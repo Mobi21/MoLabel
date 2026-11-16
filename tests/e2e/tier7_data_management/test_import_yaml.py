@@ -31,7 +31,7 @@ async def test_import_yaml(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-yaml-import-test",
+                "path": client.workspace_dir("ws-yaml-import-test"),
                 "workspace_name": "YAML Import Test",
             },
         )

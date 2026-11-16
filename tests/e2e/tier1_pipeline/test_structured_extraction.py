@@ -99,7 +99,7 @@ async def test_full_pipeline_structured_extraction(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/extraction-test",
+                "path": client.workspace_dir("extraction-test"),
                 "workspace_name": "Invoice Extraction WS",
             },
         )

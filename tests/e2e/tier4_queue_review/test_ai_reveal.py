@@ -32,7 +32,7 @@ async def test_ai_reveal_tracking(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-ai-reveal-tracking-ws",
+                "path": client.workspace_dir("ws-ai-reveal-tracking-ws"),
                 "workspace_name": "ai-reveal-tracking-ws",
             },
         )

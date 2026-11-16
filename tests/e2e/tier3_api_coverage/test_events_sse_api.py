@@ -30,7 +30,7 @@ _SSE_TIMEOUT = httpx.Timeout(connect=10.0, read=2.0, write=10.0, pool=10.0)
 async def _setup(client: InstrumentedClient) -> str:
     ws_resp = await client.post(
         f"{BASE}/workspaces",
-        json={"path": "/tmp/sse-ws", "workspace_name": "SSE WS"},
+        json={"path": client.workspace_dir("sse-ws"), "workspace_name": "SSE WS"},
     )
     assert ws_resp.status_code == 201
     return ws_resp.json()["workspace_id"]
