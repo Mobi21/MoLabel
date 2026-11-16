@@ -19,6 +19,7 @@ from molabel.app.utils import get_engine
 from molabel.core.agents.queue_binding import deserialize_agent_output_ids
 from molabel.core.data.snapshot_service import SnapshotService
 from molabel.core.models import Dataset, DatasetSnapshot, Record
+from molabel.core.types import canonical_review_decision
 from molabel.core.workflow.templates import (
     bind_template_inputs,
     get_template_path,
@@ -481,8 +482,11 @@ async def get_benchmark_run_facts(
                 ),
                 {"queue_id": queue_id},
             ):
-                key = str(decision or "").strip() or "unspecified"
-                decision_counts[key] = int(count or 0)
+                key = (
+                    canonical_review_decision(str(decision or "").strip())
+                    or "unspecified"
+                )
+                decision_counts[key] = decision_counts.get(key, 0) + int(count or 0)
 
             latest_event_rows = conn.execute(
                 text(

@@ -191,6 +191,18 @@ CANONICAL_REVIEW_DECISION: dict[DeprecatedReviewDecision, ReviewDecision] = {
 }
 
 
+def canonical_review_decision(stored: str) -> str:
+    """Return the current name of a decision read from ``review_events``.
+
+    Pre-rename aliases become accept, edit or reject. Old rows can also hold
+    ``skip``, which was never a verdict on the labels, so it comes back
+    unchanged along with any other value.
+    """
+    if stored in DeprecatedReviewDecision:
+        return CANONICAL_REVIEW_DECISION[DeprecatedReviewDecision(stored)].value
+    return stored
+
+
 class ValidationStatus(StrEnum):
     pending = "pending"
     running = "running"

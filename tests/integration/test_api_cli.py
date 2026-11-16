@@ -364,8 +364,27 @@ async def test_template_with_bound_inputs_needs_no_workspace_dataset(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored_decisions", "decision_counts", "semantic_decision_counts"),
+    [
+        (("accept", "accept"), {"accept": 2}, {"accept_ai": 1, "edit_ai": 1}),
+        (("accept_ai", "accept"), {"accept": 2}, {"accept_ai": 1, "edit_ai": 1}),
+        (
+            ("edit_ai", "reject_ai"),
+            {"edit": 1, "reject": 1},
+            {"accept_ai": 1, "reject_ai": 1},
+        ),
+        (("correct", "skip"), {"edit": 1, "skip": 1}, {"correct": 1, "skip": 1}),
+    ],
+    ids=["canonical", "legacy-accept-ai", "legacy-edit-reject", "legacy-correct-skip"],
+)
 async def test_benchmark_run_facts_returns_persisted_queue_counts(
-    client, app, tmp_path
+    client,
+    app,
+    tmp_path,
+    stored_decisions,
+    decision_counts,
+    semantic_decision_counts,
 ):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     token = _seed_reviewer(app.state.engine, workspace_id)
@@ -514,9 +533,8 @@ async def test_benchmark_run_facts_returns_persisted_queue_counts(
                     "dataset_id": str(dataset_id),
                 },
             )
-        for task_id, record_id, decision in (
-            (task_ids[0], record_ids[0], "accept"),
-            (task_ids[1], record_ids[1], "accept"),
+        for task_id, record_id, decision in zip(
+            task_ids, record_ids, stored_decisions, strict=False
         ):
             conn.execute(
                 text(
@@ -560,9 +578,8 @@ async def test_benchmark_run_facts_returns_persisted_queue_counts(
     assert body["available_count"] == 1
     assert body["claimed_count"] == 0
     assert body["review_event_count"] == 2
-    assert body["decision_counts"]["accept"] == 2
-    assert body["semantic_decision_counts"]["accept_ai"] == 1
-    assert body["semantic_decision_counts"]["edit_ai"] == 1
+    assert body["decision_counts"] == decision_counts
+    assert body["semantic_decision_counts"] == semantic_decision_counts
     assert body["queue_empty"] is False
     assert body["review_completion_rate"] == pytest.approx(2 / 3)
     assert body["summary_path"].endswith("summary.json")
