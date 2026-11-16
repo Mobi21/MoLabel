@@ -28,7 +28,8 @@ class QualityCheckExecutor(StepExecutor):
     min_coverage, min_confidence. Writes pass/fail result and metrics
     to context. Does NOT block the workflow -- use conditional/gate after.
     min_agreement compares Krippendorff's alpha, which holds for any number
-    of raters and for missing values.
+    of raters and for missing values. Every field that agreement_analysis
+    reported must reach it, and a field whose alpha is null fails.
     """
 
     def validate(
@@ -55,7 +56,15 @@ class QualityCheckExecutor(StepExecutor):
         min_confidence = config.get("min_confidence")
 
         # Read current metrics from context
-        current_agreement = context.metrics.get("agreement.krippendorff_alpha", 0.0)
+        field_alphas: dict[str, float | None] = {
+            field: summary.get("krippendorff_alpha")
+            for field, summary in context.variables.get("agreement.fields", {}).items()
+        }
+        current_agreement = (
+            min(0.0 if alpha is None else alpha for alpha in field_alphas.values())
+            if field_alphas
+            else context.metrics.get("agreement.krippendorff_alpha", 0.0)
+        )
         current_coverage = context.metrics.get("review.coverage", 0.0)
         current_confidence = context.metrics.get("agent.avg_confidence", 0.0)
 
@@ -81,14 +90,22 @@ class QualityCheckExecutor(StepExecutor):
         details: list[dict[str, Any]] = []
 
         if min_agreement is not None:
-            check_passed = current_agreement >= float(min_agreement)
+            threshold = float(min_agreement)
+            failing_fields = {
+                field: alpha
+                for field, alpha in field_alphas.items()
+                if alpha is None or alpha < threshold
+            }
+            check_passed = current_agreement >= threshold and not failing_fields
             details.append(
                 {
                     "check": "min_agreement",
                     "metric": "krippendorff_alpha",
-                    "threshold": float(min_agreement),
+                    "threshold": threshold,
                     "actual": current_agreement,
                     "passed": check_passed,
+                    "fields": field_alphas,
+                    "failing_fields": failing_fields,
                 }
             )
             if not check_passed:
@@ -215,6 +232,12 @@ class AgreementAnalysisExecutor(StepExecutor):
             else:
                 context.metrics[key] = value
 
+        fields = {
+            name: summary.model_dump()
+            for name, summary in analysis_result.fields.items()
+        }
+        context.variables["agreement.fields"] = fields
+
         for field_name, breakdown in analysis_result.human_agent_by_field.items():
             metric_prefix = f"agreement.human_agent.by_field.{_metric_key(field_name)}"
             context.metrics[f"{metric_prefix}.agreement_rate"] = (
@@ -243,6 +266,8 @@ class AgreementAnalysisExecutor(StepExecutor):
                 step_type="agreement_analysis",
                 summary={
                     "analysis_type": analysis_type,
+                    "pooled": overall.model_dump(),
+                    "fields": fields,
                     "kappa": analysis_result.overall.cohen_kappa,
                     "percent_agreement": analysis_result.overall.percent_agreement,
                     "fleiss_kappa": analysis_result.overall.fleiss_kappa,
@@ -258,6 +283,10 @@ class AgreementAnalysisExecutor(StepExecutor):
                         if analysis_result.human_agent is not None
                         else None
                     ),
+                    "human_agent_fields": {
+                        name: summary.model_dump()
+                        for name, summary in analysis_result.human_agent_fields.items()
+                    },
                     "human_agent_by_field": {
                         field_name: breakdown.model_dump()
                         for field_name, breakdown in (

@@ -14,7 +14,7 @@ from molabel.core.workflow.steps.quality_steps import (
 
 
 def _records(units: list[dict[str, tuple[str, ...]]]) -> list[dict[str, Any]]:
-    """One record per unit. A unit maps each field to rater r1, r2, r3's values."""
+    """One record per unit. A unit maps each field to the values of r0, r1, ..."""
     return [
         {
             "record_id": f"u{index}",
@@ -22,9 +22,9 @@ def _records(units: list[dict[str, tuple[str, ...]]]) -> list[dict[str, Any]]:
                 {
                     "source": "human",
                     "rater_id": f"r{rater}",
-                    "labels": {field: values[rater] for field, values in unit.items()},
+                    "labels": dict(zip(unit, values, strict=True)),
                 }
-                for rater in range(3)
+                for rater, values in enumerate(zip(*unit.values(), strict=True))
             ],
         }
         for index, unit in enumerate(units)
@@ -73,3 +73,36 @@ def test_min_agreement_gates_on_alpha_for_three_raters(
     assert detail["actual"] == pytest.approx(0.75)
     assert detail["passed"] is passed
     assert detail["metric"] == "krippendorff_alpha"
+
+
+def test_min_agreement_fails_on_one_field_while_the_pooled_alpha_passes() -> None:
+    units = [
+        {"sentiment": ("pos", "pos"), "topic": ("x", "x")},
+        {"sentiment": ("neg", "neg"), "topic": ("y", "x")},
+        {"sentiment": ("pos", "pos"), "topic": ("x", "y")},
+        {"sentiment": ("neg", "neg"), "topic": ("y", "y")},
+    ]
+
+    ctx, detail = _run_gate(_records(units), 0.6)
+
+    # Pooled: n = 16 over four labels of 4 each, 4 mismatching coincidences:
+    # alpha = 1 - 15 * 4 / (256 - 64) = 0.6875.
+    assert ctx.metrics["agreement.krippendorff_alpha"] == pytest.approx(0.6875)
+    assert ctx.variables["quality.passed"] is False
+    # topic: n = 8 with x = y = 4, 4 mismatching coincidences: 1 - 7 * 4 / 32.
+    assert detail["failing_fields"] == pytest.approx({"topic": 0.125})
+    assert detail["fields"] == pytest.approx({"sentiment": 1.0, "topic": 0.125})
+    assert detail["actual"] == pytest.approx(0.125)
+
+
+def test_min_agreement_fails_on_a_field_whose_alpha_is_null() -> None:
+    units = [
+        {"sentiment": ("pos", "pos"), "flag": ("no", "no")},
+        {"sentiment": ("neg", "neg"), "flag": ("no", "no")},
+    ]
+
+    ctx, detail = _run_gate(_records(units), 0.8)
+
+    assert ctx.metrics["agreement.krippendorff_alpha"] == pytest.approx(1.0)
+    assert ctx.variables["quality.passed"] is False
+    assert detail["failing_fields"] == {"flag": None}

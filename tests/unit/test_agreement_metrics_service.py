@@ -342,3 +342,36 @@ def test_null_agent_label_is_not_a_human_agent_pair() -> None:
         "positive",
         "negative",
     }
+
+
+def test_reports_each_field_beside_the_pooled_summary() -> None:
+    result = AgreementMetricsService().analyze(
+        [
+            _record(
+                record_id, {"sentiment": s, "topic": t}, {"sentiment": s, "topic": u}
+            )
+            for record_id, s, t, u in [
+                ("r1", "pos", "x", "x"),
+                ("r2", "neg", "y", "x"),
+                ("r3", "pos", "x", "y"),
+                ("r4", "neg", "y", "y"),
+            ]
+        ],
+        analysis_type="both",
+    )
+
+    assert result.human_agent is not None
+    for fields in (result.fields, result.human_agent_fields):
+        assert list(fields) == ["sentiment", "topic"]
+        assert fields["sentiment"].cohen_kappa == pytest.approx(1.0)
+        assert fields["sentiment"].krippendorff_alpha == pytest.approx(1.0)
+        topic = fields["topic"]
+        assert topic.percent_agreement == pytest.approx(0.5)
+        # Each rater says x half the time: p_e = 1/2, kappa = (1/2 - 1/2) / (1/2).
+        assert topic.cohen_kappa == pytest.approx(0.0)
+        # n = 8 with x = y = 4 and 4 mismatching coincidences: 1 - 7 * 4 / 32.
+        assert topic.krippendorff_alpha == pytest.approx(0.125)
+    for pooled in (result.overall, result.human_agent):
+        # n = 16 over four labels of 4 each, 4 mismatches: 1 - 15 * 4 / (256 - 64).
+        assert pooled.krippendorff_alpha == pytest.approx(0.6875)
+        assert pooled.percent_agreement == pytest.approx(6 / 8)

@@ -143,7 +143,7 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 
 **`quality_check`**
 
-- Inputs: reads `record_sets[active_record_set_id]`; reads `metrics` for current quality state; reads `config.min_agreement`, `config.min_coverage`, `config.min_confidence` (optional thresholds). `min_agreement` is compared with `metrics["agreement.krippendorff_alpha"]`, not Cohen's kappa
+- Inputs: reads `record_sets[active_record_set_id]`; reads `metrics` for current quality state; reads `config.min_agreement`, `config.min_coverage`, `config.min_confidence` (optional thresholds). `min_agreement` is compared with Krippendorff's alpha of each field in `variables["agreement.fields"]`, and fails when any field is below it or null. With no per-field summaries it is compared with `metrics["agreement.krippendorff_alpha"]`. It never reads Cohen's kappa
 - Outputs: writes `step_outputs[step_id]` with pass/fail result and details; writes `metrics["quality.agreement"]`, `metrics["quality.coverage"]`, `metrics["quality.confidence"]`; writes `variables["quality.passed"]` as boolean
 - Side effects: creates a `validation_runs` row in SQLite with the quality report; writes audit entry
 - Note: this step does NOT block the workflow — it writes metrics and a pass/fail signal. Use a `conditional` step after it to branch on the result, or a `gate` step to require human approval.
@@ -151,7 +151,7 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 **`agreement_analysis`**
 
 - Inputs: reads `record_sets[active_record_set_id]`; reads `review_queue_ids` to find review events; reads `agent_run_ids` to find agent outputs; reads `config.analysis_type` (inter_annotator, human_agent, or both)
-- Outputs: writes `step_outputs[step_id]` with the agreement report (percent agreement, Cohen's kappa, Fleiss' kappa, Krippendorff's alpha, `null_reasons`, per-field human-agent agreement, confusion matrix); writes `metrics["agreement.kappa"]` (Cohen's kappa), `metrics["agreement.percent_agreement"]`, `metrics["agreement.fleiss_kappa"]`, `metrics["agreement.krippendorff_alpha"]` and `metrics["agreement.human_agent_agreement"]`
+- Outputs: writes `step_outputs[step_id]` with the agreement report (percent agreement, Cohen's kappa, Fleiss' kappa, Krippendorff's alpha and `null_reasons`, once per field and once pooled, plus per-field human-agent agreement and the confusion matrix); writes the pooled `metrics["agreement.kappa"]` (Cohen's kappa), `metrics["agreement.percent_agreement"]`, `metrics["agreement.fleiss_kappa"]`, `metrics["agreement.krippendorff_alpha"]` and `metrics["agreement.human_agent_agreement"]`; writes the per-field summaries to `variables["agreement.fields"]`
 - Null metrics: a metric the data leave undefined is null in the report and removed from `metrics`. [Agreement metrics](../guides/agreement-metrics.md) gives each formula and the cases that make it null
 - Side effects: stores agreement report as a derived artifact; writes audit entry
 

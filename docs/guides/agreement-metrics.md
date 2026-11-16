@@ -21,19 +21,33 @@ only when the strings are equal.
 - A unit with fewer than two values cannot be paired. The service leaves it out
   of every metric.
 
-`analysis_type` decides which annotations are in scope for `overall`.
+`analysis_type` decides which annotations are in scope for `overall` and
+`fields`.
 
-| `analysis_type` | Sources in `overall` | `human_agent` summary |
+| `analysis_type` | Sources in `overall` and `fields` | `human_agent` summaries |
 | --- | --- | --- |
 | `both` (default) | every source | computed |
 | `inter_annotator` | `human`, `import` | not computed |
-| `human_agent` | `overall` is the `human_agent` summary | computed |
+| `human_agent` | the `human_agent` summaries | computed |
 
-When the analysis covers more than one field, `overall` pools the units of every
-field into one variable. A label that two fields share counts as one category.
-If the fields use different label sets, labels that can never meet in one unit
-still lower the agreement expected by chance. That raises the three
-coefficients. Pass `fields=["name"]` to get a coefficient for one field.
+## Per field and pooled
+
+The analysis covers the label fields passed to `analyze(fields=...)`, which is
+the `fields` config of an `agreement_analysis` step, or every label key it
+finds. It computes every metric once per label field and once pooled.
+
+- `fields` in the result maps each label field to its own
+  `AgreementMetricSummary`. `human_agent_fields` does the same for the
+  human-agent pairs.
+- `overall` and `human_agent` pool the units of every label field into one
+  variable.
+
+The formulas below run on one field's units for a per-field summary, and on
+every field's units for a pooled one. Read a field's own summary for that
+field's reliability. The pooled summary is not an average of the fields. A
+label that two fields share counts as one category. If the fields use different
+label sets, labels that can never meet in one unit still lower the agreement
+expected by chance, and that raises the pooled coefficients.
 
 ## Notation
 
@@ -45,7 +59,7 @@ For each pairable unit `u`:
 Over all pairable units, `n_c = sum_u n_uc` and `n = sum_c n_c`. `N` is the
 number of pairable units.
 
-## Fields
+## Summary fields
 
 | Field | Formula | Null when |
 | --- | --- | --- |
@@ -133,28 +147,69 @@ All of the formulas above then apply to those pairs.
 - `fleiss_kappa` on two-value units equals Scott's pi.
 - `krippendorff_alpha` is the two-rater alpha over the same pairs.
 
-## Null metrics in workflows
+## Workflow outputs
 
-The `agreement_analysis` step writes `agreement.kappa` (`cohen_kappa`),
+The `agreement_analysis` step's summary holds `pooled`, `fields`, `human_agent`
+and `human_agent_fields`. `pooled` is the result's `overall`. The earlier keys
+stay for compatibility and carry the pooled values. `overall` repeats `pooled`,
+and `kappa`, `percent_agreement`, `fleiss_kappa`, `krippendorff_alpha` and
+`human_agent_agreement` repeat single pooled metrics.
+[The API specification](../architecture/api-specification.md#get-qualityagreement)
+lists every key.
+
+The step also writes the pooled `agreement.kappa` (`cohen_kappa`),
 `agreement.percent_agreement`, `agreement.fleiss_kappa`,
 `agreement.krippendorff_alpha` and `agreement.human_agent_agreement` to
-`context.metrics`. A null metric is removed from `context.metrics`, which also
-clears a value from an earlier loop pass. `quality_check`, readiness gates and
-conditional predicates read a missing metric as 0.0. A loop with a `metric`
-termination keeps running while its metric is missing. The step summary keeps
-every key, with null for an undefined metric.
+`context.metrics`, and the per-field summaries to
+`context.variables["agreement.fields"]`.
+
+A null metric is removed from `context.metrics`, which also clears a value from
+an earlier loop pass. `quality_check`, readiness gates and conditional
+predicates read a missing metric as 0.0. A loop with a `metric` termination
+keeps running while its metric is missing. The step summary keeps every key,
+with null for an undefined metric.
 
 ## The quality_check gate
 
-`quality_check` compares `config.min_agreement` with
-`agreement.krippendorff_alpha`. Alpha is defined for any number of raters and
-handles missing values, so the gate works for three or more reviewers. Earlier
-versions compared it with `agreement.kappa`. That is Cohen's kappa, which is
-null with three or more raters, so those workflows always failed the gate.
+`quality_check` compares `config.min_agreement` with Krippendorff's alpha of
+each field in `context.variables["agreement.fields"]`. The check fails when any
+field's alpha is below the threshold or null, whatever the pooled alpha is.
+With no per-field summaries, because no `agreement_analysis` step has run, it
+compares the pooled `agreement.krippendorff_alpha` metric instead.
 
-Configs keep the `min_agreement` key, and its threshold now applies to alpha.
-A missing alpha reads as 0.0. The check's entry in the step's `details` names
-the coefficient as `metric: krippendorff_alpha`.
+Alpha is defined for any number of raters and handles missing values, so the
+gate works for three or more reviewers. Earlier versions compared
+`min_agreement` with `agreement.kappa`. That is Cohen's kappa, which is null
+with three or more raters, so those workflows always failed the gate. Configs
+keep the `min_agreement` key, and its threshold now applies to alpha.
+
+A field whose alpha is null fails the gate. Null means the data cannot show
+agreement on that field. Either no record has two values for it, or every value
+is the same label. Passing such a field would certify a reliability nobody
+measured. The field's `null_reasons` in the `agreement_analysis` summary says
+which case applies. To keep a field out of the gate, list the fields to check
+in the `agreement_analysis` step's `fields` config.
+
+The check's entry in the step's `details` lists every field's alpha and the
+fields that failed:
+
+```json
+{
+  "check": "min_agreement",
+  "metric": "krippendorff_alpha",
+  "threshold": 0.6,
+  "actual": 0.125,
+  "passed": false,
+  "fields": {"sentiment": 1.0, "topic": 0.125},
+  "failing_fields": {"topic": 0.125}
+}
+```
+
+`actual` and `metrics["quality.agreement"]` hold the lowest field alpha, with a
+null field read as 0.0. So `quality.agreement` reaches a positive threshold
+exactly when every field does, and a loop that terminates on it stops when the
+gate would pass. In this example the pooled alpha is 0.6875, above the
+threshold, and the gate still fails on `topic`.
 
 ## Level of measurement
 
