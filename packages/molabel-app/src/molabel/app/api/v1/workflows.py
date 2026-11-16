@@ -378,15 +378,25 @@ def _json_dumps(value: Any) -> str | None:
 def _with_offline_model(config: dict[str, Any]) -> dict[str, Any]:
     """Select the offline provider's one model for ``provider_type: offline``.
 
-    A model profile the step pins by id stays, so that its provider is checked
-    against the step's.
+    ``model`` and ``model_profile_id`` each become that model, or ``model``
+    does when the step sets neither. A model profile the step pins by id
+    stays, so that its provider is checked against the step's.
     """
     if _normalize_provider_type(config.get("provider_type")) != ProviderType.offline:
         return config
-    selected = str(config.get("model") or config.get("model_profile_id") or "").strip()
-    if _profile_id(selected) is not None:
-        return config
-    return {**config, "model": OFFLINE_MODEL_ID}
+    selected = {
+        key: str(config.get(key) or "").strip() for key in ("model", "model_profile_id")
+    }
+    if not any(selected.values()):
+        return {**config, "model": OFFLINE_MODEL_ID}
+    return {
+        **config,
+        **{
+            key: OFFLINE_MODEL_ID
+            for key, value in selected.items()
+            if value and _profile_id(value) is None
+        },
+    }
 
 
 def _build_workflow_definition(row: Any) -> WorkflowDefinitionParsed:
@@ -924,21 +934,56 @@ async def unresolved_model_error_handler(
     )
 
 
-def _step_model_config(config: dict[str, Any]) -> dict[str, Any]:
-    """The model an agent step selects, as ``_ensure_model_profile`` arguments."""
+def _resolve_step_model(
+    conn: Any, *, workspace_id: str, config: dict[str, Any]
+) -> str | None:
+    """The model profile an agent step runs on, or None if it names no model.
+
+    ``model`` and ``model_profile_id`` each select a profile through
+    ``_ensure_model_profile``, and the step runs on the one ``model`` selects.
+    When the step sets both, their profiles must have one provider, or
+    ``UnresolvedModelError`` is raised.
+    """
     config = _with_offline_model(config)
 
     def value(key: str) -> str | None:
         raw = config.get(key)
         return (str(raw).strip() or None) if raw is not None else None
 
-    return {
-        "model_identifier": value("model") or value("model_profile_id") or "",
-        "provider_type": value("provider_type"),
-        "provider_name": value("provider_name"),
-        "auth_ref": value("auth_ref"),
-        "base_url": value("base_url"),
+    settings = {
+        key: value(key)
+        for key in ("provider_type", "provider_name", "auth_ref", "base_url")
     }
+    resolved = [
+        (
+            selector,
+            _ensure_model_profile(
+                conn, workspace_id=workspace_id, model_identifier=selector, **settings
+            ),
+        )
+        for selector in (value("model"), value("model_profile_id"))
+        if selector is not None
+    ]
+    if len(resolved) == 2:
+        (model, model_profile), (pinned, pinned_profile) = resolved
+        providers = dict(
+            conn.execute(
+                text(
+                    "SELECT id, provider_type FROM model_profiles "
+                    "WHERE id IN (:model_profile, :pinned_profile)"
+                ),
+                {"model_profile": model_profile, "pinned_profile": pinned_profile},
+            ).fetchall()
+        )
+        if providers[model_profile] != providers[pinned_profile]:
+            raise UnresolvedModelError(
+                f"Model profile {pinned} uses provider "
+                f"{providers[pinned_profile]}, but the step's model {model} uses "
+                f"provider {providers[model_profile]}",
+                model=pinned,
+                provider_type=settings["provider_type"],
+            )
+    return resolved[0][1] if resolved else None
 
 
 def _resolve_agent_models(
@@ -956,11 +1001,8 @@ def _resolve_agent_models(
         else:
             continue
         for config in configs:
-            selection = _step_model_config(config)
-            if not selection["model_identifier"]:
-                continue
             try:
-                _ensure_model_profile(conn, workspace_id=workspace_id, **selection)
+                _resolve_step_model(conn, workspace_id=workspace_id, config=config)
             except UnresolvedModelError as exc:
                 raise UnresolvedModelError(
                     f"Step '{step.id}': {exc}",
@@ -1338,11 +1380,15 @@ class _LlmAgentRunner:
             if task_schema_selector is not None
             else None,
         )
-        model_profile_id = _ensure_model_profile(
-            self._conn,
-            workspace_id=self._workspace_id,
-            **_step_model_config(config),
+        model_profile_id = _resolve_step_model(
+            self._conn, workspace_id=self._workspace_id, config=config
         )
+        if model_profile_id is None:
+            raise UnresolvedModelError(
+                "The step names no model",
+                model="",
+                provider_type=_normalize_provider_type(config.get("provider_type")),
+            )
 
         # Load full model profile for provider instantiation
         profile_row = self._conn.execute(

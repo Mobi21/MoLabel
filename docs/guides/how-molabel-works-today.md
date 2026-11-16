@@ -267,7 +267,8 @@ A step whose model matches no model profile and no known model family fails
 before any step runs, with `MODEL_UNRESOLVED` and the providers the backend
 can use. So does a step that pins a model profile id that does not exist,
 whose provider MoLabel cannot run, or whose provider is not the step's
-`provider_type`.
+`provider_type`, and a step whose `model` and `model_profile_id` select
+profiles of different providers.
 `cli/README.md` describes the heuristic, and `scripts/smoke_no_key.py` runs
 import, offline pre-label, review, and export with no key in CI.
 

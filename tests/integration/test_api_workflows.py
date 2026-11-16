@@ -1184,6 +1184,99 @@ async def test_a_pinned_profile_id_runs_its_profile_in_any_uuid_spelling(
     assert hosted_calls == [("anthropic", "claude-sonnet-4-20250514")] * 3 * run_count
 
 
+def _model_beside_profile_id(agent_step_type, model, profile_id, provider_type):
+    model_key = "models" if agent_step_type == "agent_compare" else "model"
+    config = {**_pinning(model_key, model), "model_profile_id": profile_id}
+    return {**config, "provider_type": provider_type} if provider_type else config
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "agent_step_type", ["agent_run", "agent_labeling", "agent_compare"]
+)
+@pytest.mark.parametrize(
+    ("pinned_provider", "step_provider"),
+    [("anthropic", "offline"), ("offline", None)],
+    ids=["hosted-pin-on-an-offline-step", "offline-pin-beside-a-hosted-model"],
+)
+async def test_a_model_profile_id_beside_a_model_of_another_provider_fails(
+    client,
+    app,
+    tmp_path,
+    hosted_calls,
+    usable_providers,
+    agent_step_type,
+    pinned_provider,
+    step_provider,
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    profile_id = _seed_model_profile(
+        app.state.engine, workspace_id, provider_type=pinned_provider, model="team"
+    )
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        _model_beside_profile_id(
+            agent_step_type, "claude-sonnet-4-20250514", profile_id, step_provider
+        ),
+        agent_step_type,
+    )
+
+    assert resp.status_code == 400, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "MODEL_UNRESOLVED"
+    assert error["details"] == {
+        "step_id": "agent_label",
+        "model": profile_id,
+        "provider_type": step_provider,
+        "usable_providers": usable_providers,
+    }
+    assert _execution_count(app.state.engine, workspace_id) == 0
+    assert _agent_run_profiles(app.state.engine, workspace_id) == []
+    assert hosted_calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "agent_step_type", ["agent_run", "agent_labeling", "agent_compare"]
+)
+@pytest.mark.parametrize(
+    ("pinned_provider", "step_provider"),
+    [("offline", "offline"), ("anthropic", None)],
+    ids=["offline", "hosted"],
+)
+async def test_a_model_profile_id_beside_a_model_of_its_provider_runs(
+    client, app, tmp_path, hosted_calls, agent_step_type, pinned_provider, step_provider
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    profile_id = _seed_model_profile(
+        app.state.engine, workspace_id, provider_type=pinned_provider, model="team"
+    )
+    model = "claude-sonnet-4-20250514"
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        _model_beside_profile_id(agent_step_type, model, profile_id, step_provider),
+        agent_step_type,
+    )
+
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["error_summary"] is None
+    run_count = 2 if agent_step_type == "agent_compare" else 1
+    assert [
+        provider
+        for _id, provider, _wid in _agent_run_profiles(app.state.engine, workspace_id)
+    ] == [pinned_provider] * run_count
+    expected_calls = [] if pinned_provider == "offline" else [(pinned_provider, model)]
+    assert hosted_calls == expected_calls * 3 * run_count
+
+
 @pytest.mark.asyncio
 async def test_execute_workflow_reaches_review_queue(client, app, tmp_path):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
