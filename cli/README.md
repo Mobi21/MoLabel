@@ -72,6 +72,42 @@ because JSON is the default.
 that answers `{}`, a backend that fails, and an unreachable backend, and checks
 this contract for each.
 
+## Labeling without an API key
+
+The offline provider labels records with keyword heuristics instead of a
+model. It needs no LLM key, no network, and no model download, so the whole
+flow of import, pre-label, review, and export runs on any machine. Pick it
+when you create a workflow from a template:
+
+```bash
+molabel workflow create --template quick_agentic_label --provider offline
+```
+
+This writes `model: offline-heuristic` and `provider_type: offline` into every
+`agent_run` step. In a workflow file you write yourself, set either key on the
+step. A model profile with `provider_type: offline` also works.
+`--model <id>` replaces the template's model with a different one instead.
+
+For a field with options, the provider picks the first option, in schema
+order, that the record text contains as a whole word or phrase, ignoring case.
+When no option matches, it picks the first option. A multi-select field gets
+every matching option. A boolean field is true when the text contains the
+field name. Any other field gets the simplest valid value of its type. The
+same record and schema always give the same labels.
+
+Offline proposals are marked so that reviewers and routing can tell them from
+a model's. The agent run's adapter is `builtin.offline`, each output's
+`raw_response.strategy` is `offline-heuristic`, its `composite_confidence` is
+0, and the run costs nothing.
+
+MoLabel does not switch to the offline provider on its own. Without a key, a
+workflow that names a hosted model fails with `WORKFLOW_RUN_FAILED`, and the
+message names the unset key variable and the `--provider offline` flag.
+
+`molabel doctor` lists the providers the backend can use under `providers`.
+`scripts/smoke_no_key.py` runs the full flow with no key against a real
+backend, and CI runs it in the `smoke-no-key` job.
+
 ## Development
 
 ```bash
