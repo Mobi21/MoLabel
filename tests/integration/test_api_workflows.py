@@ -2183,7 +2183,7 @@ async def test_an_accept_with_no_labels_and_no_proposal_shown_gives_no_value(
 
 
 @pytest.mark.asyncio
-async def test_advance_says_an_overlap_queue_needs_more_reviewers(
+async def test_an_overlap_queue_needs_as_many_reviewers_as_copies(
     client, app, tmp_path
 ):
     _, tokens, queue_id, advance_path = await _start_three_record_review(
@@ -2191,23 +2191,27 @@ async def test_advance_says_an_overlap_queue_needs_more_reviewers(
         app,
         tmp_path,
         policy="show_agent_outputs",
-        reviewers=2,
+        reviewers=3,
         overlap_count=3,
         after_review=[],
     )
-    for token in tokens:
+    headers = {"Cookie": f"molabel_session={tokens[0]}"}
+    for token in tokens[:2]:
         while (task := await _claim(client, queue_id, token)) is not None:
             await _accept(client, task, token, {"sentiment": "neutral"})
 
-    advanced = await client.post(
-        advance_path, headers={"Cookie": f"molabel_session={tokens[0]}"}
-    )
+    refused = await client.post(advance_path, headers=headers)
 
-    assert advanced.status_code == 409
+    assert refused.status_code == 409
     assert (
         "3 copies need 3 distinct reviewers; 2 have submitted"
-        in (advanced.json()["error"]["message"])
+        in (refused.json()["error"]["message"])
     )
+
+    while (task := await _claim(client, queue_id, tokens[2])) is not None:
+        await _accept(client, task, tokens[2], {"sentiment": "neutral"})
+
+    assert (await client.post(advance_path, headers=headers)).status_code == 200
 
 
 @pytest.mark.asyncio

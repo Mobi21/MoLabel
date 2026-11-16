@@ -163,6 +163,11 @@ records in. `molabel.core.quality.review_agreement` builds them.
   summary pairs them with the reviewers' values.
 - Only events on tasks in the workflow's review queues count.
 
+The human-agent summary pairs every reviewer's value for a record with every
+run's output for it, including runs the reviewer never saw. The reviewer's
+value is the labels they submitted, so it is the reference for each run. A
+blind reviewer saw no run, and their value still measures every run.
+
 A reviewer can leave several events on one record. One of them counts.
 
 - A correction supersedes the event before it, so the head of the correction
@@ -171,21 +176,39 @@ A reviewer can leave several events on one record. One of them counts.
   different queues, such as a loop pass that reviews the record again. The
   latest head counts.
 
-The counted event's decision, after `canonical_review_decision` maps a legacy
-name such as `accept_ai` or `correct`, gives the reviewer's value.
+The counted event's labels are the reviewer's value. Submit and correct store
+them when the reviewer acts, and agreement reads them as stored. The event's
+decision, after `canonical_review_decision` maps a legacy name such as
+`accept_ai` or `correct`, says whether they count.
 
 | Decision | Value |
 | --- | --- |
-| `accept` | The labels of the proposal the task showed. A task with no proposal has none to take, so the labels the reviewer sent count. |
-| `edit` | The labels the reviewer submitted. |
-| no decision | The labels the reviewer submitted. |
+| `accept` | The labels the reviewer sent. An accept with no labels stores the labels of the proposal the reviewer was shown. With no proposal shown, it stores none and gives no value. |
+| `edit` | The labels the reviewer sent. |
+| no decision | The labels the reviewer sent. |
 | `reject` | No value. Rejecting a proposal does not say which label is right. |
 | `skip` | No value. |
+
+An event that stores no labels gives no value, whatever its decision.
+
+Each claim and reveal records the agent output it returns, or none, as the
+task's `shown_agent_output_id`. Under `hide_agent_outputs_by_default` a claim
+shows no output until the reviewer reveals one, and under `no_agent` no output
+is ever shown. The output shown is the newest one for the record and task
+schema, so it can come from a later run than the one the queue was built from.
+Submit and correct copy the id to the event's `agent_output_id`, and agreement
+never looks the proposal up again.
 
 Two reviewers see the same record only when the queue holds two tasks for it.
 A `human_review` step with `overlap_count: 2` creates two tasks per record, and
 the queue never hands one reviewer both. The step resumes once every task is
 submitted, so each record then has two reviewers.
+
+A step with `overlap_count: N` needs N distinct reviewers. With fewer, each
+reviewer submits one copy of every record, the queue then looks empty to all of
+them, and the remaining copies stay `available`. The step cannot resume, and
+advancing it returns 409 with a message such as "3 copies need 3 distinct
+reviewers; 2 have submitted". A new reviewer can claim the remaining copies.
 
 ## Workflow outputs
 

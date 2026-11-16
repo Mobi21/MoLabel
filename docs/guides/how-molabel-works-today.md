@@ -293,8 +293,9 @@ Review happens through queues. A reviewer typically:
 
 The decision is one of:
 
-- `accept`: keep the proposed labels. With no labels in the request, the
-  agent's proposal is stored.
+- `accept`: keep the proposed labels. With no labels in the request, MoLabel
+  stores the labels of the proposal that the claim or reveal showed. With no
+  proposal shown, it stores no labels.
 - `edit`: submit changed labels.
 - `reject`: reject the proposal.
 
