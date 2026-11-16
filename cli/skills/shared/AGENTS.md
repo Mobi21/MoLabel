@@ -3,7 +3,7 @@
 - MoLabel is agent-first and CLI-primary.
 - Agents should operate through `molabel` and the installed MoLabel skill only.
 - Assume raw backend APIs are unavailable and out of contract for operator work.
-- Prefer `--json` for machine use and NDJSON-style streams for long-running operations.
+- Every command prints one JSON document and exits 0 or 1. On exit 1, read `error.code` from the error envelope described in the CLI README.
 - Use `molabel manifest --json` before assuming command behavior.
 - Use `molabel workspace detect` before mutating local canonical artifacts.
 - Treat the GUI as the inspection and manual-review layer, not the primary automation surface.
