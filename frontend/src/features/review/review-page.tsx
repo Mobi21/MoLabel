@@ -7,7 +7,10 @@ import {
   submitCorrectionEndpointMutation,
   submitReviewEndpointMutation,
 } from '@/api/generated/@tanstack/react-query.gen'
-import type { ReviewItemResponse } from '@/api/generated/types.gen'
+import type {
+  ReviewDecision,
+  ReviewItemResponse,
+} from '@/api/generated/types.gen'
 import { errorMessage } from '@/api/client'
 import { taskSchemaQuery } from '@/api/queries'
 import { KeyLegend } from '@/components/key-legend'
@@ -83,7 +86,8 @@ export function ReviewPage() {
   } else {
     body = (
       <ReviewItem
-        key={item.id}
+        // A new counted review on the server starts the form over from it.
+        key={`${item.id} ${item.review?.review_event_id ?? ''}`}
         item={item}
         fields={fields}
         instructions={schema.data.instructions ?? null}
@@ -198,6 +202,14 @@ function QueueDone({
   )
 }
 
+function reviewDecision(
+  decision: string | null | undefined,
+): ReviewDecision | null {
+  return decision === 'accept' || decision === 'edit' || decision === 'reject'
+    ? decision
+    : null
+}
+
 const DECISION_STYLES = {
   accept: 'border-go/40 bg-go-soft text-go',
   edit: 'border-signal/40 bg-signal-soft text-signal',
@@ -291,7 +303,18 @@ function ReviewItem({
   })
   const correct = useMutation({
     ...submitCorrectionEndpointMutation(),
-    onSuccess: () => {
+    onSuccess: ({ event }) => {
+      queryClient.setQueryData(reviewTaskKey(item.id), {
+        ...item,
+        review: {
+          review_event_id: event.id,
+          decision: event.decision ?? null,
+          labels: event.labels,
+          rationale: event.rationale ?? null,
+          ai_was_revealed: event.ai_was_revealed ?? false,
+          created_at: event.created_at,
+        },
+      })
       void queryClient.invalidateQueries({ queryKey: reviewTaskKey(item.id) })
       session.refreshTrail()
       session.goNext()
@@ -308,6 +331,23 @@ function ReviewItem({
   function save(decision: 'reject' | null = null) {
     if (busy || isSkipped) return
     const rationaleText = rationale.trim() === '' ? null : rationale.trim()
+    if (!isHead && decision === null && corrections.length === 0) {
+      const review = item.review
+      if (!review || rationaleText === (review.rationale ?? null)) {
+        session.goNext()
+        return
+      }
+      // Only the note changed, so the stored decision and labels stand.
+      correct.mutate({
+        path: { task_id: item.id },
+        body: {
+          decision: reviewDecision(review.decision),
+          labels: review.labels,
+          rationale: rationaleText,
+        },
+      })
+      return
+    }
     const invalid = invalidFields(fields, form)
     if (invalid.length > 0) {
       setActive(fields.findIndex((f) => f.name === invalid[0]))
@@ -324,10 +364,6 @@ function ReviewItem({
         ? { decision, labels: rawLabels(form) }
         : { decision: outcome.decision, labels: outcome.labels }
     if (!isHead) {
-      if (corrections.length === 0 && decision === null) {
-        session.goNext()
-        return
-      }
       correct.mutate({
         path: { task_id: item.id },
         body: { ...body, rationale: rationaleText },

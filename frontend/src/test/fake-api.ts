@@ -18,7 +18,8 @@ type Route = [method: string, path: RegExp, reply: (call: Call) => unknown]
 
 /**
  * Point the generated client at canned replies for one test, and record
- * every request it sends. An unrouted request fails the test loudly.
+ * every request it sends. A reply may be a promise, to hold a response back.
+ * An unrouted request fails the test loudly.
  */
 export function fakeApi(routes: Route[]) {
   const calls: Call[] = []
@@ -40,7 +41,7 @@ export function fakeApi(routes: Route[]) {
       if (!route) {
         throw new Error(`no fake route for ${call.method} ${call.path}`)
       }
-      const result = route[2](call)
+      const result = await route[2](call)
       const reply = result instanceof Reply ? result : new Reply(200, result)
       return new Response(JSON.stringify(reply.body), {
         status: reply.status,

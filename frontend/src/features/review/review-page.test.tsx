@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { meQuery } from '@/api/queries'
@@ -144,6 +150,128 @@ function serve(policy: string, fixture = TRIAGE) {
   ])
 }
 
+interface StoredReview {
+  review_event_id: string
+  decision: string | null
+  labels: Record<string, unknown>
+  rationale: string | null
+  ai_was_revealed: boolean
+  created_at: string
+}
+
+/**
+ * A reviewer who submitted ticket-0 and holds ticket-1. The server stores
+ * each correction of ticket-0 as its new counted review, and holds back
+ * every later read of ticket-0 until the test calls ``release``.
+ */
+function serveTrail(
+  first: Omit<StoredReview, 'created_at' | 'ai_was_revealed'>,
+) {
+  let review: StoredReview = {
+    ...first,
+    ai_was_revealed: false,
+    created_at: '2026-11-16T00:00:00Z',
+  }
+  let held: Promise<void> | null = null
+  let release = () => {}
+  const submittedTask = () => ({
+    ...task('show_agent_outputs', true),
+    id: 't0',
+    record_id: 'rec0',
+    record_external_id: 'ticket-0',
+    status: 'submitted',
+    review,
+  })
+  const calls = fakeApi([
+    ['GET', /^\/api\/v1\/queues$/, () => ({ items: [] })],
+    [
+      'GET',
+      /\/my-tasks$/,
+      () => ({
+        queue_id: 'q1',
+        items: [
+          {
+            task_id: 't0',
+            record_id: 'rec0',
+            record_external_id: 'ticket-0',
+            status: 'submitted',
+            decision: review.decision,
+          },
+          {
+            task_id: 't1',
+            record_id: 'rec1',
+            record_external_id: 'ticket-1',
+            status: 'claimed',
+          },
+        ],
+      }),
+    ],
+    ['GET', /\/task-schemas\/s1$/, () => SCHEMA],
+    ['GET', /\/review-tasks\/t1$/, () => task('show_agent_outputs', true)],
+    [
+      'GET',
+      /\/review-tasks\/t0$/,
+      async () => {
+        await held
+        return submittedTask()
+      },
+    ],
+    [
+      'POST',
+      /\/review-tasks\/t0\/correct$/,
+      (call) => {
+        const body = call.body as Pick<
+          StoredReview,
+          'decision' | 'labels' | 'rationale'
+        >
+        review = {
+          ...review,
+          ...body,
+          review_event_id: `${review.review_event_id}+`,
+        }
+        held = new Promise((done) => {
+          release = done
+        })
+        return {
+          event: {
+            ...review,
+            id: review.review_event_id,
+            review_task_id: 't0',
+            record_id: 'rec0',
+            task_schema_id: 's1',
+            task_schema_version: 1,
+            reviewer_id: 'r1',
+            source: 'human',
+            supersedes_event_id: first.review_event_id,
+            workspace_id: 'w1',
+          },
+        }
+      },
+    ],
+  ])
+  return {
+    calls,
+    release: () => {
+      release()
+    },
+    /** Another session corrects ticket-0. */
+    correctElsewhere: (labels: Record<string, unknown>) => {
+      review = { ...review, labels, review_event_id: 'elsewhere' }
+    },
+  }
+}
+
+function corrections(calls: Call[]) {
+  return calls.filter((c) => c.path.endsWith('/correct'))
+}
+
+function intentButton(name: string) {
+  return within(screen.getByRole('group', { name: 'intent' })).getByRole(
+    'button',
+    { name },
+  )
+}
+
 function renderReview() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -168,6 +296,7 @@ function renderReview() {
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return queryClient
 }
 
 function press(key: string, init: KeyboardEventInit = {}) {
@@ -286,6 +415,82 @@ describe('ReviewPage', () => {
         intent: 'refund',
         entities: [{ text: 'Ada', type: 'PERSON' }],
       },
+    })
+  })
+
+  it('shows a correction on return, and never sends the labels it replaced', async () => {
+    const { calls, release } = serveTrail({
+      review_event_id: 'e0',
+      decision: 'edit',
+      labels: { intent: 'bug', urgent: false },
+      rationale: null,
+    })
+    renderReview()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+
+    press('k')
+    await screen.findByRole('heading', { name: 'ticket-0' })
+    expect(intentButton('bug')).toHaveAttribute('aria-pressed', 'true')
+    press('3')
+    press('Enter', { ctrlKey: true })
+    await screen.findByRole('heading', { name: 'ticket-1' })
+    expect(corrections(calls)[0]?.body).toMatchObject({
+      labels: { intent: 'shipping' },
+    })
+
+    press('k')
+    await screen.findByRole('heading', { name: 'ticket-0' })
+    expect(intentButton('shipping')).toHaveAttribute('aria-pressed', 'true')
+    press('Enter', { ctrlKey: true })
+    await screen.findByRole('heading', { name: 'ticket-1' })
+    expect(corrections(calls)).toHaveLength(1)
+    release()
+  })
+
+  it('saves a correction that changes only the note, keeping the decision', async () => {
+    const { calls } = serveTrail({
+      review_event_id: 'e0',
+      decision: 'reject',
+      labels: { intent: 'bug', urgent: false },
+      rationale: null,
+    })
+    renderReview()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+    press('k')
+    await screen.findByRole('heading', { name: 'ticket-0' })
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Note/ }), {
+      target: { value: 'Not a bug report; the order never shipped.' },
+    })
+    press('Enter', { ctrlKey: true })
+
+    await waitFor(() => {
+      expect(corrections(calls)).toHaveLength(1)
+    })
+    expect(corrections(calls)[0]?.body).toEqual({
+      decision: 'reject',
+      labels: { intent: 'bug', urgent: false },
+      rationale: 'Not a bug report; the order never shipped.',
+    })
+  })
+
+  it('starts the form over when the review on the server changes under it', async () => {
+    const { correctElsewhere } = serveTrail({
+      review_event_id: 'e0',
+      decision: 'edit',
+      labels: { intent: 'bug', urgent: false },
+      rationale: null,
+    })
+    const queryClient = renderReview()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+    press('k')
+    await screen.findByRole('heading', { name: 'ticket-0' })
+
+    correctElsewhere({ intent: 'other', urgent: false })
+    await queryClient.invalidateQueries()
+
+    await waitFor(() => {
+      expect(intentButton('other')).toHaveAttribute('aria-pressed', 'true')
     })
   })
 })
