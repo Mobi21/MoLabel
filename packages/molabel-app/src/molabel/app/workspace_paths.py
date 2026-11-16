@@ -86,10 +86,17 @@ def resolve_in_workspace(root: Path, raw: str) -> Path:
 
 
 def glob_in_workspace(root: Path, base: Path, pattern: str) -> list[Path]:
-    """Resolved matches of *pattern* under *base*, refusing any outside *root*."""
+    """Matches of *pattern* under *base*, refusing any that resolve outside *root*.
+
+    Each match keeps the path it was found at under *base*, so a caller can
+    take it relative to *base* even when a link inside *root* leads to it.
+    """
     if not base.is_dir():
         return []
-    return [resolve_in_workspace(root, str(hit)) for hit in sorted(base.glob(pattern))]
+    hits = sorted(base.glob(pattern))
+    for hit in hits:
+        resolve_in_workspace(root, str(hit))
+    return hits
 
 
 def registered_root(conn, workspace_id: str) -> Path | None:

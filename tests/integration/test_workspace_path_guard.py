@@ -444,12 +444,7 @@ async def test_release_gate_reads_no_benchmark_summary_through_a_link(
     assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
 
 
-@pytest.mark.asyncio
-async def test_benchmark_run_facts_list_no_files_through_a_link(client, app, layout):
-    _link_folder(
-        layout["workspace"] / "workbench" / "benchmarks" / "runs" / "live-operator",
-        layout["outside"],
-    )
+def _completed_execution(app) -> str:
     execution_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     with app.state.engine.begin() as conn:
@@ -467,11 +462,43 @@ async def test_benchmark_run_facts_list_no_files_through_a_link(client, app, lay
                 "now": now,
             },
         )
+    return execution_id
+
+
+@pytest.mark.asyncio
+async def test_benchmark_run_facts_list_no_files_through_a_link(client, app, layout):
+    _link_folder(
+        layout["workspace"] / "workbench" / "benchmarks" / "runs" / "live-operator",
+        layout["outside"],
+    )
+    execution_id = _completed_execution(app)
 
     resp = await client.get(f"/api/v1/cli/benchmark-run-facts/{execution_id}")
 
     assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
     assert "secret.jsonl" not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_benchmark_run_facts_list_files_through_a_link_inside_the_workspace(
+    client, app, layout
+):
+    reports = layout["workspace"] / "data" / "shared-reports"
+    reports.mkdir()
+    (reports / "report.md").write_text("inside", encoding="utf-8")
+    run = layout["workspace"] / "workbench" / "benchmarks" / "runs" / "live-operator"
+    run.mkdir(parents=True)
+    (run / "summary.json").write_text("{}", encoding="utf-8")
+    _link_folder(run / "reports", reports)
+    execution_id = _completed_execution(app)
+
+    resp = await client.get(f"/api/v1/cli/benchmark-run-facts/{execution_id}")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["artifact_files"] == [
+        str(Path("reports", "report.md")),
+        "summary.json",
+    ]
 
 
 @pytest.mark.asyncio
