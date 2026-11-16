@@ -1,0 +1,131 @@
+import { queryOptions } from '@tanstack/react-query'
+import {
+  getAgreementMetricsQueryKey,
+  getMeQueryKey,
+  getQueueDisagreementQueryKey,
+  getReviewTaskEndpointQueryKey,
+  getTaskSchemaQueryKey,
+  listMyQueueTasksEndpointQueryKey,
+  listQueueDisagreementsQueryKey,
+  listQueuesEndpointQueryKey,
+  listReviewerProfilesQueryKey,
+  listWorkspacesQueryKey,
+} from '@/api/generated/@tanstack/react-query.gen'
+import {
+  getAgreementMetrics,
+  getMe,
+  getQueueDisagreement,
+  getReviewTaskEndpoint,
+  getTaskSchema,
+  listMyQueueTasksEndpoint,
+  listQueueDisagreements,
+  listQueuesEndpoint,
+  listReviewerProfiles,
+  listWorkspaces,
+} from '@/api/generated/sdk.gen'
+
+/*
+ * Query options over the generated SDK, keyed by the generated query keys.
+ * The TanStack plugin's own option factories are declared without
+ * exactOptionalPropertyTypes, so their types do not fit useQuery under this
+ * app's flags. Its mutation factories and keys do, and are used as is.
+ */
+
+export const meQuery = () =>
+  queryOptions({
+    queryKey: getMeQueryKey(),
+    queryFn: async ({ signal }) =>
+      (await getMe({ signal, throwOnError: true })).data,
+    staleTime: Infinity,
+  })
+
+export const reviewerProfilesQuery = () =>
+  queryOptions({
+    queryKey: listReviewerProfilesQueryKey(),
+    queryFn: async ({ signal }) =>
+      (await listReviewerProfiles({ signal, throwOnError: true })).data,
+  })
+
+export const workspacesQuery = () => {
+  const options = { query: { limit: 200 } }
+  return queryOptions({
+    queryKey: listWorkspacesQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await listWorkspaces({ ...options, signal, throwOnError: true })).data,
+  })
+}
+
+export const queuesQuery = (workspaceId: string) => {
+  const options = { query: { workspace_id: workspaceId } }
+  return queryOptions({
+    queryKey: listQueuesEndpointQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await listQueuesEndpoint({ ...options, signal, throwOnError: true }))
+        .data,
+  })
+}
+
+export const myTasksQuery = (queueId: string) => {
+  const options = { path: { queue_id: queueId } }
+  return queryOptions({
+    queryKey: listMyQueueTasksEndpointQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (
+        await listMyQueueTasksEndpoint({
+          ...options,
+          signal,
+          throwOnError: true,
+        })
+      ).data,
+  })
+}
+
+export const reviewTaskQuery = (taskId: string) => {
+  const options = { path: { task_id: taskId } }
+  return queryOptions({
+    queryKey: getReviewTaskEndpointQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await getReviewTaskEndpoint({ ...options, signal, throwOnError: true }))
+        .data,
+  })
+}
+
+export const taskSchemaQuery = (taskSchemaId: string) => {
+  const options = { path: { task_schema_id: taskSchemaId } }
+  return queryOptions({
+    queryKey: getTaskSchemaQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await getTaskSchema({ ...options, signal, throwOnError: true })).data,
+    staleTime: Infinity,
+  })
+}
+
+export const disagreementsQuery = (queueId: string) => {
+  const options = { path: { queue_id: queueId } }
+  return queryOptions({
+    queryKey: listQueueDisagreementsQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await listQueueDisagreements({ ...options, signal, throwOnError: true }))
+        .data,
+  })
+}
+
+export const disagreementQuery = (queueId: string, recordId: string) => {
+  const options = { path: { queue_id: queueId, record_id: recordId } }
+  return queryOptions({
+    queryKey: getQueueDisagreementQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await getQueueDisagreement({ ...options, signal, throwOnError: true }))
+        .data,
+  })
+}
+
+export const agreementQuery = (workspaceId: string, queueId: string) => {
+  const options = { query: { workspace_id: workspaceId, queue_id: queueId } }
+  return queryOptions({
+    queryKey: getAgreementMetricsQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await getAgreementMetrics({ ...options, signal, throwOnError: true }))
+        .data,
+  })
+}

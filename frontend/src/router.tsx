@@ -1,12 +1,15 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { QueueListPage } from '@/features/queues/queue-list-page'
+import { RequireSession } from '@/features/session/require-session'
+import { SignInPage } from '@/features/session/sign-in-page'
 
 export const router = createBrowserRouter([
+  { path: '/sign-in', element: <SignInPage /> },
   {
-    path: '*',
-    element: (
-      <main className="p-6">
-        <h1 className="text-lg font-semibold">MoLabel</h1>
-      </main>
-    ),
+    element: <RequireSession />,
+    children: [
+      { path: '/', element: <QueueListPage /> },
+      { path: '*', element: <Navigate to="/" replace /> },
+    ],
   },
 ])
