@@ -139,6 +139,9 @@ two disagree:
   Create never overwrites: if a file already sits at the target path, it is
   left as it is and the request registers it. That is what
   `molabel task-schema create --file workbench/config/task-schemas/x.yaml` does.
+- A write keeps what a person put in the file. Comments, key order, quoting
+  and indentation survive for every key the write keeps, in the config file
+  and in the manifest.
 - Every writer of a workspace takes turns, whatever its data directory. Each
   write holds an OS-level lock on `.molabel/locks/workspace.lock` inside the
   workspace. `.molabel/` holds a `.gitignore` of `*`, so it never shows in

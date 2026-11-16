@@ -230,6 +230,93 @@ async def test_create_registers_an_existing_file_without_rewriting_it(
     ]
 
 
+HAND_WRITTEN_SCHEMA = """\
+# Sentiment schema, reviewed by the labeling lead.
+title: Sentiment
+task_type: text_classification  # set once, never changes
+task_schema_slug: sentiment
+
+# One categorical field.
+label_fields:
+  - name: sentiment
+    field_type: categorical
+    required: true
+    options:
+      - "yes"
+      - "no"
+    description: ""
+required_fields: []
+optional_fields: []
+blind_review_policy: hide_agent_outputs_by_default
+supported_agent_roles: []
+"""
+
+HAND_WRITTEN_MANIFEST = """\
+# Workspace manifest, edited by hand.
+workspace_name: Reviews
+workspace_id: {workspace_id}  # do not change
+core_version: "0.1.0"
+enabled_plugins: []
+
+# Datasets are imported with the CLI.
+datasets: []
+task_schemas: []
+prompts: []
+workflows: []
+export_targets: []
+validation_gates: []
+"""
+
+
+def _comments(text: str) -> list[str]:
+    return [line.partition("#")[2] for line in text.splitlines() if "#" in line]
+
+
+@pytest.mark.asyncio
+async def test_config_writes_keep_hand_written_comments_and_key_order(
+    client, workspace
+):
+    manifest_file = workspace / "workbench.project.yaml"
+    manifest_text = HAND_WRITTEN_MANIFEST.format(workspace_id=client.workspace_id)
+    manifest_file.write_text(manifest_text, encoding="utf-8")
+    schema_file = workspace / "workbench/config/task-schemas/sentiment.yaml"
+    schema_file.parent.mkdir(parents=True)
+    schema_file.write_text(HAND_WRITTEN_SCHEMA, encoding="utf-8")
+    manifest_keys = list(_yaml(manifest_file))
+
+    schema = await _create(
+        client,
+        "/api/v1/task-schemas",
+        {
+            **yaml.safe_load(HAND_WRITTEN_SCHEMA),
+            "file_path": schema_file.relative_to(workspace).as_posix(),
+        },
+    )
+
+    created = manifest_file.read_text(encoding="utf-8")
+    assert _comments(created) == _comments(manifest_text)
+    assert list(_yaml(manifest_file)) == manifest_keys
+    assert _yaml(manifest_file)["task_schemas"] == [
+        {
+            "task_schema_id": "sentiment",
+            "task_type_plugin": None,
+            "definition_path": "workbench/config/task-schemas/sentiment.yaml",
+        }
+    ]
+
+    resp = await client.put(
+        f"/api/v1/task-schemas/{schema['task_schema_id']}",
+        json={"title": "Review sentiment"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert schema_file.read_text(encoding="utf-8") == HAND_WRITTEN_SCHEMA.replace(
+        "title: Sentiment\n", "title: Review sentiment\n"
+    )
+    assert _yaml(schema_file)["label_fields"][0]["options"] == ["yes", "no"]
+    assert manifest_file.read_text(encoding="utf-8") == created
+
+
 @pytest.mark.asyncio
 async def test_config_for_a_workspace_without_a_folder_is_refused(
     client, tmp_path: Path
