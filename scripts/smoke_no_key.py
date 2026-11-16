@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -113,7 +114,7 @@ class Cli:
         self._cwd = cwd
 
     def __call__(self, *args: str, expect_exit: int = 0) -> Any:
-        print(f"$ molabel {' '.join(args)}")
+        print(f"$ molabel {shlex.join(args)}")
         result = subprocess.run(
             ["node", str(CLI), *args],
             cwd=self._cwd,
