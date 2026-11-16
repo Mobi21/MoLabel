@@ -297,11 +297,10 @@ function Resolver({
       setProblem(errorMessage(error))
       if (errorCode(error) === 'CONFLICT') {
         onConflict()
-        void queryClient.invalidateQueries({
-          queryKey: disagreementQuery(queueId, detail.record_id).queryKey,
-        })
-        void queryClient.invalidateQueries({
-          queryKey: disagreementsQuery(queueId).queryKey,
+        invalidateQueueOutcomes(queryClient, {
+          workspaceId: reviewer.workspace_id,
+          queueId,
+          recordId: detail.record_id,
         })
       }
     },
