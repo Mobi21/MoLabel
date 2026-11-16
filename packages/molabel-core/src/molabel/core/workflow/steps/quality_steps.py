@@ -75,7 +75,8 @@ class QualityCheckExecutor(StepExecutor):
                     config=config,
                     metrics=context.metrics,
                 )
-                current_agreement = result.get("agreement", current_agreement)
+                if not field_alphas:
+                    current_agreement = result.get("agreement", current_agreement)
                 current_coverage = result.get("coverage", current_coverage)
                 current_confidence = result.get("confidence", current_confidence)
             except Exception as e:

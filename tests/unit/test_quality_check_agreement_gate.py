@@ -31,8 +31,18 @@ def _records(units: list[dict[str, tuple[str, ...]]]) -> list[dict[str, Any]]:
     ]
 
 
+class _ReportingChecker:
+    def __init__(self, agreement: float) -> None:
+        self.agreement = agreement
+
+    def check(self, **_: Any) -> dict[str, float]:
+        return {"agreement": self.agreement}
+
+
 def _run_gate(
-    records: list[dict[str, Any]], min_agreement: float
+    records: list[dict[str, Any]],
+    min_agreement: float,
+    services: dict[str, Any] | None = None,
 ) -> tuple[WorkflowContext, dict[str, Any]]:
     ctx = WorkflowContext(
         workspace_id="ws-1", workflow_execution_id="exec-1", workflow_version=1
@@ -44,7 +54,7 @@ def _run_gate(
     )
     assert analysis.success
     check = QualityCheckExecutor().execute(
-        "quality", {"min_agreement": min_agreement}, ctx
+        "quality", {"min_agreement": min_agreement}, ctx, services
     )
     assert check.success
     assert check.output is not None
@@ -106,3 +116,37 @@ def test_min_agreement_fails_on_a_field_whose_alpha_is_null() -> None:
     assert ctx.metrics["agreement.krippendorff_alpha"] == pytest.approx(1.0)
     assert ctx.variables["quality.passed"] is False
     assert detail["failing_fields"] == {"flag": None}
+
+
+PER_FIELD_SPLIT = [
+    {"sentiment": ("pos", "pos"), "topic": ("x", "x")},
+    {"sentiment": ("neg", "neg"), "topic": ("y", "x")},
+    {"sentiment": ("pos", "pos"), "topic": ("x", "y")},
+    {"sentiment": ("neg", "neg"), "topic": ("y", "y")},
+]
+
+
+@pytest.mark.parametrize("reported", [0.99, 0.1])
+def test_an_injected_checker_cannot_override_the_field_minimum(
+    reported: float,
+) -> None:
+    ctx, detail = _run_gate(
+        _records(PER_FIELD_SPLIT),
+        0.6,
+        {"quality_checker": _ReportingChecker(reported)},
+    )
+
+    assert detail["actual"] == pytest.approx(0.125)
+    assert ctx.metrics["quality.agreement"] == pytest.approx(0.125)
+    assert ctx.variables["quality.passed"] is False
+
+
+def test_an_injected_checker_cannot_fail_fields_that_all_agree() -> None:
+    units = [{"code": ("a", "a")}, {"code": ("b", "b")}]
+
+    ctx, detail = _run_gate(
+        _records(units), 0.6, {"quality_checker": _ReportingChecker(0.1)}
+    )
+
+    assert detail["actual"] == pytest.approx(1.0)
+    assert ctx.variables["quality.passed"] is True
