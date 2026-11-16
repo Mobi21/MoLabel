@@ -204,10 +204,7 @@ function Disagreement(props: DisagreementProps) {
     [schema.data],
   )
   const [reloaded, setReloaded] = useState(false)
-  if (
-    (detail.data === undefined && detail.isError) ||
-    (schema.data === undefined && schema.isError)
-  ) {
+  if (detail.isError || schema.isError) {
     return (
       <ReadFailed
         error={detail.error ?? schema.error}

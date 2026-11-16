@@ -185,6 +185,47 @@ describe('AdjudicationPage', () => {
     })
   })
 
+  it('shows a failed reload after a conflict with a retry, and recovers', async () => {
+    let current: typeof READ | Reply = READ
+    fakeApi([
+      ['GET', /^\/api\/v1\/queues$/, () => ({ items: [] })],
+      ['GET', /\/task-schemas\/s1$/, () => SCHEMA],
+      [
+        'GET',
+        /\/disagreements$/,
+        () => ({ queue_id: 'q1', items: [SUMMARY], total: 1, unresolved: 1 }),
+      ],
+      ['GET', /\/disagreements\/rec1$/, () => current],
+      [
+        'POST',
+        /\/resolve$/,
+        () => {
+          current = new Reply(500, { error: { message: 'database is locked' } })
+          return new Reply(409, {
+            error: {
+              code: 'CONFLICT',
+              message: 'This disagreement changed since it was read; reload it',
+            },
+          })
+        },
+      ],
+    ])
+    renderAdjudication()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+
+    press('b')
+    press('Enter', { ctrlKey: true })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'database is locked',
+    )
+    current = CHANGED
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    expect(await screen.findByRole('cell', { name: 'shipping' })).toBeVisible()
+    expect(screen.getByText(/changed since you opened it/)).toBeVisible()
+  })
+
   it('marks the queue agreement stale after a resolve', async () => {
     const calls = serve({ conflictOnce: false })
     const queryClient = renderAdjudication()
