@@ -68,59 +68,31 @@ async def test_list_review_events_with_filters(client):
 
 
 # ---------------------------------------------------------------------------
-# Adjudication endpoints (API-064 through API-066)
+# Adjudication endpoints
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_list_adjudication_queue_route_exists(client):
-    """API-064: GET /adjudication/queue route is reachable.
-
-    Note: queue.py already registers GET /adjudication/queue with auth.
-    When both routers are mounted, the queue.py version matches first
-    and returns 401 (no session). Once __init__.py is updated to wire
-    the adjudication router, the paginated version will be preferred
-    only if it's registered after queue.py or queue.py's route is
-    removed. Either way, the route is reachable.
-    """
+async def test_list_adjudication_queue_requires_auth(client):
+    """The in-memory adjudication queue requires a session cookie."""
     resp = await client.get("/api/v1/adjudication/queue")
-    # 200 (our new paginated endpoint) or 401 (queue.py's auth-protected version)
-    assert resp.status_code in (200, 401)
+    assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_list_adjudication_queue_with_filters(client):
-    """API-064: Adjudication queue accepts filter params.
-
-    Same routing note as above — both queue.py and adjudication.py
-    expose this path.
-    """
+async def test_get_queue_disagreement_requires_auth(client):
+    """A queue's disagreement detail requires a session cookie."""
     resp = await client.get(
-        "/api/v1/adjudication/queue",
-        params={
-            "task_schema_id": "ts-1",
-            "dataset_id": "ds-1",
-            "severity": "high",
-        },
+        "/api/v1/adjudication/queues/some-queue/disagreements/some-record"
     )
-    assert resp.status_code in (200, 401)
-
-
-@pytest.mark.asyncio
-async def test_get_adjudication_detail_not_found(client):
-    """API-065: Get non-existent adjudication returns 404."""
-    resp = await client.get("/api/v1/adjudication/nonexistent-id")
-    assert resp.status_code == 404
+    assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_resolve_adjudication_requires_auth(client):
-    """API-066: Resolve adjudication requires session cookie."""
+    """Resolving a queue's disagreement requires a session cookie."""
     resp = await client.post(
-        "/api/v1/adjudication/some-adj-id/resolve",
-        json={
-            "resolution_type": "majority_vote",
-            "reasoning": "Two reviewers agree.",
-        },
+        "/api/v1/adjudication/queues/some-queue/disagreements/some-record/resolve",
+        json={"resolved_labels": {"sentiment": "positive"}},
     )
     assert resp.status_code == 401

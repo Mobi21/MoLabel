@@ -130,7 +130,6 @@ async def test_adjudication_detect_build_resolve(
             # If no item with that ID, 404 is valid; otherwise 200
             assert resp.status_code in (200, 404), resp.text
 
-    # Extended adjudication router endpoints
     with checkpoint(ctx, "list_adjudication_queue_filtered"):
         resp = await client.get(
             f"{BASE}/adjudication/queue",
@@ -138,7 +137,7 @@ async def test_adjudication_detect_build_resolve(
         )
         assert resp.status_code == 200, resp.text
 
-    with checkpoint(ctx, "get_adjudication_detail_404"):
+    with checkpoint(ctx, "queue_disagreements_404"):
         fake_id = str(uuid.uuid4())
-        resp = await client.get(f"{BASE}/adjudication/{fake_id}")
+        resp = await client.get(f"{BASE}/adjudication/queues/{fake_id}/disagreements")
         assert resp.status_code == 404, resp.text
