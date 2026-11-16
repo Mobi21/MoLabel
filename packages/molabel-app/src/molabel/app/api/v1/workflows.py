@@ -21,7 +21,7 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
-from molabel.app.workspace_config import WORKFLOW, workspace_folder, write_config
+from molabel.app.workspace_config import WORKFLOW, workspace_files, workspace_folder
 from molabel.app.workspace_paths import resolve_in_workspace
 from molabel.core.agents.queue_binding import serialize_agent_output_ids
 from molabel.core.providers.model_defaults import (
@@ -2473,16 +2473,16 @@ async def create_workflow(
     workflow_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     slug = body.workflow_slug or body.name.lower().replace(" ", "-")
-    file_path = write_config(
-        folder,
-        WORKFLOW,
-        slug=slug,
-        document=_workflow_document(body.model_copy(update={"workflow_slug": slug})),
-        file_path=body.file_path,
-        overwrite=False,
-    )
-
-    with engine.connect() as conn:
+    with workspace_files(folder) as files, engine.connect() as conn:
+        file_path = files.write_config(
+            WORKFLOW,
+            slug=slug,
+            document=_workflow_document(
+                body.model_copy(update={"workflow_slug": slug})
+            ),
+            file_path=body.file_path,
+            overwrite=False,
+        )
         conn.execute(
             _WORKFLOW_INSERT_SQL,
             {
@@ -2499,6 +2499,8 @@ async def create_workflow(
             },
         )
         conn.commit()
+
+    with engine.connect() as conn:
         row = conn.execute(_WORKFLOW_DETAIL_SQL, {"id": workflow_id}).first()
 
     return _row_to_detail(row)
@@ -2524,7 +2526,7 @@ async def update_workflow(
             raise HTTPException(status_code=404, detail="Workflow not found")
     folder = workspace_folder(engine, str(existing[1]))
 
-    with engine.connect() as conn:
+    with workspace_files(folder) as files, engine.connect() as conn:
         updates: list[str] = ["updated_at = :now"]
         params: dict[str, Any] = {"id": str(workflow_id), "now": now}
 
@@ -2553,8 +2555,7 @@ async def update_workflow(
         detail = _row_to_detail(
             conn.execute(_WORKFLOW_DETAIL_SQL, {"id": str(workflow_id)}).first()
         )
-        file_path = write_config(
-            folder,
+        file_path = files.write_config(
             WORKFLOW,
             slug=detail.workflow_slug,
             document=_workflow_document(detail),

@@ -140,10 +140,16 @@ listed in `workbench.project.yaml`:
 The database row for each is an index of its file, and the file wins when the
 two disagree:
 
-- `POST` (create) and `PUT` (update) write the file in the same request, then
-  the row. Create never overwrites: if a file already sits at the target path,
-  it is left as it is and the request registers it. That is what
+- `POST` (create) and `PUT` (update) write the file, the manifest and the row
+  as one unit. If any of the three fails, the files get their old content back
+  and the row is not saved. A file or manifest that cannot be written, such as
+  one marked read-only, gets `409 WORKSPACE_FILE_NOT_WRITABLE` with its path.
+  Create never overwrites: if a file already sits at the target path, it is
+  left as it is and the request registers it. That is what
   `molabel task-schema create --file workbench/config/task-schemas/x.yaml` does.
+- Servers that share a workspace take turns. Each write holds an OS-level lock
+  on `.workbench.project.yaml.lock` beside the manifest, which is removed when
+  the write finishes.
 - An edit made to a file outside the API, by hand or with `molabel artifact
   write`, reaches the database at the next `molabel workspace bootstrap`. Bootstrap
   re-reads every file the manifest lists and rewrites its row. A listed file it

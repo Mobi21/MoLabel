@@ -103,19 +103,22 @@ def load_manifest(path: Path) -> WorkspaceManifest:
     return WorkspaceManifest.model_validate(data)
 
 
-def save_manifest(manifest: WorkspaceManifest, path: Path) -> None:
-    """Write a *WorkspaceManifest* to *path* as YAML.
+def dump_manifest(manifest: WorkspaceManifest) -> str:
+    """Render a *WorkspaceManifest* as YAML.
 
     Uses ``default_flow_style=False`` and ``sort_keys=False`` so the
     output matches the human-authored fixture style.
     """
-    data = manifest.model_dump(mode="json")
+    return yaml.dump(
+        manifest.model_dump(mode="json"), default_flow_style=False, sort_keys=False
+    )
+
+
+def save_manifest(manifest: WorkspaceManifest, path: Path) -> None:
+    """Write a *WorkspaceManifest* to *path* as YAML."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temp.write_text(
-        yaml.dump(data, default_flow_style=False, sort_keys=False),
-        encoding="utf-8",
-    )
+    temp.write_text(dump_manifest(manifest), encoding="utf-8")
     os.replace(temp, path)
 
 

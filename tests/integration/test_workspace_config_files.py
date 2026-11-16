@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
+import subprocess
+import sys
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 import yaml
+from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event
 from sqlalchemy.pool import StaticPool
 from sqlmodel import create_engine
 
@@ -64,6 +72,7 @@ async def client(workspace: Path):
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as c:
+        c.engine = engine
         c.workspace_id = await _bootstrap(c, workspace)
         yield c
 
@@ -235,3 +244,231 @@ async def test_config_for_a_workspace_without_a_folder_is_refused(
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "WORKSPACE_FOLDER_MISSING"
     assert not missing.exists()
+
+
+def _files(root: Path) -> dict[str, bytes]:
+    return {
+        p.relative_to(root).as_posix(): p.read_bytes()
+        for p in root.rglob("*")
+        if p.is_file()
+    }
+
+
+class CommitRefused(Exception):
+    """The database refused to commit."""
+
+
+@contextmanager
+def _commits_refused(engine):
+    def refuse(_conn) -> None:
+        raise CommitRefused
+
+    event.listen(engine, "commit", refuse)
+    try:
+        yield
+    finally:
+        event.remove(engine, "commit", refuse)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "change",
+    [
+        "update task schema",
+        "update workflow",
+        "create task schema",
+        "create workflow",
+        "create dataset",
+    ],
+)
+async def test_a_refused_commit_leaves_the_workspace_files_as_they_were(
+    client, workspace, change
+):
+    schema = await _create(client, "/api/v1/task-schemas", SCHEMA)
+    workflow = await _create(client, "/api/v1/workflows", WORKFLOW)
+    requests = {
+        "update task schema": (
+            "PUT",
+            f"/api/v1/task-schemas/{schema['task_schema_id']}",
+            {"title": "Never saved"},
+        ),
+        "update workflow": (
+            "PUT",
+            f"/api/v1/workflows/{workflow['workflow_id']}",
+            {"description": "Never saved"},
+        ),
+        "create task schema": (
+            "POST",
+            "/api/v1/task-schemas",
+            {
+                **SCHEMA,
+                "task_schema_slug": "unsaved",
+                "workspace_id": client.workspace_id,
+            },
+        ),
+        "create workflow": (
+            "POST",
+            "/api/v1/workflows",
+            {
+                **WORKFLOW,
+                "workflow_slug": "unsaved",
+                "workspace_id": client.workspace_id,
+            },
+        ),
+        "create dataset": (
+            "POST",
+            "/api/v1/datasets",
+            {
+                "dataset_name": "unsaved",
+                "source_type": "jsonl",
+                "workspace_id": client.workspace_id,
+            },
+        ),
+    }
+    method, route, body = requests[change]
+    before = _files(workspace)
+
+    with _commits_refused(client.engine), pytest.raises(CommitRefused):
+        await client.request(method, route, json=body)
+
+    assert _files(workspace) == before
+
+
+@pytest.mark.asyncio
+async def test_a_read_only_manifest_refuses_the_update_and_keeps_the_file(
+    client, workspace
+):
+    schema = await _create(client, "/api/v1/task-schemas", SCHEMA)
+    manifest = workspace / "workbench.project.yaml"
+    before = _files(workspace)
+    manifest.chmod(stat.S_IREAD)
+    try:
+        resp = await client.put(
+            f"/api/v1/task-schemas/{schema['task_schema_id']}",
+            json={"title": "Never saved"},
+        )
+    finally:
+        manifest.chmod(stat.S_IREAD | stat.S_IWRITE)
+
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["error"]["code"] == "WORKSPACE_FILE_NOT_WRITABLE"
+    assert resp.json()["error"]["details"]["path"] == "workbench.project.yaml"
+    assert _files(workspace) == before
+    after = await client.get(f"/api/v1/task-schemas/{schema['task_schema_id']}")
+    assert after.json()["title"] == SCHEMA["title"]
+
+
+_CREATE_SCHEMAS_WHEN_TOLD = """
+import sys, time, uuid
+from pathlib import Path
+from fastapi.testclient import TestClient
+from molabel.app.main import create_app
+from molabel.app.services.session import create_session_token
+
+workspace_id, reviewer_id, worker, count = sys.argv[1:5]
+ready, go = Path(sys.argv[5]), Path(sys.argv[6])
+app = create_app()
+with TestClient(app) as client:
+    client.cookies.set(
+        "molabel_session",
+        create_session_token(uuid.UUID(reviewer_id), app.state.app_secret),
+    )
+    ready.touch()
+    while not go.exists():
+        time.sleep(0.005)
+    for n in range(int(count)):
+        resp = client.post(
+            "/api/v1/task-schemas",
+            json={
+                "workspace_id": workspace_id,
+                "task_schema_slug": f"w{worker}-{n}",
+                "task_type": "text_classification",
+                "title": f"Worker {worker} schema {n}",
+            },
+        )
+        assert resp.status_code == 201, resp.text
+"""
+
+
+def test_servers_writing_one_manifest_together_keep_every_entry(
+    tmp_path: Path, workspace: Path, monkeypatch: pytest.MonkeyPatch
+):
+    db_url = f"sqlite:///{(tmp_path / 'server.db').as_posix()}"
+    env = {
+        **os.environ,
+        "MOLABEL_DB_URL": db_url,
+        "MOLABEL_DATA_DIR": str(tmp_path / "data"),
+    }
+    monkeypatch.setenv("MOLABEL_DB_URL", env["MOLABEL_DB_URL"])
+    monkeypatch.setenv("MOLABEL_DATA_DIR", env["MOLABEL_DATA_DIR"])
+    with TestClient(create_app()) as setup:
+        booted = setup.post(
+            "/api/v1/cli/workspaces/bootstrap", json={"path": str(workspace)}
+        ).json()
+    workers, per_worker = 4, 8
+    go = tmp_path / "go"
+    ready = [tmp_path / f"ready-{n}" for n in range(workers)]
+    servers = [
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                _CREATE_SCHEMAS_WHEN_TOLD,
+                booted["workspace_id"],
+                booted["reviewer_id"],
+                str(n),
+                str(per_worker),
+                str(flag),
+                str(go),
+            ],
+            env=env,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for n, flag in enumerate(ready)
+    ]
+    deadline = time.monotonic() + 60
+    while not all(flag.exists() for flag in ready):
+        assert time.monotonic() < deadline, "servers did not start"
+        assert all(s.poll() is None for s in servers), [
+            s.communicate()[1] for s in servers if s.poll() is not None
+        ]
+        time.sleep(0.01)
+    go.touch()
+
+    errors = [server.communicate(timeout=180)[1] for server in servers]
+
+    assert [server.returncode for server in servers] == [0] * workers, errors
+    listed = {
+        e["task_schema_id"]
+        for e in _yaml(workspace / "workbench.project.yaml")["task_schemas"]
+    }
+    expected = {f"w{w}-{n}" for w in range(workers) for n in range(per_worker)}
+    assert listed == expected
+
+
+@pytest.mark.asyncio
+async def test_a_read_only_manifest_refuses_the_import_and_keeps_no_records(
+    client, workspace
+):
+    dataset = await _create(
+        client,
+        "/api/v1/datasets",
+        {"dataset_name": "reviews", "source_type": "jsonl", "record_kind": "text"},
+    )
+    manifest = workspace / "workbench.project.yaml"
+    before = _files(workspace)
+    manifest.chmod(stat.S_IREAD)
+    try:
+        resp = await client.post(
+            f"/api/v1/datasets/{dataset['dataset_id']}/import",
+            json={"source_uri": "data/reviews.jsonl"},
+        )
+    finally:
+        manifest.chmod(stat.S_IREAD | stat.S_IWRITE)
+
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["error"]["code"] == "WORKSPACE_FILE_NOT_WRITABLE"
+    assert _files(workspace) == before
+    records = await client.get(f"/api/v1/datasets/{dataset['dataset_id']}/records")
+    assert records.json()["items"] == []

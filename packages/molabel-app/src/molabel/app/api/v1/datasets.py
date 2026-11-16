@@ -20,8 +20,7 @@ from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
 from molabel.app.workspace_config import (
-    add_dataset_source,
-    list_dataset,
+    workspace_files,
     workspace_folder,
 )
 from molabel.app.workspace_paths import registered_root, resolve_in_workspace
@@ -467,18 +466,16 @@ async def create_dataset(
     dataset_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     slug = body.dataset_name.lower().replace(" ", "-")
-    list_dataset(
-        folder,
-        DatasetManifestEntry(
-            dataset_id=slug,
-            loader_plugin=body.loader_plugin,
-            record_kind=body.record_kind,
-            canonical_id_strategy=body.canonical_id_strategy,
-            indexing_mode=body.indexing_mode,
-        ),
-    )
-
-    with engine.connect() as conn:
+    with workspace_files(folder) as files, engine.connect() as conn:
+        files.list_dataset(
+            DatasetManifestEntry(
+                dataset_id=slug,
+                loader_plugin=body.loader_plugin,
+                record_kind=body.record_kind,
+                canonical_id_strategy=body.canonical_id_strategy,
+                indexing_mode=body.indexing_mode,
+            ),
+        )
         conn.execute(
             text(
                 "INSERT INTO datasets "
@@ -504,6 +501,7 @@ async def create_dataset(
         )
         conn.commit()
 
+    with engine.connect() as conn:
         row = conn.execute(
             text(
                 "SELECT id, dataset_name, dataset_slug, workspace_id, "
@@ -694,12 +692,12 @@ async def import_dataset(
                 "dataset_id": str(dataset_id),
             },
         )
-        conn.commit()
-
-    if imported_file is not None:
-        add_dataset_source(
-            workspace_folder(engine, workspace_id), str(row[3]), imported_file
-        )
+        if imported_file is None:
+            conn.commit()
+        else:
+            with workspace_files(workspace_folder(engine, workspace_id)) as files:
+                files.add_dataset_source(str(row[3]), imported_file)
+                conn.commit()
 
     return ImportStatus(
         job_id=job_id,

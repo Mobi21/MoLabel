@@ -17,7 +17,11 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
-from molabel.app.workspace_config import TASK_SCHEMA, workspace_folder, write_config
+from molabel.app.workspace_config import (
+    TASK_SCHEMA,
+    workspace_files,
+    workspace_folder,
+)
 
 router = APIRouter(prefix="/task-schemas", tags=["task-schemas"])
 
@@ -499,16 +503,14 @@ async def create_task_schema(
     schema_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     slug = body.task_schema_slug or body.title.lower().replace(" ", "-")
-    file_path = write_config(
-        folder,
-        TASK_SCHEMA,
-        slug=slug,
-        document=_document(body.model_copy(update={"task_schema_slug": slug})),
-        file_path=body.file_path,
-        overwrite=False,
-    )
-
-    with engine.connect() as conn:
+    with workspace_files(folder) as files, engine.connect() as conn:
+        file_path = files.write_config(
+            TASK_SCHEMA,
+            slug=slug,
+            document=_document(body.model_copy(update={"task_schema_slug": slug})),
+            file_path=body.file_path,
+            overwrite=False,
+        )
         conn.execute(
             _INSERT_SQL,
             {
@@ -522,6 +524,7 @@ async def create_task_schema(
         )
         conn.commit()
 
+    with engine.connect() as conn:
         row = conn.execute(
             text(
                 f"SELECT {_DETAIL_COLUMNS} "  # noqa: S608
@@ -558,7 +561,7 @@ async def update_task_schema(
             )
     folder = workspace_folder(engine, str(existing[2]))
 
-    with engine.connect() as conn:
+    with workspace_files(folder) as files, engine.connect() as conn:
         updates: list[str] = ["updated_at = :now"]
         params: dict[str, Any] = {"id": str(task_schema_id), "now": now}
 
@@ -625,8 +628,7 @@ async def update_task_schema(
             {"id": str(task_schema_id)},
         ).first()
         detail = _row_to_detail(row)
-        file_path = write_config(
-            folder,
+        file_path = files.write_config(
             TASK_SCHEMA,
             slug=detail.task_schema_slug,
             document=_document(detail),

@@ -18,7 +18,7 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
-from molabel.app.workspace_config import PROMPT, workspace_folder, write_config
+from molabel.app.workspace_config import PROMPT, workspace_files, workspace_folder
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
@@ -228,18 +228,16 @@ async def create_prompt(
     content_hash = hashlib.sha256(
         (body.system_instructions + (body.task_rubric or "")).encode("utf-8")
     ).hexdigest()[:12]
-    file_path = write_config(
-        folder,
-        PROMPT,
-        slug=prompt_slug,
-        document=body.model_dump(
-            mode="json", exclude={"workspace_id"}, exclude_none=True
-        ),
-        file_path=None,
-        overwrite=False,
-    )
-
-    with engine.connect() as conn:
+    with workspace_files(folder) as files, engine.connect() as conn:
+        file_path = files.write_config(
+            PROMPT,
+            slug=prompt_slug,
+            document=body.model_dump(
+                mode="json", exclude={"workspace_id"}, exclude_none=True
+            ),
+            file_path=None,
+            overwrite=False,
+        )
         conn.execute(
             _PROMPT_INSERT_SQL,
             {
