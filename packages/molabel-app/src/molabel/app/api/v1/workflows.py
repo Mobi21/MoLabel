@@ -2159,21 +2159,29 @@ def _assert_human_queue_complete(
     if not queue_id:
         return
 
-    remaining = conn.execute(
+    remaining, copies, reviewers = conn.execute(
         text(
-            "SELECT count(*) FROM review_tasks "
-            "WHERE queue_id = :queue_id AND status != 'submitted'"
+            "SELECT "
+            "(SELECT count(*) FROM review_tasks "
+            " WHERE queue_id = :queue_id AND status != 'submitted'), "
+            "(SELECT coalesce(max(n), 0) FROM (SELECT count(*) AS n FROM review_tasks "
+            " WHERE queue_id = :queue_id GROUP BY record_id)), "
+            "(SELECT count(DISTINCT claimed_by) FROM review_tasks "
+            " WHERE queue_id = :queue_id AND status = 'submitted')"
         ),
         {"queue_id": queue_id},
-    ).scalar_one()
+    ).one()
     if int(remaining) > 0:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Review queue '{queue_id}' is not complete; "
-                f"{int(remaining)} task(s) still need submission"
-            ),
+        detail = (
+            f"Review queue '{queue_id}' is not complete; "
+            f"{int(remaining)} task(s) still need submission"
         )
+        if int(copies) > max(int(reviewers), 1):
+            detail += (
+                f". {copies} copies need {copies} distinct reviewers; "
+                f"{reviewers} have submitted"
+            )
+        raise HTTPException(status_code=409, detail=detail)
 
 
 def _restore_engine_state(
