@@ -14,7 +14,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
-from molabel.app.api.v1.workflows import _LlmAgentRunner
+from molabel.app.api.v1.workflows import _ensure_model_profile, _LlmAgentRunner
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
 from molabel.core.database import get_engine
@@ -441,6 +441,154 @@ async def test_execute_reports_an_agent_step_that_labels_no_records(
     body = resp.json()
     assert body["current_step_id"] == "agent_label"
     assert "x-api-key header is required" in body["error_summary"]
+
+
+PROVIDER_KEYS = (
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "MINIMAX_API_KEY",
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("key", "names_the_offline_switch"), [(None, True), ("sk-test", False)]
+)
+async def test_a_keyless_agent_step_fails_and_names_the_offline_switch(
+    client, app, tmp_path, monkeypatch, key, names_the_offline_switch
+):
+    for name in PROVIDER_KEYS:
+        monkeypatch.delenv(name, raising=False)
+    if key is not None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", key)
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    workflow_id = _seed_workflow(
+        app.state.engine,
+        workspace_id,
+        agent_config={
+            "model": "claude-sonnet-4-20250514",
+            "prompt_ref": "prompts/default.yaml",
+        },
+    )
+    _write_demo_reviews(tmp_path)
+
+    def reject_missing_key(self, **_kwargs):
+        raise ProviderError("Anthropic API error: 401 x-api-key header is required")
+
+    monkeypatch.setattr(_LlmAgentRunner, "_label_record", reject_missing_key)
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+
+    body = resp.json()
+    assert body["current_step_id"] == "agent_label"
+    assert "x-api-key header is required" in body["error_summary"]
+    hint = (
+        "ANTHROPIC_API_KEY is not set. To label without an API key, recreate the "
+        "workflow with `molabel workflow create --template <template-id> "
+        "--provider offline`, or set `provider_type: offline` in this "
+        "agent_run step's config"
+    )
+    assert (hint in body["error_summary"]) is names_the_offline_switch
+    with app.state.engine.connect() as conn:
+        adapters = conn.execute(
+            text("SELECT adapter_plugin FROM agent_runs WHERE workspace_id = :wid"),
+            {"wid": str(workspace_id)},
+        ).fetchall()
+    assert [row[0] for row in adapters] == ["builtin.anthropic"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "agent_config",
+    [
+        {"model": "offline-heuristic"},
+        {"model": "claude-sonnet-4-20250514", "provider_type": "offline"},
+    ],
+    ids=["offline-model", "offline-provider-over-claude-profile"],
+)
+async def test_an_offline_workflow_reaches_review_without_a_key(
+    client, app, tmp_path, monkeypatch, agent_config
+):
+    for name in PROVIDER_KEYS:
+        monkeypatch.delenv(name, raising=False)
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    with app.state.engine.connect() as conn:
+        _ensure_model_profile(
+            conn,
+            workspace_id=str(workspace_id),
+            model_identifier="claude-sonnet-4-20250514",
+        )
+        conn.commit()
+    workflow_id = _seed_workflow(
+        app.state.engine,
+        workspace_id,
+        agent_config={**agent_config, "prompt_ref": "prompts/default.yaml"},
+    )
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "reviews.jsonl").write_text(
+        "\n".join(
+            json.dumps({"id": record_id, "text": text_value})
+            for record_id, text_value in [
+                ("r1", "A Negative experience overall."),
+                ("r2", "Mostly neutral, a bit negative."),
+                ("r3", "No opinion."),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+
+    body = resp.json()
+    assert body["error_summary"] is None
+    assert body["status"] == "paused"
+    assert body["current_step_id"] == "review"
+    with app.state.engine.connect() as conn:
+        outputs = conn.execute(
+            text(
+                "SELECT r.external_id, o.labels, o.raw_response, "
+                "o.composite_confidence, a.adapter_plugin, p.provider_type "
+                "FROM agent_outputs o "
+                "JOIN records r ON r.id = o.record_id "
+                "JOIN agent_runs a ON a.id = o.agent_run_id "
+                "JOIN model_profiles p ON p.id = a.model_profile_id "
+                "WHERE o.workspace_id = :wid ORDER BY r.external_id"
+            ),
+            {"wid": str(workspace_id)},
+        ).fetchall()
+        task_count = conn.execute(
+            text("SELECT count(*) FROM review_tasks WHERE workspace_id = :wid"),
+            {"wid": str(workspace_id)},
+        ).scalar()
+
+    assert task_count == 3
+    assert [(row[0], json.loads(row[1])) for row in outputs] == [
+        ("r1", {"sentiment": "negative"}),
+        ("r2", {"sentiment": "negative"}),
+        ("r3", {"sentiment": "positive"}),
+    ]
+    for _external_id, _labels, raw_response, confidence, adapter, provider in outputs:
+        provenance = json.loads(raw_response)
+        assert provenance["strategy"] == "offline-heuristic"
+        assert provenance["provider_type"] == "offline"
+        assert provenance["model"] == "offline-heuristic"
+        assert confidence == 0.0
+        assert adapter == "builtin.offline"
+        assert provider == "offline"
 
 
 @pytest.mark.asyncio

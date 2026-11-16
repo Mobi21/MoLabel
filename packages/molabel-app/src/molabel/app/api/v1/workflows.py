@@ -24,9 +24,14 @@ from molabel.app.utils import get_engine
 from molabel.app.workspace_config import WORKFLOW, workspace_files, workspace_folder
 from molabel.app.workspace_paths import resolve_in_workspace
 from molabel.core.agents.queue_binding import serialize_agent_output_ids
+from molabel.core.providers.base import resolve_api_key
 from molabel.core.providers.model_defaults import (
     MINIMAX_M27_HIGHSPEED,
     is_minimax_model,
+)
+from molabel.core.providers.offline_adapter import (
+    OFFLINE_CONFIDENCE,
+    OFFLINE_MODEL_ID,
 )
 from molabel.core.types import (
     BlindReviewPolicy,
@@ -801,12 +806,20 @@ def _infer_profile_defaults(
     inferred_base_url = base_url
 
     if inferred_provider_type is None:
-        if normalized_model.startswith("claude-") or is_minimax_model(model_identifier):
+        if normalized_model == OFFLINE_MODEL_ID:
+            inferred_provider_type = ProviderType.offline.value
+        elif normalized_model.startswith("claude-") or is_minimax_model(
+            model_identifier
+        ):
             inferred_provider_type = ProviderType.anthropic.value
         elif normalized_model.startswith(("gpt-", "o1", "o3", "o4")):
             inferred_provider_type = ProviderType.openai_compatible.value
 
-    if inferred_provider_type == ProviderType.anthropic.value:
+    if inferred_provider_type == ProviderType.offline.value:
+        inferred_provider_name = inferred_provider_name or "Offline heuristic"
+        inferred_auth_ref = None
+        inferred_base_url = None
+    elif inferred_provider_type == ProviderType.anthropic.value:
         if not inferred_provider_name:
             inferred_provider_name = (
                 MINIMAX_M27_HIGHSPEED.provider_name
@@ -840,6 +853,17 @@ def _infer_profile_defaults(
         inferred_auth_ref,
         inferred_base_url,
     )
+
+
+_DEFAULT_PROFILE_TRAITS: tuple[str, list[str], float | None] = (
+    "https",
+    ["workflow-auto-profile"],
+    None,
+)
+_BUILTIN_PROFILE_TRAITS: dict[str, tuple[str, list[str], float | None]] = {
+    ProviderType.custom.value: ("builtin", ["heuristic", "workflow-demo"], None),
+    ProviderType.offline.value: ("builtin", ["offline", "heuristic"], 0.0),
+}
 
 
 def _ensure_model_profile(
@@ -914,6 +938,9 @@ def _ensure_model_profile(
     routing_metadata = {}
     if resolved_base_url:
         routing_metadata["base_url"] = resolved_base_url
+    transport, capability_tags, token_cost = _BUILTIN_PROFILE_TRAITS.get(
+        resolved_provider_type, _DEFAULT_PROFILE_TRAITS
+    )
     conn.execute(
         text(
             """
@@ -927,7 +954,7 @@ def _ensure_model_profile(
             VALUES (
                 :id, :slug, :provider_type, :provider_name, :model_identifier,
                 :transport, :auth_ref, 1, 0, NULL, :capability_tags,
-                :routing_metadata, NULL, NULL, 1,
+                :routing_metadata, :token_cost, :token_cost, 1,
                 :now, :now, :wid
             )
             """
@@ -938,20 +965,13 @@ def _ensure_model_profile(
             "provider_type": resolved_provider_type,
             "provider_name": resolved_provider_name or "builtin-heuristic",
             "model_identifier": model_identifier,
-            "transport": (
-                "https"
-                if resolved_provider_type != ProviderType.custom.value
-                else "builtin"
-            ),
+            "transport": transport,
             "auth_ref": resolved_auth_ref,
-            "capability_tags": _json_dumps(
-                ["workflow-auto-profile"]
-                if resolved_provider_type != ProviderType.custom.value
-                else ["heuristic", "workflow-demo"]
-            ),
+            "capability_tags": _json_dumps(capability_tags),
             "routing_metadata": (
                 _json_dumps(routing_metadata) if routing_metadata else None
             ),
+            "token_cost": token_cost,
             "now": now,
             "wid": workspace_id,
         },
@@ -1248,6 +1268,15 @@ class _HeuristicAgentRunner:
         }
 
 
+def _missing_key_hint(auth_ref: str) -> str:
+    return (
+        f"{auth_ref} is not set. To label without an API key, recreate the "
+        "workflow with `molabel workflow create --template <template-id> "
+        "--provider offline`, or set `provider_type: offline` in this "
+        "agent_run step's config"
+    )
+
+
 class _LlmAgentRunner:
     """Agent runner that calls a real LLM provider for label proposals.
 
@@ -1276,6 +1305,8 @@ class _LlmAgentRunner:
         prompt_ref = config.get("prompt_ref")
         agent_role = str(kwargs.get("agent_role") or "proposer")
         provider_type = _normalize_provider_type(config.get("provider_type"))
+        if provider_type == ProviderType.offline:
+            model_identifier = OFFLINE_MODEL_ID
         provider_name = (
             str(config["provider_name"]).strip()
             if config.get("provider_name") is not None
@@ -1427,6 +1458,7 @@ class _LlmAgentRunner:
                 labels, raw_response, confidence, tokens_in, tokens_out, latency = (
                     self._label_record(
                         record_id=record_id,
+                        provider_type=provider_type,
                         adapter=adapter,
                         enforcer=enforcer,
                         db_model_id=db_model_id,
@@ -1493,6 +1525,8 @@ class _LlmAgentRunner:
             if failed == 0
             else ("partially_completed" if completed > 0 else "failed")
         )
+        if completed == 0 and auth_ref and resolve_api_key(auth_ref) is None:
+            error_summary_parts.insert(0, _missing_key_hint(auth_ref))
         error_summary = (
             "; ".join(error_summary_parts[:5]) if error_summary_parts else None
         )
@@ -1546,6 +1580,7 @@ class _LlmAgentRunner:
         self,
         *,
         record_id: str,
+        provider_type: str,
         adapter: Any,
         enforcer: Any,
         db_model_id: str,
@@ -1659,12 +1694,18 @@ class _LlmAgentRunner:
         ]
         normalized, _norm_errors = _normalize_labels(result.parsed, field_defs)
 
-        confidence = result.parsed.get("confidence", 0.8)
-        if not isinstance(confidence, (int, float)):
-            confidence = 0.8
+        if provider_type == ProviderType.offline:
+            confidence = OFFLINE_CONFIDENCE
+            strategy = "offline-heuristic"
+        else:
+            confidence = result.parsed.get("confidence", 0.8)
+            if not isinstance(confidence, (int, float)):
+                confidence = 0.8
+            strategy = "llm-structured-output"
 
         raw_response = {
-            "strategy": "llm-structured-output",
+            "strategy": strategy,
+            "provider_type": provider_type,
             "model": db_model_id,
             "attempts": result.attempts,
             "used_native": result.used_native,
@@ -1830,6 +1871,11 @@ class _LlmAgentRunner:
             if base_url:
                 kwargs["base_url"] = base_url
             return OllamaAdapter(**kwargs)
+
+        if provider_type == ProviderType.offline:
+            from molabel.core.providers.offline_adapter import OfflineAdapter
+
+            return OfflineAdapter()
 
         raise HTTPException(
             status_code=500,
