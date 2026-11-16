@@ -11,11 +11,7 @@ import {
   normalizeArtifactSelector,
   resolveArtifact,
 } from '../workspace-context.js'
-import {
-  getDefaultConfigPath,
-  loadConfig,
-  resolveConfig,
-} from '../config.js'
+import { getDefaultConfigPath, loadConfig, resolveConfig } from '../config.js'
 import type {
   CliConfig,
   CliRuntimeOptions,

@@ -10,7 +10,9 @@ const tempDirs: string[] = []
 
 afterEach(async () => {
   const dirs = tempDirs.splice(0)
-  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })))
+  await Promise.all(
+    dirs.map((dir) => rm(dir, { recursive: true, force: true })),
+  )
 })
 
 async function captureCliJson(
@@ -18,12 +20,12 @@ async function captureCliJson(
 ): Promise<{ exitCode: number; json: unknown }> {
   const chunks: string[] = []
   const originalWrite = process.stdout.write.bind(process.stdout)
-  process.stdout.write = ((chunk: string | Uint8Array) => {
+  process.stdout.write = (chunk: string | Uint8Array) => {
     chunks.push(
       typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'),
     )
     return true
-  })
+  }
 
   try {
     const result = await runCli(argv)

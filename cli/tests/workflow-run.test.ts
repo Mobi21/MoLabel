@@ -18,7 +18,9 @@ afterEach(async () => {
   await Promise.all(openApis.splice(0).map((api) => api.close()))
 })
 
-function execution(overrides: Record<string, unknown>): Record<string, unknown> {
+function execution(
+  overrides: Record<string, unknown>,
+): Record<string, unknown> {
   return {
     execution_id: EXECUTION_ID,
     workflow_definition_id: WORKFLOW_ID,
