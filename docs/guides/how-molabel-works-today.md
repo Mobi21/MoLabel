@@ -195,6 +195,23 @@ directory, never in the folder the server was launched from:
 `MOLABEL_DATA_DIR` moves the whole directory. `MOLABEL_DB_URL` points the
 server at a different database and leaves the secret in the data directory.
 
+Earlier versions kept the database at `molabel.db` in the folder the server
+was launched from, and bootstrap wrote another at
+`<workspace>/workbench/molabel.db`. The server does not read or merge either.
+While its own database holds no workspace, it reports a populated one: the
+server logs a `LEGACY DATABASE NOT LOADED` warning at startup, and
+`molabel status` and `molabel workspace bootstrap` include it under
+`legacy_databases`, with its `path`, its `workspace_count`, and an `adopt`
+setting. To keep using the old database, restart the server with that
+setting, for example:
+
+```bash
+MOLABEL_DB_URL=sqlite:////home/me/projects/molabel.db molabel-dev
+```
+
+On start the server backs the database up, stamps it at the baseline revision
+if it predates Alembic, and upgrades it.
+
 ### 4.3 Derived State
 
 Derived caches and analytics outputs can be regenerated. They are authoritative

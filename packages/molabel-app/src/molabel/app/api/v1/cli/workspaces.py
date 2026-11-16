@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +15,11 @@ from sqlalchemy import text
 from molabel.app.api.v1.prompts import index_prompt
 from molabel.app.api.v1.task_schemas import index_task_schema
 from molabel.app.api.v1.workflows import index_workflow
+from molabel.app.server_state import (
+    LegacyDatabase,
+    launch_folder_database,
+    legacy_databases,
+)
 from molabel.app.services.session import (
     AVATAR_COLORS,
     COOKIE_HTTPONLY,
@@ -41,6 +47,7 @@ from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 from molabel.core.manifest import load_manifest
 
 router = APIRouter(prefix="", tags=["cli"])
+logger = logging.getLogger(__name__)
 
 _APP_VERSION = "0.1.0"
 _CORE_VERSION = "0.1.0"
@@ -63,6 +70,7 @@ class CLIStatusResponse(BaseModel):
     manifest_path: str | None = None
     detection_mode: str | None = None
     workspace_count: int = 0
+    legacy_databases: list[LegacyDatabase] = Field(default_factory=list)
     checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -96,6 +104,7 @@ class WorkspaceBootstrapResponse(BaseModel):
     missing_requirements: list[str] = Field(default_factory=list)
     session_created: bool = False
     reviewer_id: str | None = None
+    legacy_databases: list[LegacyDatabase] = Field(default_factory=list)
 
 
 def _detect_workspace(path: Path) -> object:
@@ -159,14 +168,18 @@ async def status(
             text("SELECT count(*) FROM workspaces")
         ).first()
     workspace_count = int(workspace_count_row[0]) if workspace_count_row else 0
+    legacy = legacy_databases(engine, [launch_folder_database()])
 
     if path is None:
-        return CLIStatusResponse(workspace_count=workspace_count)
+        return CLIStatusResponse(
+            workspace_count=workspace_count, legacy_databases=legacy
+        )
 
     workspace_path = new_workspace_root(path)
     if not workspace_path.exists():
         return CLIStatusResponse(
             workspace_count=workspace_count,
+            legacy_databases=legacy,
             workspace_detected=False,
             workspace_root=str(workspace_path),
         )
@@ -174,6 +187,7 @@ async def status(
     detection = _detect_workspace(workspace_path)
     return CLIStatusResponse(
         workspace_count=workspace_count,
+        legacy_databases=legacy,
         workspace_detected=bool(detection.is_project),
         workspace_name=detection.suggested_name,
         workspace_root=str(workspace_path),
@@ -218,6 +232,15 @@ async def bootstrap_workspace(
     resolve_in_workspace(workspace_path, MANIFEST_FILENAME)
 
     engine = get_engine(request)
+    legacy = legacy_databases(
+        engine,
+        [
+            launch_folder_database(),
+            resolve_in_workspace(workspace_path, "workbench/molabel.db"),
+        ],
+    )
+    for notice in legacy:
+        logger.warning("LEGACY DATABASE NOT LOADED: %s", notice.message)
     result = WorkspaceBootstrapper().bootstrap(
         workspace_path,
         engine=engine,
@@ -293,4 +316,5 @@ async def bootstrap_workspace(
         missing_requirements=list(result.missing_requirements),
         session_created=reviewer_id is not None,
         reviewer_id=str(reviewer_id) if reviewer_id is not None else None,
+        legacy_databases=legacy,
     )

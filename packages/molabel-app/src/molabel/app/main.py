@@ -24,7 +24,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from molabel.app.api.v1 import router as v1_router
 from molabel.app.schemas import ErrorDetail, ErrorResponse, HealthResponse
-from molabel.app.server_state import server_db_url
+from molabel.app.server_state import (
+    launch_folder_database,
+    legacy_databases,
+    server_db_url,
+)
 from molabel.app.services.session import get_or_create_app_secret
 from molabel.app.workspace_paths import (
     WorkspacePathError,
@@ -98,6 +102,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     engine = _create_engine_from_env()
     upgrade_database(engine)
+    for legacy in legacy_databases(engine, [launch_folder_database()]):
+        logger.warning("LEGACY DATABASE NOT LOADED: %s", legacy.message)
     app.state.engine = engine
     app.state.app_secret = get_or_create_app_secret()
 
