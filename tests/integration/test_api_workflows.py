@@ -518,9 +518,10 @@ async def test_a_keyless_agent_step_fails_and_names_the_offline_switch(
     "agent_config",
     [
         {"model": "offline-heuristic"},
+        {"provider_type": "offline"},
         {"model": "claude-sonnet-4-20250514", "provider_type": "offline"},
     ],
-    ids=["offline-model", "offline-provider-over-claude-profile"],
+    ids=["offline-model", "offline-provider", "offline-provider-over-claude-profile"],
 )
 async def test_an_offline_workflow_reaches_review_without_a_key(
     client, app, tmp_path, monkeypatch, agent_config

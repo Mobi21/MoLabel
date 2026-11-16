@@ -257,8 +257,8 @@ These runs create durable operational records:
 A proposal needs no LLM key. The offline provider labels records with keyword
 heuristics, with no network and no model download. Select it with
 `molabel workflow create --template <id> --provider offline`, or with
-`provider_type: offline` or `model: offline-heuristic` on an `agent_run` step.
-Its outputs record `builtin.offline` as the run's adapter,
+`provider_type: offline` or `model: offline-heuristic` alone on an `agent_run`
+step. Its outputs record `builtin.offline` as the run's adapter,
 `raw_response.strategy: offline-heuristic`, and a `composite_confidence` of 0,
 so review and routing never treat them as a model's. MoLabel never switches
 to the offline provider on its own. A workflow that names a hosted model fails

@@ -374,6 +374,13 @@ def _json_dumps(value: Any) -> str | None:
     return json.dumps(value)
 
 
+def _with_offline_model(config: dict[str, Any]) -> dict[str, Any]:
+    """Select the offline provider's one model for ``provider_type: offline``."""
+    if _normalize_provider_type(config.get("provider_type")) == ProviderType.offline:
+        return {**config, "model": OFFLINE_MODEL_ID}
+    return config
+
+
 def _build_workflow_definition(row: Any) -> WorkflowDefinitionParsed:
     steps_raw = _json_loads(row[4])
     steps_data = steps_raw if isinstance(steps_raw, list) else []
@@ -388,7 +395,7 @@ def _build_workflow_definition(row: Any) -> WorkflowDefinitionParsed:
         step = StepDefinition(
             id=str(item.get("step_id", item.get("id", f"step-{index + 1}"))),
             type=str(item.get("step_type", item.get("type", ""))),
-            config=dict(item.get("config", {})),
+            config=_with_offline_model(dict(item.get("config", {}))),
         )
         steps.append(step)
         step_index[step.id] = step
@@ -902,24 +909,16 @@ async def unresolved_model_error_handler(
 
 
 def _step_model_config(config: dict[str, Any]) -> dict[str, Any]:
-    """The model an agent step selects, as ``_ensure_model_profile`` arguments.
-
-    The offline provider has one model, so ``provider_type: offline`` selects
-    it whatever ``model`` says.
-    """
+    """The model an agent step selects, as ``_ensure_model_profile`` arguments."""
+    config = _with_offline_model(config)
 
     def value(key: str) -> str | None:
         raw = config.get(key)
         return (str(raw).strip() or None) if raw is not None else None
 
-    provider_type = value("provider_type")
     return {
-        "model_identifier": (
-            OFFLINE_MODEL_ID
-            if provider_type == ProviderType.offline
-            else value("model") or value("model_profile_id") or ""
-        ),
-        "provider_type": provider_type,
+        "model_identifier": value("model") or value("model_profile_id") or "",
+        "provider_type": value("provider_type"),
         "provider_name": value("provider_name"),
         "auth_ref": value("auth_ref"),
         "base_url": value("base_url"),
