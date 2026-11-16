@@ -95,9 +95,10 @@ reason points to `krippendorff_alpha`, which handles that case.
 ### Cohen's kappa
 
 Cohen's kappa compares exactly two raters, each with its own marginals
-(Cohen 1960). `AgreementAnnotation` has no rater ID, so the annotation `source`
-is the rater. `cohen_kappa` is defined only when every pairable unit holds one
-value from each of the same two sources. Then each unit is a pair `(a, b)`:
+(Cohen 1960). An annotation's rater is its `rater_id`. An annotation without a
+`rater_id` falls back to its `source` as the rater. `cohen_kappa` is defined
+only when every pairable unit holds one value from each of the same two raters.
+Then each unit is a pair `(a, b)`:
 
 ```text
 p_o = (number of units where a == b) / N
@@ -107,11 +108,11 @@ cohen_kappa = (p_o - p_e) / (1 - p_e)
 
 These cases make `cohen_kappa` null.
 
-- Annotations from three or more sources. Use `fleiss_kappa` or
+- Annotations from three or more raters. Use `fleiss_kappa` or
   `krippendorff_alpha`.
-- Two annotations with the same source in one unit. Two people who both label
-  as `human` cannot be told apart, so human-human data never has a
-  `cohen_kappa`.
+- Two annotations with the same rater in one unit. Two people who both label
+  as `human` with no `rater_id` cannot be told apart. Give each annotation the
+  reviewer's id as `rater_id` to get a human-human `cohen_kappa`.
 - Both raters use the same single label, so `p_e` is 1.
 
 ## The human-agent summary

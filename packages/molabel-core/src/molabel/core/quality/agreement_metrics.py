@@ -13,8 +13,9 @@ out. Values are compared as nominal categories.
 - ``fleiss_kappa``. Fleiss' kappa (Fleiss 1971), defined only when every unit
   holds the same number of values.
 - ``cohen_kappa``. Cohen's kappa (Cohen 1960) for exactly two raters, each with
-  its own marginals. Raters are told apart by annotation source, so it needs one
-  value from each of the same two sources in every unit.
+  its own marginals. An annotation's rater is its ``rater_id``, or its source
+  when it has none, so it needs one value from each of the same two raters
+  in every unit.
 
 The ``human_agent`` summary pairs each human value in a unit with each agent
 value. Every pair is a two-rater unit, with the human side and the agent as
@@ -34,16 +35,17 @@ from pydantic import BaseModel, Field
 from molabel.core.utils.canonical import canonical_label_value as _canonical_label
 
 Rating = tuple[str, str]
-"""A (rater, canonical value) pair. The rater is the annotation source."""
+"""A (rater, canonical value) pair. See ``AgreementAnnotation.rater``."""
 
 NO_PAIRABLE_VALUES = "No unit has two or more values to compare."
 SINGLE_CATEGORY = (
     "Every compared value is the same label, so chance alone predicts full "
     "agreement and the coefficient is 0/0."
 )
-SHARED_SOURCE = (
+SHARED_RATER = (
     "Cohen's kappa needs one value from each of two raters per unit. Raters are "
-    "told apart by annotation source, and a unit holds two values from one source."
+    "told apart by rater_id, or by source when an annotation has no rater_id, "
+    "and a unit holds two values from one rater."
 )
 
 
@@ -107,12 +109,12 @@ def _cohen_kappa(units: Sequence[Sequence[Rating]]) -> float | _Undefined:
     """(p_o - p_e) / (1 - p_e), with p_e from each rater's own marginals."""
     for unit in units:
         if len({rater for rater, _ in unit}) < len(unit):
-            return _Undefined(SHARED_SOURCE)
+            return _Undefined(SHARED_RATER)
     raters = sorted({rater for unit in units for rater, _ in unit})
     if len(raters) != 2:
         return _Undefined(
             "Cohen's kappa is defined for exactly two raters, and the values come "
-            f"from {len(raters)} sources ({', '.join(raters)}). Use fleiss_kappa "
+            f"from {len(raters)} raters ({', '.join(raters)}). Use fleiss_kappa "
             "or krippendorff_alpha."
         )
     first, second = raters
@@ -131,7 +133,12 @@ class AgreementAnnotation(BaseModel):
     """A single label assignment for a record."""
 
     source: str
+    rater_id: str | None = None
     labels: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def rater(self) -> str:
+        return self.rater_id or self.source
 
 
 class AgreementRecord(BaseModel):
@@ -234,7 +241,11 @@ class AgreementAnalysisResult(BaseModel):
 
 @runtime_checkable
 class AgreementRecordSource(Protocol):
-    """Protocol for services that load grouped agreement records."""
+    """Protocol for services that load grouped agreement records.
+
+    A source built on review events sets each annotation's ``rater_id`` to the
+    event's ``reviewer_id``, so two reviewers are two raters.
+    """
 
     def load_agreement_records(
         self,
@@ -350,7 +361,7 @@ class AgreementMetricsService:
         for record in records:
             for field in fields:
                 unit = [
-                    (annotation.source, _canonical_label(annotation.labels[field]))
+                    (annotation.rater, _canonical_label(annotation.labels[field]))
                     for annotation in record.annotations
                     if field in annotation.labels
                     and (source_filter is None or annotation.source in source_filter)

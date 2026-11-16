@@ -265,3 +265,30 @@ def test_cohen_kappa_is_null_when_two_ratings_share_a_source() -> None:
     assert result.overall.cohen_kappa is None
     assert "cohen_kappa" in result.overall.null_reasons
     assert result.overall.krippendorff_alpha is not None
+
+
+def test_cohen_kappa_tells_two_humans_apart_by_rater_id() -> None:
+    cells = {("yes", "yes"): 4, ("yes", "no"): 1, ("no", "yes"): 2, ("no", "no"): 3}
+    pairs = [pair for pair, count in cells.items() for _ in range(count)]
+
+    result = AgreementMetricsService().analyze(
+        [
+            AgreementRecord(
+                record_id=f"r{index}",
+                annotations=[
+                    AgreementAnnotation(
+                        source="human", rater_id="reviewer-a", labels={"code": a}
+                    ),
+                    AgreementAnnotation(
+                        source="human", rater_id="reviewer-b", labels={"code": b}
+                    ),
+                ],
+            )
+            for index, (a, b) in enumerate(pairs)
+        ],
+        analysis_type="inter_annotator",
+    )
+
+    # p_o = 7/10. A says yes 5 times, B 6 times: p_e = 0.5 * 0.6 + 0.5 * 0.4 = 0.5.
+    assert result.overall.cohen_kappa == pytest.approx((0.7 - 0.5) / (1 - 0.5))
+    assert result.overall.null_reasons == {}
