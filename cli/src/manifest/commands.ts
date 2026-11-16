@@ -7,7 +7,8 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
     {
       name: 'doctor',
       group: 'core',
-      description: 'Check local workspace and backend reachability',
+      description:
+        'Check local workspace, backend reachability, and the providers the backend can use',
       flags: [
         { name: '--base-url', description: 'Backend base URL' },
         { name: '--workspace', description: 'Workspace root override' },
