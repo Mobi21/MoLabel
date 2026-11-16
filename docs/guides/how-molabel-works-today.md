@@ -152,9 +152,10 @@ two disagree:
   Create never overwrites: if a file already sits at the target path, it is
   left as it is and the request registers it. That is what
   `molabel task-schema create --file workbench/config/task-schemas/x.yaml` does.
-- Servers that share a workspace take turns. Each write holds an OS-level lock
-  on a file under `<server data dir>/locks/`, named by a hash of the workspace
-  root, so the workspace itself holds only canonical files.
+- Every writer of a workspace takes turns, whatever its data directory. Each
+  write holds an OS-level lock on `.molabel/locks/workspace.lock` inside the
+  workspace. `.molabel/` holds a `.gitignore` of `*`, so it never shows in
+  `git status`.
 - An edit made to a file outside the API, by hand or with `molabel artifact
   write`, reaches the database at the next `molabel workspace bootstrap`. Bootstrap
   re-reads every file the manifest lists and rewrites its row. A listed file it

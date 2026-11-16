@@ -12,7 +12,6 @@ state and live only in the database.
 from __future__ import annotations
 
 import errno
-import hashlib
 import os
 import stat
 import uuid
@@ -27,7 +26,6 @@ from fastapi import HTTPException
 from filelock import FileLock
 from sqlalchemy import text
 
-from molabel.app.server_state import server_data_dir
 from molabel.app.workspace_paths import WorkspacePathError, resolve_in_workspace
 from molabel.core.manifest import (
     DatasetManifestEntry,
@@ -220,18 +218,25 @@ class WorkspaceFiles:
                 _write_atomically(path, original)
 
 
+WORKSPACE_STATE_DIR = ".molabel"
+
+
 def workspace_lock(root: Path) -> FileLock:
     """The OS-level lock every writer of files in the workspace at *root* holds.
 
     Take it before any database write, so writers wait for each other in one
     order and a rollback in ``workspace_files`` can only undo its own writes.
-    The lock file lives in the server data directory, keyed by the resolved
-    root, so the workspace holds only canonical files.
+    The lock file lives in the workspace, so every writer shares it whatever
+    its data directory, under ``.molabel/``, which ignores itself in git.
     """
-    key = os.path.normcase(str(root.resolve())).encode("utf-8")
-    locks = server_data_dir() / "locks"
-    locks.mkdir(parents=True, exist_ok=True)
-    return FileLock(locks / f"workspace-{hashlib.sha256(key).hexdigest()}.lock")
+    state_dir = resolve_in_workspace(root, WORKSPACE_STATE_DIR)
+    (state_dir / "locks").mkdir(parents=True, exist_ok=True)
+    ignore = resolve_in_workspace(root, f"{WORKSPACE_STATE_DIR}/.gitignore")
+    if not ignore.exists():
+        _write_atomically(ignore, "*\n")
+    return FileLock(
+        resolve_in_workspace(root, f"{WORKSPACE_STATE_DIR}/locks/workspace.lock")
+    )
 
 
 @contextmanager
