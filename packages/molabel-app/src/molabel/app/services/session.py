@@ -85,8 +85,9 @@ def create_session_token(reviewer_id: uuid.UUID, secret: str) -> str:
     Token format: ``<base64url-json-payload>.<hmac-sha256-hex>``
 
     The payload is a JSON object with ``reviewer_id`` (str) and
-    ``issued_at`` (float, Unix timestamp), base64url-encoded to reduce
-    information exposure in the cookie value.
+    ``issued_at`` (float, Unix timestamp), base64url-encoded without
+    padding. ``=`` is not a legal cookie character for ``http.cookies``,
+    so a padded payload makes the Set-Cookie value arrive wrapped in quotes.
     """
     payload_json = json.dumps(
         {
@@ -95,7 +96,11 @@ def create_session_token(reviewer_id: uuid.UUID, secret: str) -> str:
         },
         separators=(",", ":"),
     )
-    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode("ascii")
+    payload_b64 = (
+        base64.urlsafe_b64encode(payload_json.encode("utf-8"))
+        .decode("ascii")
+        .rstrip("=")
+    )
     signature = _sign_payload(payload_b64, secret)
     return f"{payload_b64}{_SEPARATOR}{signature}"
 
@@ -117,7 +122,8 @@ def verify_session_token(token: str, secret: str) -> uuid.UUID | None:
         return None
 
     try:
-        payload_json = base64.urlsafe_b64decode(payload_b64.encode("ascii")).decode(
+        padded_b64 = payload_b64 + "=" * (-len(payload_b64) % 4)
+        payload_json = base64.urlsafe_b64decode(padded_b64.encode("ascii")).decode(
             "utf-8"
         )
         data = json.loads(payload_json)
