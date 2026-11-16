@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import type { Command } from 'commander'
 import { parse as parseYaml } from 'yaml'
 
+import { CliFailure } from '../errors.js'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import { getRuntimeOptions, outputMode, requireClient } from './context.js'
@@ -184,19 +185,20 @@ async function runBenchmarkVerifyPack(
     result.warnings = []
   }
 
-  await emit(
-    {
-      benchmark: pack.pack,
-      ok: result.errors.length === 0,
-      errors: result.errors,
-      warnings: result.warnings,
-    },
-    outputMode(options),
-  )
-
-  if (result.errors.length > 0) {
-    process.exitCode = 1
+  const report = {
+    benchmark: pack.pack,
+    ok: result.errors.length === 0,
+    errors: result.errors,
+    warnings: result.warnings,
   }
+  if (!report.ok) {
+    throw new CliFailure(
+      'BENCHMARK_PACK_INVALID',
+      `Benchmark pack failed verification with ${String(result.errors.length)} error(s)`,
+      report,
+    )
+  }
+  await emit(report, outputMode(options))
 }
 
 async function runBenchmarkFetchSource(
