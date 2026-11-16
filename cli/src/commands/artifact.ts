@@ -28,16 +28,9 @@ export function registerArtifactCommands(
     .description('Artifact operations')
   artifact
     .command('read <kind> <selector>')
-    .description('Read a canonical artifact')
-    .option('--raw', 'emit raw file content')
-    .action(async function (this: Command, kind: string, selector: string) {
-      const commandOptions = this.opts<{ raw?: boolean }>()
-      await runArtifactRead(
-        getRuntimeOptions(program, runtime),
-        kind,
-        selector,
-        commandOptions.raw ?? false,
-      )
+    .description('Read a canonical artifact (--raw prints only its content)')
+    .action(async (kind: string, selector: string) => {
+      await runArtifactRead(getRuntimeOptions(program, runtime), kind, selector)
     })
   artifact
     .command('diff <kind> <selector>')
@@ -137,8 +130,8 @@ async function runArtifactRead(
   options: CliRuntimeOptions,
   kind: string,
   selector: string,
-  raw = false,
 ): Promise<void> {
+  const raw = options.raw ?? false
   const workspace = await detectWorkspaceRoot(options.workspaceRoot)
   if (!workspace.rootDir) {
     throw new Error('No MoLabel workspace detected')

@@ -25,7 +25,7 @@ interface JsonBodyOptions {
 interface ReleaseCertifyOptions {
   workspaceId?: string
   name?: string
-  version: string
+  releaseVersion: string
   exportId?: string[]
   benchmarkRunId?: string[]
   certificationThreshold?: string
@@ -83,7 +83,7 @@ export function registerReleaseCommands(
   release
     .command('certify')
     .description('Create a release from benchmark certification evidence')
-    .requiredOption('--version <version>', 'Release version')
+    .requiredOption('--release-version <version>', 'Release version')
     .option('--workspace-id <id>', 'Workspace ID')
     .option('--name <name>', 'Release name')
     .option('--export-id <id>', 'Export bundle id', collect, [])
@@ -168,8 +168,8 @@ async function runReleaseCertify(
   }
   const response = await client.postJson('/api/v1/releases', {
     workspace_id: workspaceId,
-    name: commandOptions.name ?? `Certified ${commandOptions.version}`,
-    version: commandOptions.version,
+    name: commandOptions.name ?? `Certified ${commandOptions.releaseVersion}`,
+    version: commandOptions.releaseVersion,
     export_ids: commandOptions.exportId ?? [],
     benchmark_run_ids: commandOptions.benchmarkRunId ?? [],
     certification_threshold: threshold,

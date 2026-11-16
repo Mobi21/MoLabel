@@ -32,7 +32,6 @@ export function registerCoreCommands(
   program
     .command('manifest')
     .description('Print the CLI manifest')
-    .option('--json')
     .action(async () => {
       await emit(COMMAND_MANIFEST, 'json')
     })

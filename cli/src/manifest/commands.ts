@@ -450,6 +450,13 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       name: 'release certify',
       group: 'release',
       description: 'Create a release from benchmark certification evidence',
+      flags: [
+        {
+          name: '--release-version',
+          description: 'Release version',
+          required: true,
+        },
+      ],
     },
     {
       name: 'artifact read',
