@@ -36,6 +36,10 @@ async function snap(page: Page, name: string) {
 async function signIn(page: Page, name: string) {
   await page.goto('/')
   await expect(page).toHaveURL(/\/sign-in$/)
+  await expect(
+    page.getByRole('heading', { name: 'Who is reviewing?' }),
+  ).toBeVisible()
+  await snap(page, 'sign-in')
   const digit = await page
     .getByRole('button', { name: new RegExp(`${name}$|${name} `) })
     .locator('kbd')
