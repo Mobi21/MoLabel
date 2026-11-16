@@ -1,7 +1,7 @@
 """Agreement metrics tests (T6-01, T6-02).
 
-T6-01: Cohen's kappa — binary/multi-class; perfect=1.0, random~0.
-T6-02: Krippendorff's alpha — ordinal scale, multiple raters, missing data.
+T6-01: Cohen's kappa — binary/multi-class; undefined on a single label.
+T6-02: Krippendorff's alpha — nominal, multiple raters, missing data.
 """
 
 from __future__ import annotations
@@ -53,8 +53,7 @@ async def test_cohens_kappa_perfect_and_random(
     """T6-01: Cohen's kappa computation for binary and multi-class cases."""
     service = AgreementMetricsService()
 
-    with checkpoint(ctx, "perfect_agreement_kappa_one"):
-        # All human-agent pairs agree → kappa = 1.0
+    with checkpoint(ctx, "single_label_kappa_undefined"):
         records = [
             AgreementRecord(
                 record_id=f"r{i}",
@@ -70,7 +69,8 @@ async def test_cohens_kappa_perfect_and_random(
         ha = result.human_agent
         assert ha is not None
         assert ha.percent_agreement == pytest.approx(1.0)
-        assert ha.cohen_kappa == pytest.approx(1.0)
+        assert ha.cohen_kappa is None
+        assert "cohen_kappa" in ha.null_reasons
 
     with checkpoint(ctx, "complete_disagreement_kappa_near_negative"):
         # All human=positive, all agent=negative → 0% agreement
@@ -163,11 +163,10 @@ async def test_krippendorffs_alpha_ordinal_and_missing(
     ctx: TestContext,
     client: InstrumentedClient,
 ) -> None:
-    """T6-02: Krippendorff's alpha — ordinal scale, multiple raters, missing data."""
+    """T6-02: Krippendorff's alpha — nominal, multiple raters, missing data."""
     service = AgreementMetricsService()
 
-    with checkpoint(ctx, "ordinal_perfect_agreement_alpha_one"):
-        # 5-point ordinal scale, all raters agree
+    with checkpoint(ctx, "single_value_alpha_undefined"):
         records_perfect = []
         for i in range(10):
             annotations = [
@@ -181,7 +180,8 @@ async def test_krippendorffs_alpha_ordinal_and_missing(
         result_perfect = service.analyze(
             records_perfect, analysis_type="inter_annotator"
         )
-        assert result_perfect.overall.krippendorff_alpha == pytest.approx(1.0)
+        assert result_perfect.overall.krippendorff_alpha is None
+        assert "krippendorff_alpha" in result_perfect.overall.null_reasons
 
     with checkpoint(ctx, "ordinal_disagreement_lowers_alpha"):
         records_mixed = [
