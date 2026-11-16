@@ -218,17 +218,25 @@ class WorkspaceFiles:
                 _write_atomically(path, original)
 
 
+def workspace_lock(root: Path) -> FileLock:
+    """The OS-level lock every writer of files in the workspace at *root* holds.
+
+    Take it before any database write, so writers wait for each other in one
+    order and a rollback in ``workspace_files`` can only undo its own writes.
+    """
+    return FileLock(resolve_in_workspace(root, f".{MANIFEST_FILENAME}.lock"))
+
+
 @contextmanager
 def workspace_files(folder: WorkspaceFolder) -> Iterator[WorkspaceFiles]:
     """Write config files and commit their rows as one unit.
 
-    Holds an OS-level lock beside the manifest, so writers in other server
-    processes wait their turn. Commit the database inside the block, as its
+    Holds ``workspace_lock``, so other writers, in this server process or
+    another, wait their turn. Commit the database inside the block, as its
     last step: if anything in the block raises, every file it wrote gets its
     old content back, or is removed if it is new.
     """
-    lock = resolve_in_workspace(folder.path, f".{MANIFEST_FILENAME}.lock")
-    with FileLock(lock):
+    with workspace_lock(folder.path):
         files = WorkspaceFiles(folder)
         try:
             yield files

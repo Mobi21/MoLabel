@@ -16,6 +16,7 @@ from sqlalchemy import text
 
 from molabel.app.api.v1.cli.deps import CurrentCliReviewer
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import workspace_lock
 from molabel.app.workspace_paths import (
     WorkspaceRoot,
     glob_in_workspace,
@@ -872,25 +873,26 @@ async def decide_artifact_proposal(
             selector=payload["selector"],
             workspace=workspace,
         )
-        current_hash = _hash_file(path)
         expected_hash = payload.get("expected_hash") or payload.get("current_hash")
-        if current_hash is not None and expected_hash != current_hash:
-            payload["status"] = "conflicted"
-            payload["has_conflict"] = True
-            payload["decision_notes"] = body.notes
-            payload["decided_by"] = str(reviewer.id)
-            payload["decided_at"] = decided_at.isoformat()
-            _write_proposal(_proposal_path(workspace.path, proposal_id), payload)
-            raise HTTPException(
-                status_code=409,
-                detail="Artifact changed since proposal creation",
+        with workspace_lock(workspace.path):
+            current_hash = _hash_file(path)
+            if current_hash is not None and expected_hash != current_hash:
+                payload["status"] = "conflicted"
+                payload["has_conflict"] = True
+                payload["decision_notes"] = body.notes
+                payload["decided_by"] = str(reviewer.id)
+                payload["decided_at"] = decided_at.isoformat()
+                _write_proposal(_proposal_path(workspace.path, proposal_id), payload)
+                raise HTTPException(
+                    status_code=409,
+                    detail="Artifact changed since proposal creation",
+                )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            result = AtomicWriter().write_atomic(
+                str(payload["content"]).encode("utf-8"),
+                path,
+                skip_conflict_check=True,
             )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        result = AtomicWriter().write_atomic(
-            str(payload["content"]).encode("utf-8"),
-            path,
-            skip_conflict_check=True,
-        )
         if not result.success or result.final_path is None:
             raise HTTPException(
                 status_code=500,
@@ -944,34 +946,35 @@ async def write_artifact(
     _reviewer: CurrentCliReviewer,
 ) -> ArtifactWriteResponse:
     """Write canonical artifact content after an expected-hash check."""
+    workspace = _request_workspace(
+        request, workspace_root=body.workspace_root, workspace_id=body.workspace_id
+    )
     path, _metadata = _resolve_artifact_path(
-        request,
-        kind=body.kind,
-        selector=body.selector,
-        workspace=_request_workspace(
-            request, workspace_root=body.workspace_root, workspace_id=body.workspace_id
-        ),
+        request, kind=body.kind, selector=body.selector, workspace=workspace
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    current_hash = _hash_file(path)
-    if path.exists():
-        if body.expected_hash is None:
-            raise HTTPException(
-                status_code=409,
-                detail="expected_hash is required when overwriting an existing file",
-            )
-        if current_hash != body.expected_hash:
-            raise HTTPException(
-                status_code=409,
-                detail="Artifact changed since it was read",
-            )
+    with workspace_lock(workspace.path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        current_hash = _hash_file(path)
+        if path.exists():
+            if body.expected_hash is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "expected_hash is required when overwriting an existing file"
+                    ),
+                )
+            if current_hash != body.expected_hash:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Artifact changed since it was read",
+                )
 
-    writer = AtomicWriter()
-    result = writer.write_atomic(
-        body.content.encode("utf-8"),
-        path,
-        skip_conflict_check=True,
-    )
+        writer = AtomicWriter()
+        result = writer.write_atomic(
+            body.content.encode("utf-8"),
+            path,
+            skip_conflict_check=True,
+        )
     if not result.success or result.final_path is None:
         raise HTTPException(
             status_code=500,

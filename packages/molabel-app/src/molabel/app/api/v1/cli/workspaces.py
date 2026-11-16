@@ -37,6 +37,7 @@ from molabel.app.workspace_config import (
     WORKFLOW,
     WorkspaceFolder,
     read_config,
+    workspace_lock,
 )
 from molabel.app.workspace_paths import (
     WorkspacePathError,
@@ -241,17 +242,18 @@ async def bootstrap_workspace(
     )
     for notice in legacy:
         logger.warning("LEGACY DATABASE NOT LOADED: %s", notice.message)
-    result = WorkspaceBootstrapper().bootstrap(
-        workspace_path,
-        engine=engine,
-        workspace_name=body.workspace_name,
-    )
-    index_problems = _reindex_config_files(
-        engine,
-        WorkspaceFolder(
-            str(result.workspace_id), result.workspace_name, Path(result.root_path)
-        ),
-    )
+    with workspace_lock(workspace_path):
+        result = WorkspaceBootstrapper().bootstrap(
+            workspace_path,
+            engine=engine,
+            workspace_name=body.workspace_name,
+        )
+        index_problems = _reindex_config_files(
+            engine,
+            WorkspaceFolder(
+                str(result.workspace_id), result.workspace_name, Path(result.root_path)
+            ),
+        )
     reviewer_id: uuid.UUID | None = None
     with engine.connect() as conn:
         row = conn.execute(

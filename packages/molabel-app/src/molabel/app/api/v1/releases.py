@@ -20,6 +20,7 @@ from molabel.app.api.v1.exports import ExportSummary
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import workspace_lock
 from molabel.app.workspace_paths import (
     glob_in_workspace,
     registered_root,
@@ -412,11 +413,12 @@ def _write_proof_manifest(
     manifest_path = resolve_in_workspace(
         root, f"workbench/releases/{_slugify(data.version)}/proof-manifest.json"
     )
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(
-        json.dumps(proof_manifest, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
+    with workspace_lock(root):
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps(proof_manifest, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
     return proof_manifest, str(manifest_path)
 
 

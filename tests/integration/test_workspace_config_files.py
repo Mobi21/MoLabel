@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -473,6 +476,124 @@ async def test_a_read_only_manifest_refuses_the_import_and_keeps_no_records(
     assert _files(workspace) == before
     records = await client.get(f"/api/v1/datasets/{dataset['dataset_id']}/records")
     assert records.json()["items"] == []
+
+
+@pytest.fixture()
+def threaded(tmp_path: Path, workspace: Path):
+    """An app on a database file, so requests on separate threads overlap."""
+    engine = create_engine(
+        f"sqlite:///{(tmp_path / 'threaded.db').as_posix()}",
+        connect_args={"check_same_thread": False},
+    )
+    upgrade_database(engine)
+    app = create_app()
+    app.state.engine = engine
+    app.state.app_secret = "config-files-secret"
+    booted = TestClient(app).post(
+        "/api/v1/cli/workspaces/bootstrap", json={"path": str(workspace)}
+    )
+    assert booted.status_code == 201, booted.text
+    app.state.workspace_id = booted.json()["workspace_id"]
+    app.state.session = booted.cookies["molabel_session"]
+    yield app
+    engine.dispose()
+
+
+def _client(app) -> TestClient:
+    return TestClient(app, cookies={"molabel_session": app.state.session})
+
+
+def _during_a_rolled_back_schema_create(app, action):
+    """Run *action* while a task schema create has written its files.
+
+    The create then fails its database insert and puts its files back. It
+    waits briefly for *action* first, so an action that does not wait for the
+    workspace lock lands inside the create.
+    """
+    in_flight, acted = threading.Event(), threading.Event()
+
+    def fail_the_first_insert(_conn, _cursor, statement, *_args) -> None:
+        if statement.startswith("INSERT INTO task_schemas") and not in_flight.is_set():
+            in_flight.set()
+            acted.wait(0.5)
+            raise CommitRefused
+
+    engine = app.state.engine
+    event.listen(engine, "before_cursor_execute", fail_the_first_insert)
+    try:
+        with ThreadPoolExecutor(1) as pool:
+            create = pool.submit(
+                _client(app).post,
+                "/api/v1/task-schemas",
+                json={**SCHEMA, "workspace_id": app.state.workspace_id},
+            )
+            assert in_flight.wait(10), "the create never reached its insert"
+            result = action(_client(app))
+            acted.set()
+            with pytest.raises(CommitRefused):
+                create.result(timeout=30)
+    finally:
+        event.remove(engine, "before_cursor_execute", fail_the_first_insert)
+    return result
+
+
+AGENT_EDIT = "# An agent's edit\n"
+
+
+def _manifest_edit(workspace: Path, workspace_id: str) -> dict:
+    manifest = workspace / "workbench.project.yaml"
+    return {
+        "kind": "workspace_manifest",
+        "selector": "workspace",
+        "workspace_id": workspace_id,
+        "content": manifest.read_text(encoding="utf-8") + AGENT_EDIT,
+        "expected_hash": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+    }
+
+
+def _write(client: TestClient, edit: dict):
+    return client.post("/api/v1/cli/artifacts/write", json=edit)
+
+
+def _propose_and_accept(client: TestClient, edit: dict):
+    proposal = client.post("/api/v1/cli/artifacts/proposals", json=edit)
+    assert proposal.status_code == 200, proposal.text
+    return client.post(
+        f"/api/v1/cli/artifacts/proposals/{proposal.json()['proposal_id']}/decision",
+        json={"decision": "accept", "workspace_id": edit["workspace_id"]},
+    )
+
+
+@pytest.mark.parametrize(
+    "apply", [_write, _propose_and_accept], ids=["write", "accepted proposal"]
+)
+def test_an_artifact_edit_during_a_rolled_back_config_write_conflicts(
+    threaded, workspace, apply
+):
+    resp = _during_a_rolled_back_schema_create(
+        threaded,
+        lambda client: apply(
+            client, _manifest_edit(workspace, threaded.state.workspace_id)
+        ),
+    )
+
+    manifest = (workspace / "workbench.project.yaml").read_text(encoding="utf-8")
+    assert (resp.status_code, AGENT_EDIT in manifest) == (409, False)
+
+
+def test_bootstrap_during_a_rolled_back_config_write_indexes_none_of_it(
+    threaded, workspace
+):
+    resp = _during_a_rolled_back_schema_create(
+        threaded,
+        lambda client: client.post(
+            "/api/v1/cli/workspaces/bootstrap", json={"path": str(workspace)}
+        ),
+    )
+
+    assert resp.status_code == 201, resp.text
+    schemas = _client(threaded).get("/api/v1/task-schemas").json()["items"]
+    assert [s["task_schema_slug"] for s in schemas] == []
 
 
 NATIVE_WORKFLOW = """\
