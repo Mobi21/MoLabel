@@ -8,26 +8,22 @@ description: >
 steps:
   - id: ingest
     type: data_ingest
-    config:
-      source: "data/raw/*.jsonl"
+    config: {}
 
   - id: normalize
     type: data_normalize
-    config:
-      schema_ref: "schemas/default.yaml"
+    config: {}
 
   - id: expert_review_1
     type: human_review
     config:
       sample_strategy: all
-      task_schema_id: default
       breakpoint: true
 
   - id: expert_review_2
     type: human_review
     config:
       sample_strategy: all
-      task_schema_id: default
 
   - id: agreement
     type: agreement_analysis

@@ -131,14 +131,20 @@ def _seed_task_schema(engine, workspace_id):
     return task_schema_id
 
 
-def _seed_workflow(engine, workspace_id, *, include_export: bool = False):
+def _seed_workflow(
+    engine,
+    workspace_id,
+    *,
+    include_export: bool = False,
+    ingest_config: dict | None = None,
+):
     workflow_id = uuid.uuid4()
     now = datetime.now(UTC).isoformat()
     steps = [
         {
             "step_id": "ingest",
             "step_type": "data_ingest",
-            "config": {"source": "data/reviews.jsonl"},
+            "config": ingest_config or {"source": "data/reviews.jsonl"},
         },
         {
             "step_id": "agent_label",
@@ -317,6 +323,85 @@ async def test_execute_failed_step_reports_same_status_as_detail(client, app, tm
     assert body["status"] == detail["status"] == "paused"
     states = {item["step_id"]: item["status"] for item in detail["step_states"]}
     assert states["ingest"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_execute_ingests_an_imported_dataset_by_id(client, app, tmp_path):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    headers = {"Cookie": f"molabel_session={token}"}
+    dataset_resp = await client.post(
+        "/api/v1/datasets",
+        json={
+            "workspace_id": str(workspace_id),
+            "dataset_name": "Imported reviews",
+            "source_type": "jsonl",
+        },
+        headers=headers,
+    )
+    assert dataset_resp.status_code == 201, dataset_resp.text
+    dataset_id = dataset_resp.json()["dataset_id"]
+    import_resp = await client.post(
+        f"/api/v1/datasets/{dataset_id}/import",
+        json={
+            "records": [
+                {"id": "r1", "text": "I love how fast this is."},
+                {"id": "r2", "text": "This was slow and bad."},
+            ]
+        },
+        headers=headers,
+    )
+    assert import_resp.status_code == 202, import_resp.text
+    workflow_id = _seed_workflow(
+        app.state.engine, workspace_id, ingest_config={"dataset_id": dataset_id}
+    )
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute", json={}, headers=headers
+    )
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["error_summary"] is None
+    assert body["current_step_id"] == "review"
+    with app.state.engine.connect() as conn:
+        queued = conn.execute(
+            text("SELECT count(*), min(dataset_id) FROM review_tasks")
+        ).first()
+    assert int(queued[0]) == 2
+    assert str(queued[1]) == dataset_id
+
+
+@pytest.mark.asyncio
+async def test_execute_reports_an_empty_dataset_as_a_failed_ingest(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    headers = {"Cookie": f"molabel_session={token}"}
+    dataset_resp = await client.post(
+        "/api/v1/datasets",
+        json={
+            "workspace_id": str(workspace_id),
+            "dataset_name": "Empty",
+            "source_type": "jsonl",
+        },
+        headers=headers,
+    )
+    dataset_id = dataset_resp.json()["dataset_id"]
+    workflow_id = _seed_workflow(
+        app.state.engine, workspace_id, ingest_config={"dataset_id": dataset_id}
+    )
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute", json={}, headers=headers
+    )
+
+    body = resp.json()
+    assert body["current_step_id"] == "ingest"
+    assert "has no records" in body["error_summary"]
 
 
 @pytest.mark.asyncio

@@ -200,3 +200,63 @@ def get_template_yaml(template_id: str) -> str:
     """
     path = get_template_path(template_id)
     return path.read_text(encoding="utf-8")
+
+
+TASK_SCHEMA_STEP_TYPES = frozenset(
+    {"agent_run", "agent_compare", "human_review", "human_calibration"}
+)
+
+
+def _steps(definition: dict[str, Any]) -> list[dict[str, Any]]:
+    steps = definition.get("steps")
+    return steps if isinstance(steps, list) else []
+
+
+def _config(step: dict[str, Any]) -> dict[str, Any]:
+    config = step.get("config")
+    return config if isinstance(config, dict) else {}
+
+
+def template_needs_dataset(definition: dict[str, Any]) -> bool:
+    """Whether a data_ingest step has neither a source file nor a dataset."""
+    return any(
+        step.get("type") == "data_ingest"
+        and not _config(step).get("source")
+        and not _config(step).get("dataset_id")
+        for step in _steps(definition)
+    )
+
+
+def template_needs_task_schema(definition: dict[str, Any]) -> bool:
+    """Whether a step that labels or reviews records has no task schema."""
+    return any(
+        step.get("type") in TASK_SCHEMA_STEP_TYPES
+        and not _config(step).get("task_schema_id")
+        for step in _steps(definition)
+    )
+
+
+def bind_template_inputs(
+    definition: dict[str, Any],
+    *,
+    dataset_id: str | None,
+    task_schema_id: str | None,
+) -> dict[str, Any]:
+    """Return a copy of a template definition bound to a dataset and schema.
+
+    A bound dataset replaces any ingest source file. A bound task schema
+    applies to every labeling, review, and normalize step.
+    """
+    bound_steps: list[dict[str, Any]] = []
+    for step in _steps(definition):
+        config = dict(_config(step))
+        step_type = step.get("type")
+        if dataset_id and step_type == "data_ingest":
+            config.pop("source", None)
+            config["dataset_id"] = dataset_id
+        if task_schema_id and step_type in TASK_SCHEMA_STEP_TYPES:
+            config["task_schema_id"] = task_schema_id
+        if task_schema_id and step_type == "data_normalize":
+            config["schema_ref"] = task_schema_id
+        bound_steps.append({**step, "config": config})
+    return {**definition, "steps": bound_steps}

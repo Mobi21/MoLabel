@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+import yaml
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.pool import StaticPool
@@ -168,6 +169,163 @@ async def test_workflow_templates_are_listable_and_fetchable(client):
     assert body["task_family"] == "general_labeling"
     assert "agent_labeling" in body["capabilities"]
     assert "yaml" in body and "steps" in body["yaml"]
+
+
+def _seed_template_inputs(
+    engine, workspace_id: uuid.UUID, *, datasets: int, task_schemas: int
+) -> tuple[list[str], list[str]]:
+    dataset_ids = [str(uuid.uuid4()) for _ in range(datasets)]
+    schema_ids = [str(uuid.uuid4()) for _ in range(task_schemas)]
+    now = datetime.now(UTC).isoformat()
+    with engine.connect() as conn:
+        for index, dataset_id in enumerate(dataset_ids):
+            conn.execute(
+                text(
+                    "INSERT INTO datasets (id, dataset_name, dataset_slug, "
+                    "source_type, canonical_id_strategy, indexing_mode, "
+                    "record_count, labeled_count, health_status, created_at, "
+                    "updated_at, workspace_id) VALUES (:id, :name, :slug, 'jsonl', "
+                    "'source_record_id', 'projection', 0, 0, 'healthy', :now, "
+                    ":now, :wid)"
+                ),
+                {
+                    "id": dataset_id,
+                    "name": f"Dataset {index}",
+                    "slug": f"dataset-{index}",
+                    "now": now,
+                    "wid": str(workspace_id),
+                },
+            )
+        for index, schema_id in enumerate(schema_ids):
+            conn.execute(
+                text(
+                    "INSERT INTO task_schemas (id, task_schema_slug, version, "
+                    "task_type, title, label_fields, blind_review_policy, "
+                    "is_active, is_frozen, created_at, updated_at, workspace_id) "
+                    "VALUES (:id, :slug, 1, 'classification', :title, '[]', "
+                    "'show_agent_outputs', 1, 0, :now, :now, :wid)"
+                ),
+                {
+                    "id": schema_id,
+                    "slug": f"schema-{index}",
+                    "title": f"Schema {index}",
+                    "now": now,
+                    "wid": str(workspace_id),
+                },
+            )
+        conn.commit()
+    return dataset_ids, schema_ids
+
+
+@pytest.mark.asyncio
+async def test_template_binds_to_the_single_dataset_and_task_schema(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    (dataset_id,), (schema_id,) = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=1, task_schemas=1
+    )
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={"workspace_id": str(workspace_id)},
+    )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["bindings"] == {"dataset_id": dataset_id, "task_schema_id": schema_id}
+    steps = {step["id"]: step for step in yaml.safe_load(body["yaml"])["steps"]}
+    assert steps["ingest"]["config"] == {"dataset_id": dataset_id}
+    assert steps["agent_label"]["config"]["task_schema_id"] == schema_id
+    assert steps["review"]["config"]["task_schema_id"] == schema_id
+
+
+@pytest.mark.asyncio
+async def test_template_binding_uses_the_named_dataset_and_task_schema(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    dataset_ids, schema_ids = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=2, task_schemas=2
+    )
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={
+            "workspace_id": str(workspace_id),
+            "dataset_id": "dataset-1",
+            "task_schema_id": schema_ids[0],
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["bindings"] == {
+        "dataset_id": dataset_ids[1],
+        "task_schema_id": schema_ids[0],
+    }
+
+
+@pytest.mark.asyncio
+async def test_template_binding_rejects_an_ambiguous_dataset(client, app, tmp_path):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    dataset_ids, _ = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=2, task_schemas=1
+    )
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={"workspace_id": str(workspace_id)},
+    )
+
+    assert resp.status_code == 400
+    message = resp.json()["error"]["message"]
+    assert all(dataset_id in message for dataset_id in dataset_ids)
+
+
+@pytest.mark.asyncio
+async def test_template_binding_rejects_a_workspace_with_no_dataset(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    _seed_template_inputs(app.state.engine, workspace_id, datasets=0, task_schemas=1)
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={"workspace_id": str(workspace_id)},
+    )
+
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_template_binding_rejects_an_unknown_dataset(client, app, tmp_path):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    _seed_template_inputs(app.state.engine, workspace_id, datasets=1, task_schemas=1)
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={"workspace_id": str(workspace_id), "dataset_id": "missing"},
+    )
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_template_with_bound_inputs_needs_no_workspace_dataset(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/grounded_classification_review",
+        params={"workspace_id": str(workspace_id)},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["bindings"] == {"dataset_id": None, "task_schema_id": None}
+    steps = yaml.safe_load(resp.json()["yaml"])["steps"]
+    ingest = next(step for step in steps if step["type"] == "data_ingest")
+    assert ingest["config"]["source"] == "workbench/benchmarks/splits/test.jsonl"
 
 
 @pytest.mark.asyncio

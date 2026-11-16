@@ -7,13 +7,11 @@ description: >
 steps:
   - id: ingest
     type: data_ingest
-    config:
-      source: "data/raw/*.jsonl"
+    config: {}
 
   - id: normalize
     type: data_normalize
-    config:
-      schema_ref: "schemas/default.yaml"
+    config: {}
 
   - id: agent_label
     type: agent_run

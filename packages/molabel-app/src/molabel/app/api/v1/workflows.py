@@ -968,6 +968,26 @@ class _WorkflowDataLoader:
         self._workspace_id = workspace_id
         self._workspace_root = workspace_root
 
+    def load_dataset_records(self, dataset_id: str) -> list[_LoadedRecord]:
+        dataset = self._conn.execute(
+            text("SELECT id FROM datasets WHERE id = :id AND workspace_id = :wid"),
+            {"id": dataset_id, "wid": self._workspace_id},
+        ).first()
+        if dataset is None:
+            raise LookupError(f"Dataset not found in this workspace: {dataset_id}")
+        rows = self._conn.execute(
+            text(
+                "SELECT id FROM records WHERE dataset_id = :dataset_id "
+                "ORDER BY sequence_index, created_at"
+            ),
+            {"dataset_id": dataset_id},
+        ).fetchall()
+        if not rows:
+            raise LookupError(
+                f"Dataset {dataset_id} has no records. Import records first."
+            )
+        return [_LoadedRecord(str(row[0])) for row in rows]
+
     def load_records(
         self,
         source: str,
