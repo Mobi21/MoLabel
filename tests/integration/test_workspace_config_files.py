@@ -596,6 +596,59 @@ def test_bootstrap_during_a_rolled_back_config_write_indexes_none_of_it(
     assert [s["task_schema_slug"] for s in schemas] == []
 
 
+def test_an_import_and_a_config_write_at_once_both_succeed(threaded, workspace):
+    client = TestClient(
+        threaded,
+        cookies={"molabel_session": threaded.state.session},
+        raise_server_exceptions=False,
+    )
+    dataset = client.post(
+        "/api/v1/datasets",
+        json={
+            "workspace_id": threaded.state.workspace_id,
+            "dataset_name": "reviews",
+            "source_type": "jsonl",
+        },
+    )
+    assert dataset.status_code == 201, dataset.text
+    import_wrote, config_writing = threading.Event(), threading.Event()
+
+    def overlap(_conn, _cursor, statement, *_args) -> None:
+        if statement.lstrip().startswith("UPDATE datasets"):
+            import_wrote.set()
+            config_writing.wait(1)
+        elif statement.startswith("INSERT INTO task_schemas"):
+            config_writing.set()
+
+    engine = threaded.state.engine
+    event.listen(engine, "before_cursor_execute", overlap)
+    try:
+        with ThreadPoolExecutor(2) as pool:
+            imported = pool.submit(
+                client.post,
+                f"/api/v1/datasets/{dataset.json()['dataset_id']}/import",
+                json={"source_uri": "data/reviews.jsonl"},
+            )
+            assert import_wrote.wait(10), "the import never wrote its records"
+            created = pool.submit(
+                client.post,
+                "/api/v1/task-schemas",
+                json={**SCHEMA, "workspace_id": threaded.state.workspace_id},
+            )
+            statuses = (
+                imported.result(timeout=30).status_code,
+                created.result(timeout=30).status_code,
+            )
+    finally:
+        event.remove(engine, "before_cursor_execute", overlap)
+
+    assert statuses == (202, 201)
+    manifest = _yaml(workspace / "workbench.project.yaml")
+    assert [e["task_schema_id"] for e in manifest["task_schemas"]] == ["sentiment"]
+    datasets = {d["dataset_id"]: d["source_paths"] for d in manifest["datasets"]}
+    assert datasets["reviews"] == ["data/reviews.jsonl"]
+
+
 NATIVE_WORKFLOW = """\
 name: Native review
 description: Written by hand in the core format.

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -602,6 +603,13 @@ async def import_dataset(
                     )
                     records_skipped += 1
 
+    # Take the workspace lock before the first database write, as every route does.
+    manifest_change = (
+        nullcontext()
+        if imported_file is None
+        else workspace_files(workspace_folder(engine, workspace_id))
+    )
+    with manifest_change as files, engine.connect() as conn:
         # Check existing records to avoid duplicates
         existing_rows = conn.execute(
             text("SELECT id, external_id FROM records WHERE dataset_id = :dataset_id"),
@@ -692,12 +700,9 @@ async def import_dataset(
                 "dataset_id": str(dataset_id),
             },
         )
-        if imported_file is None:
-            conn.commit()
-        else:
-            with workspace_files(workspace_folder(engine, workspace_id)) as files:
-                files.add_dataset_source(str(row[3]), imported_file)
-                conn.commit()
+        if files is not None:
+            files.add_dataset_source(str(row[3]), imported_file)
+        conn.commit()
 
     return ImportStatus(
         job_id=job_id,
