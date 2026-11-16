@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -127,6 +128,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Claim expiry background task stopped")
 
 
+def _operation_id(route: APIRoute) -> str:
+    """Name each operation after its route function, for readable generated clients."""
+    return route.name
+
+
 def create_app() -> FastAPI:
     """Build and return the configured FastAPI application."""
 
@@ -137,6 +143,7 @@ def create_app() -> FastAPI:
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
         lifespan=_lifespan,
+        generate_unique_id_function=_operation_id,
     )
 
     # ----- middleware -----
