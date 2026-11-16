@@ -1,4 +1,4 @@
-import { Command } from 'commander'
+import { Command, CommanderError } from 'commander'
 
 import { ApiError } from './client/http.js'
 import { registerCommands } from './commands/index.js'
@@ -44,6 +44,24 @@ export async function runCli(
     return { exitCode }
   } catch (error) {
     const { emit } = await import('./output.js')
+    if (error instanceof CommanderError) {
+      if (error.exitCode === 0) {
+        return { exitCode: 0 }
+      }
+      await emit(
+        {
+          error: {
+            code: 'USAGE_ERROR',
+            message:
+              error.code === 'commander.help'
+                ? 'A subcommand is required. Run with --help to list them.'
+                : error.message,
+          },
+        },
+        'json',
+      )
+      return { exitCode: error.exitCode }
+    }
     if (error instanceof ApiError) {
       await emit(
         {
