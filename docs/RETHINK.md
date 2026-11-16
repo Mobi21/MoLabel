@@ -91,7 +91,7 @@ Each PR is small, stacked, and records its test, lint and typecheck numbers.
 | P2 | State and safety | No database in the launch folder, an honest file-canonical boundary, validated `workspace_root`, Alembic-only tables |
 | P3a | starlette upgrade | Python security bump on its own |
 | P3b | npm majors | vitest@5, @hey-api/openapi-ts |
-| P4 | Cut dead weight | Assistant, depolarize, `src-tauri`, SSE stubs, unused frontend files and deps, internal prompts, accurate AGENTS.md and CLAUDE.md. Format the existing CLI files with prettier, then add `prettier --check` to the CLI CI job |
+| P4 | Cut dead weight | Assistant, depolarize, `src-tauri`, SSE stubs, unused frontend files and deps, internal prompts, accurate AGENTS.md and CLAUDE.md. Format the existing CLI files with prettier, then add `prettier --check` to the CLI CI job. Round-trip workspace YAML (for example `ruamel.yaml`) so config writes keep hand-written comments (#8) |
 | P5 | Offline provider | Deterministic heuristic pre-labels, so the full flow runs with no key. Done means a no-key end-to-end smoke test in CI: import, offline pre-label, review, export |
 | P5b | Agreement metrics correctness | Real Krippendorff's alpha (coincidence matrix, n/(n-1) correction). Cohen, Fleiss and alpha tested against published reference values |
 | P6 | Review GUI | The four screens above, on the real API, with the mock pages deleted |
