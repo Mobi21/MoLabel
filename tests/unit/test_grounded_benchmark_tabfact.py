@@ -10,12 +10,14 @@ from molabel.core.quality.grounded_benchmarks import (
     load_jsonl,
     score_grounded_stage,
 )
+from tests.fixture_data import requires_benchmark_fixtures
 
 ROOT = (
     Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks-grounded" / "tabfact"
 )
 
 
+@requires_benchmark_fixtures
 def test_tabfact_fixture_keeps_paper_and_grounded_views_distinct() -> None:
     bundle = load_grounded_benchmark(ROOT)
     assert bundle.scenario.benchmark_id == "tabfact"

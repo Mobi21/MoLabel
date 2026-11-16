@@ -374,9 +374,10 @@ async def get_agent_run(
     """Get agent run detail (API-042)."""
     engine = get_engine(request)
     with engine.connect() as conn:
-        row = conn.execute(
-            text(
-                """
+        row = (
+            conn.execute(
+                text(
+                    """
                 SELECT
                     agent_runs.id,
                     agent_runs.workspace_id,
@@ -410,9 +411,12 @@ async def get_agent_run(
                 WHERE agent_runs.id = :agent_run_id
                 LIMIT 1
                 """
-            ),
-            {"agent_run_id": agent_run_id},
-        ).mappings().first()
+                ),
+                {"agent_run_id": agent_run_id},
+            )
+            .mappings()
+            .first()
+        )
 
     if row is None:
         raise HTTPException(status_code=404, detail="Agent run not found")

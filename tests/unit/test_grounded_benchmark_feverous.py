@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from molabel.core.quality.grounded_benchmarks import load_grounded_benchmark
+from tests.fixture_data import requires_benchmark_fixtures
 
 BENCHMARK_ROOT = (
     Path(__file__).resolve().parents[2]
@@ -102,6 +103,7 @@ def _paper_direct_score(
     }
 
 
+@requires_benchmark_fixtures
 def test_grounded_feverous_fixture_contract() -> None:
     bundle = load_grounded_benchmark(BENCHMARK_ROOT)
 

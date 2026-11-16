@@ -405,9 +405,8 @@ function ReviewMode({
     setBlindMode(false)
   }
 
-  const handleAction = (action: string) => {
+  const handleAction = (_action: string) => {
     // TODO: submit via API
-    void action
     onBack()
   }
 

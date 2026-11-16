@@ -381,14 +381,11 @@ class TestSubmitCorrectionService:
         events = _review_events_for_task(engine, task_id)
         assert len(events) == 3
 
-        original_id = events[0][0]
-        corr1_id = events[1][0]
+        originals = [str(e[0]) for e in events if e[11] is None]
+        assert len(originals) == 1
 
-        # First correction supersedes original
-        assert corr1["supersedes_event_id"] == original_id
-
-        # Second correction supersedes first correction
-        assert corr2["supersedes_event_id"] == corr1_id
+        assert str(corr1["supersedes_event_id"]) == originals[0]
+        assert str(corr2["supersedes_event_id"]) == str(corr1["id"])
 
     def test_correction_fails_without_prior_event(
         self, engine, reviewer, workspace

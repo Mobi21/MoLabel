@@ -83,7 +83,7 @@ class HuggingFaceLoader:
             ).exists()
         # Pseudo-path convention: Path("huggingface://x") normalises to
         # "huggingface:/x", so we check for both forms.
-        path_str = str(path)
+        path_str = path.as_posix()
         return path_str.startswith("huggingface:/") or path_str.startswith(
             "huggingface://"
         )
@@ -92,7 +92,7 @@ class HuggingFaceLoader:
         """Return the HF dataset name or local path."""
         if config.get("dataset_name"):
             return config["dataset_name"]
-        path_str = str(path)
+        path_str = path.as_posix()
         if path_str.startswith("huggingface://"):
             return path_str[len("huggingface://") :]
         if path_str.startswith("huggingface:/"):

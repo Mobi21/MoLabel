@@ -9,6 +9,7 @@ from molabel.core.quality.grounded_benchmarks import (
     load_jsonl,
     score_grounded_stage,
 )
+from tests.fixture_data import requires_benchmark_fixtures
 
 ROOT = (
     Path(__file__).resolve().parents[2]
@@ -18,6 +19,7 @@ ROOT = (
 )
 
 
+@requires_benchmark_fixtures
 def test_evidence_inference_fixture_uses_grouped_evidence_primitives() -> None:
     bundle = load_grounded_benchmark(ROOT)
     assert bundle.scenario.benchmark_id == "evidence-inference"
