@@ -163,7 +163,8 @@ class TestSessionToken:
         import base64
         import json
 
-        decoded = base64.urlsafe_b64decode(payload_part.encode("ascii")).decode("utf-8")
+        padded = payload_part + "=" * (-len(payload_part) % 4)
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
         data = json.loads(decoded)
         assert data["reviewer_id"] == str(reviewer_id)
 
