@@ -143,6 +143,37 @@ def test_executor_uses_metrics_service_and_writes_flat_metrics() -> None:
     ] == pytest.approx(2 / 3)
 
 
+def test_executor_leaves_undefined_metrics_out_of_context() -> None:
+    executor = AgreementAnalysisExecutor()
+    ctx = _context()
+    ctx.metrics["agreement.kappa"] = 0.9
+    single_label_records = [
+        {
+            "record_id": record_id,
+            "annotations": [
+                {"source": "human", "labels": {"sentiment": "positive"}},
+                {"source": "agent", "labels": {"sentiment": "positive"}},
+            ],
+        }
+        for record_id in ("r1", "r2", "r3")
+    ]
+
+    result = executor.execute(
+        "agreement",
+        {"analysis_type": "both", "agreement_records": single_label_records},
+        ctx,
+    )
+
+    assert result.success
+    assert ctx.metrics["agreement.percent_agreement"] == pytest.approx(1.0)
+    assert "agreement.kappa" not in ctx.metrics
+    assert "agreement.fleiss_kappa" not in ctx.metrics
+    assert "agreement.krippendorff_alpha" not in ctx.metrics
+    assert result.output is not None
+    assert result.output.summary["kappa"] is None
+    assert "cohen_kappa" in result.output.summary["overall"]["null_reasons"]
+
+
 def test_validate_rejects_invalid_analysis_type() -> None:
     executor = AgreementAnalysisExecutor()
     ctx = _context()

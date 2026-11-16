@@ -589,12 +589,16 @@ class TestQualityCheck:
 
 
 class TestAgreementAnalysis:
-    def test_basic_analysis(self) -> None:
+    def test_analysis_without_annotations_writes_no_metrics(self) -> None:
         executor = AgreementAnalysisExecutor()
         ctx = _ctx_with_records()
         result = executor.execute("agreement", {"analysis_type": "both"}, ctx)
         assert result.success
-        assert "agreement.kappa" in ctx.metrics
+        assert "agreement.kappa" not in ctx.metrics
+        assert "agreement.percent_agreement" not in ctx.metrics
+        assert result.output is not None
+        warnings = result.output.summary["warnings"]
+        assert "No comparable annotations were available." in warnings
 
     def test_validate_invalid_type(self) -> None:
         executor = AgreementAnalysisExecutor()
