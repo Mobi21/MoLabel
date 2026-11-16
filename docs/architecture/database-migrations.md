@@ -31,6 +31,7 @@ Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 ### Version Tracking
 - Alembic stores the current schema version in the `alembic_version` table of the server database. There is one server database for all workspaces (see `docs/guides/how-molabel-works-today.md` section 4.2)
 - On startup, the server runs `upgrade_database`, which is `alembic upgrade head`
+- Servers that share a SQLite file migrate it one at a time. Each takes an OS-level lock on `<database>.migrate.lock` beside the file, then re-reads the revision before running anything
 - A database created by `create_all` before Alembic owned the schema has tables but no `alembic_version`. It is stamped at `001`, whose DDL is frozen at exactly that schema, and then upgraded
 - Before stamping, the server checks that such a database has every table and column that `001` creates. If any are missing, startup stops with an error that lists them, and the database is not changed
 
@@ -59,7 +60,7 @@ Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 - Each migration must be idempotent (safe to run twice)
 
 ## Backup Strategy
-- Before running migrations, the app creates a backup: `{db_name}.backup.{timestamp}.sqlite`
+- Before running migrations on a database that has tables, the app creates a backup: `{db_name}.backup.{timestamp}.sqlite`. It is written with SQLite's backup API, so rows still in the WAL file are included
 - Backups are kept for 30 days, then cleaned up
 - If a migration fails, the user can restore from the backup via the Settings screen
 

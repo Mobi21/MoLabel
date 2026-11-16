@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from contextlib import closing
+from contextlib import AbstractContextManager, closing, nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,6 +19,7 @@ from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
+from filelock import FileLock
 from sqlalchemy import Connection, Engine, create_engine, inspect
 
 logger = logging.getLogger(__name__)
@@ -42,14 +43,21 @@ def _alembic_config(engine: Engine) -> AlembicConfig:
     return cfg
 
 
-def _sqlite_file(engine: Engine) -> Path | None:
+def _sqlite_path(engine: Engine) -> Path | None:
     database = engine.url.database
     if engine.url.get_backend_name() != "sqlite" or not database:
         return None
     if database == ":memory:" or database.startswith("file:"):
         return None
-    path = Path(database)
-    return path if path.is_file() and path.stat().st_size > 0 else None
+    return Path(database)
+
+
+def _migration_lock(engine: Engine) -> AbstractContextManager[object]:
+    """An OS-level lock beside a SQLite database file, held by one process at a time."""
+    db_path = _sqlite_path(engine)
+    if db_path is None:
+        return nullcontext()
+    return FileLock(db_path.with_name(f"{db_path.name}.migrate.lock"))
 
 
 def _backup(db_path: Path) -> Path:
@@ -111,32 +119,34 @@ def _require_baseline(conn: Connection) -> None:
 def upgrade_database(engine: Engine) -> None:
     """Run ``alembic upgrade head`` on *engine*, stamping pre-Alembic databases.
 
-    Raises :class:`IncompleteBaselineError`, and changes nothing, when a
-    database without ``alembic_version`` is missing tables or columns of the
-    baseline revision.
+    Processes sharing a SQLite file migrate one at a time; each re-reads the
+    revision once it holds the lock. Raises :class:`IncompleteBaselineError`,
+    and changes nothing, when a database without ``alembic_version`` is
+    missing tables or columns of the baseline revision.
     """
     cfg = _alembic_config(engine)
     head = ScriptDirectory.from_config(cfg).get_current_head()
 
-    with engine.connect() as conn:
-        current = MigrationContext.configure(conn).get_current_heads()
-        if current == (head,):
-            return
-        tables = set(inspect(conn).get_table_names())
-        pre_alembic = bool(tables) and "alembic_version" not in tables
-        if pre_alembic:
-            _require_baseline(conn)
+    with _migration_lock(engine):
+        with engine.connect() as conn:
+            current = MigrationContext.configure(conn).get_current_heads()
+            if current == (head,):
+                return
+            tables = set(inspect(conn).get_table_names())
+            pre_alembic = bool(tables) and "alembic_version" not in tables
+            if pre_alembic:
+                _require_baseline(conn)
 
-    db_file = _sqlite_file(engine)
-    if db_file is not None:
-        _backup(db_file)
+        db_path = _sqlite_path(engine)
+        if tables and db_path is not None:
+            _backup(db_path)
 
-    with engine.begin() as conn:
-        cfg.attributes["connection"] = conn
-        if pre_alembic:
-            logger.info(
-                "Stamping pre-Alembic database at baseline %s", BASELINE_REVISION
-            )
-            alembic_command.stamp(cfg, BASELINE_REVISION)
-        alembic_command.upgrade(cfg, "head")
+        with engine.begin() as conn:
+            cfg.attributes["connection"] = conn
+            if pre_alembic:
+                logger.info(
+                    "Stamping pre-Alembic database at baseline %s", BASELINE_REVISION
+                )
+                alembic_command.stamp(cfg, BASELINE_REVISION)
+            alembic_command.upgrade(cfg, "head")
     logger.info("Database schema is at revision %s", head)

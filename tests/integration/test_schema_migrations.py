@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import sqlite3
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -159,3 +162,46 @@ def test_database_missing_part_of_the_baseline_is_refused_and_left_alone(
     finally:
         conn.close()
     assert sorted(p.name for p in tmp_path.iterdir()) == ["partial.db"]
+
+
+_UPGRADE_WHEN_TOLD = """
+import sys, time
+from pathlib import Path
+from sqlalchemy import create_engine
+from molabel.core.migration_runner import upgrade_database
+
+url, ready, go = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+ready.touch()
+while not go.exists():
+    time.sleep(0.005)
+upgrade_database(create_engine(url))
+"""
+
+
+def test_servers_starting_together_on_a_fresh_database_all_start(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "fresh.db"
+    url = f"sqlite:///{db_path.as_posix()}"
+    go = tmp_path / "go"
+    ready = [tmp_path / f"ready-{n}" for n in range(4)]
+    starts = [
+        subprocess.Popen(
+            [sys.executable, "-c", _UPGRADE_WHEN_TOLD, url, str(flag), str(go)],
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for flag in ready
+    ]
+    deadline = time.monotonic() + 60
+    while not all(flag.exists() for flag in ready):
+        assert time.monotonic() < deadline, "upgrade processes did not start"
+        time.sleep(0.01)
+    go.touch()
+
+    errors = [start.communicate(timeout=120)[1] for start in starts]
+
+    assert [start.returncode for start in starts] == [0, 0, 0, 0], errors
+    revision, drift = _revision_and_drift(db_path)
+    assert revision == (HEAD,)
+    assert drift == []

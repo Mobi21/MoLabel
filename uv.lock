@@ -729,6 +729,7 @@ version = "0.1.0"
 source = { editable = "packages/molabel-core" }
 dependencies = [
     { name = "alembic" },
+    { name = "filelock" },
     { name = "httpx" },
     { name = "packaging" },
     { name = "pydantic" },
@@ -739,6 +740,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
+    { name = "filelock", specifier = ">=3.12" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "packaging", specifier = ">=23.0" },
     { name = "pydantic", specifier = ">=2.0" },
