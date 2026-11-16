@@ -1059,7 +1059,7 @@ class GroundedCliHarness:
                 await self.review_submit(
                     task_id,
                     labels={},
-                    decision="accept_ai",
+                    decision="accept",
                     rationale=(
                         "MiniMax guided operator accepted the MiniMax proposal "
                         "after queue inspection."

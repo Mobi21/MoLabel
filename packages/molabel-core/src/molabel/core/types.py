@@ -163,13 +163,32 @@ class AgentEventType(StrEnum):
 
 
 class ReviewDecision(StrEnum):
+    """What a reviewer did with a record's proposed labels.
+
+    Whether an AI suggestion was shown is recorded separately as
+    ``ai_was_revealed``, not encoded in the decision name.
+    """
+
     accept = "accept"
+    edit = "edit"
+    reject = "reject"
+
+
+class DeprecatedReviewDecision(StrEnum):
+    """Pre-rename decision names, accepted as input for one release."""
+
     accept_ai = "accept_ai"
     edit_ai = "edit_ai"
     reject_ai = "reject_ai"
     correct = "correct"
-    reject = "reject"
-    skip = "skip"
+
+
+CANONICAL_REVIEW_DECISION: dict[DeprecatedReviewDecision, ReviewDecision] = {
+    DeprecatedReviewDecision.accept_ai: ReviewDecision.accept,
+    DeprecatedReviewDecision.edit_ai: ReviewDecision.edit,
+    DeprecatedReviewDecision.reject_ai: ReviewDecision.reject,
+    DeprecatedReviewDecision.correct: ReviewDecision.edit,
+}
 
 
 class ValidationStatus(StrEnum):
@@ -394,7 +413,7 @@ class ReviewEvent(BaseModel):
     reviewer_id: UUID | None = None
     source: str  # human | agent | import
     decision: str | None = None
-    """One of: accept, accept_ai, edit_ai, reject_ai, correct, reject, skip."""
+    """One of: accept, edit, reject. Older rows may hold pre-rename names."""
     labels: dict[str, Any] = {}
     rationale: str | None = None
     confidence: float | None = None

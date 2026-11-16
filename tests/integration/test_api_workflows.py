@@ -415,7 +415,7 @@ async def test_review_queue_must_complete_before_advance_and_export(
             f"/api/v1/review-tasks/{task['id']}/submit",
             json={
                 "labels": {},
-                "decision": "accept_ai",
+                "decision": "accept",
                 "rationale": "Accepting agent label for benchmark flow.",
                 "auto_claim_next": True,
             },
@@ -470,10 +470,15 @@ async def test_review_queue_must_complete_before_advance_and_export(
             ),
             {"wid": str(workspace_id)},
         ).fetchall()
+        decisions = conn.execute(
+            text("SELECT decision FROM review_events WHERE workspace_id = :wid"),
+            {"wid": str(workspace_id)},
+        ).fetchall()
 
     assert len(record_rows) == 3
     assert all(row[0] is not None for row in record_rows)
     assert all(int(row[1]) == 1 for row in record_rows)
+    assert [row[0] for row in decisions] == ["accept", "accept", "accept"]
 
 
 @pytest.mark.asyncio
@@ -541,7 +546,7 @@ async def test_review_completion_is_required_before_advancing_and_export_runs(
             f"/api/v1/review-tasks/{next_task_id}/submit",
             json={
                 "labels": {},
-                "decision": "accept_ai",
+                "decision": "accept",
                 "auto_claim_next": True,
             },
             headers={"Cookie": f"molabel_session={token}"},

@@ -381,7 +381,7 @@ def _resolve_effective_submission_labels(
     if explicit_labels:
         return explicit_labels
 
-    if decision != ReviewDecision.accept_ai:
+    if decision != ReviewDecision.accept:
         return explicit_labels
 
     row = conn.execute(

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
-from molabel.core.types import ReviewDecision, ReviewEventSource, TrustLevel
+from molabel.core.types import ReviewEventSource, TrustLevel
 
 
 class ReviewEvent(SQLModel, table=True):
@@ -31,7 +31,8 @@ class ReviewEvent(SQLModel, table=True):
     source_system: str | None = None
     source_file: str | None = None
     trust_level: TrustLevel | None = None
-    decision: ReviewDecision | None = None
+    # A ReviewDecision value, or a pre-rename name such as accept_ai on old rows.
+    decision: str | None = None
     labels: dict = Field(sa_column=Column(JSON, nullable=False))
     previous_labels: dict | None = Field(default=None, sa_column=Column(JSON))
     rationale: str | None = None

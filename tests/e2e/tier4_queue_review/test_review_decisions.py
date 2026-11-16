@@ -1,28 +1,22 @@
-"""All 7 ReviewDecision types test (T4-15).
+"""Review decision vocabulary test (T4-15).
 
-Exercises each decision value in the submit payload:
-accept, accept_ai, edit_ai, reject_ai, correct, reject, skip.
+Submits each canonical decision (accept, edit, reject) and each deprecated
+alias, and skips one task through the skip endpoint.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from molabel.core.types import ReviewDecision
+from molabel.core.types import DeprecatedReviewDecision, ReviewDecision
 from tests.e2e.infrastructure.assertions import checkpoint
 from tests.e2e.infrastructure.client import InstrumentedClient
 from tests.e2e.infrastructure.logging_config import TestContext
 from tests.e2e.infrastructure.parallel import SEQUENTIAL
 
-ALL_DECISIONS = [
-    ReviewDecision.accept,
-    ReviewDecision.accept_ai,
-    ReviewDecision.edit_ai,
-    ReviewDecision.reject_ai,
-    ReviewDecision.correct,
-    ReviewDecision.reject,
-    ReviewDecision.skip,
-]
+CANONICAL_DECISIONS = [decision.value for decision in ReviewDecision]
+DEPRECATED_DECISIONS = [decision.value for decision in DeprecatedReviewDecision]
+SUBMIT_DECISIONS = CANONICAL_DECISIONS + DEPRECATED_DECISIONS
 
 
 async def _create_queue_with_n_tasks(
@@ -90,84 +84,50 @@ async def _create_queue_with_n_tasks(
 @pytest.mark.asyncio
 @pytest.mark.e2e
 @pytest.mark.tier4
-async def test_all_seven_review_decisions(
+async def test_review_decision_vocabulary(
     ctx: TestContext,
     client: InstrumentedClient,
 ) -> None:
-    """T4-15: Exercise all 7 ReviewDecision enum values.
-
-    Creates 7 tasks (one per decision) and submits each with the
-    corresponding decision value. Verifies:
-    - Each submit returns 200
-    - submitted_task.status == "submitted"
-    - The decision enum is serialized correctly in the request
-    """
-    n_tasks = len(ALL_DECISIONS)
-
-    with checkpoint(ctx, "setup_queue_with_seven_tasks"):
-        _, queue_id = await _create_queue_with_n_tasks(client, n_tasks)
-
-    with checkpoint(ctx, "verify_all_decision_enum_values"):
-        # Verify the enum values match the spec
-        expected_values = {
-            "accept",
-            "accept_ai",
-            "edit_ai",
-            "reject_ai",
-            "correct",
-            "reject",
-            "skip",
-        }
-        actual_values = {d.value for d in ReviewDecision}
-        assert expected_values == actual_values, (
-            f"ReviewDecision enum mismatch. Expected {expected_values}, "
-            f"got {actual_values}"
+    """T4-15: Submit every canonical decision and deprecated alias, then skip."""
+    with checkpoint(ctx, "setup_queue"):
+        _, queue_id = await _create_queue_with_n_tasks(
+            client, len(SUBMIT_DECISIONS) + 1
         )
 
-    submitted_decisions: list[str] = []
-    skipped_task_ids: list[str] = []
+    with checkpoint(ctx, "verify_canonical_decision_values"):
+        assert set(CANONICAL_DECISIONS) == {"accept", "edit", "reject"}
 
-    for decision in ALL_DECISIONS:
-        with checkpoint(ctx, f"submit_with_decision_{decision.value}"):
+    for decision in SUBMIT_DECISIONS:
+        with checkpoint(ctx, f"submit_with_decision_{decision}"):
             claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
             assert claim_resp.status_code == 200
             body = claim_resp.json()
-
             if body.get("queue_empty"):
-                # Fewer tasks than decisions — that's acceptable
                 break
-
             task_id = body["task"]["id"]
 
-            if decision == ReviewDecision.skip:
-                # Use the skip endpoint for skip decision
-                skip_resp = await client.post(f"/api/v1/review-tasks/{task_id}/skip")
-                assert skip_resp.status_code == 200
-                skip_body = skip_resp.json()
-                assert skip_body["skipped_task"]["status"] == "skipped"
-                assert skip_body["message"] == "skipped"
-                skipped_task_ids.append(task_id)
-            else:
-                submit_resp = await client.post(
-                    f"/api/v1/review-tasks/{task_id}/submit",
-                    json={
-                        "labels": {"sentiment": "positive"},
-                        "decision": decision.value,
-                        "auto_claim_next": False,
-                    },
-                )
-                assert submit_resp.status_code == 200, (
-                    f"Expected 200 for decision={decision.value}, "
-                    f"got {submit_resp.status_code}: {submit_resp.text}"
-                )
-                submit_body = submit_resp.json()
-                assert submit_body["submitted_task"]["status"] == "submitted"
-                assert submit_body["message"] == "submitted"
-                submitted_decisions.append(decision.value)
+            submit_resp = await client.post(
+                f"/api/v1/review-tasks/{task_id}/submit",
+                json={
+                    "labels": {"sentiment": "positive"},
+                    "decision": decision,
+                    "auto_claim_next": False,
+                },
+            )
+            assert submit_resp.status_code == 200, submit_resp.text
+            submit_body = submit_resp.json()
+            assert submit_body["submitted_task"]["status"] == "submitted"
+            assert bool(submit_body["deprecations"]) == (
+                decision in DEPRECATED_DECISIONS
+            )
 
-    with checkpoint(ctx, "verify_all_non_skip_decisions_submitted"):
-        non_skip_decisions = [
-            d.value for d in ALL_DECISIONS if d != ReviewDecision.skip
-        ]
-        for decision_val in submitted_decisions:
-            assert decision_val in non_skip_decisions
+    with checkpoint(ctx, "skip_uses_the_skip_endpoint"):
+        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
+        assert claim_resp.status_code == 200
+        body = claim_resp.json()
+        if not body.get("queue_empty"):
+            skip_resp = await client.post(
+                f"/api/v1/review-tasks/{body['task']['id']}/skip"
+            )
+            assert skip_resp.status_code == 200
+            assert skip_resp.json()["skipped_task"]["status"] == "skipped"

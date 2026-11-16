@@ -38,7 +38,12 @@ from molabel.core.adjudication.adjudication_service import (
 from molabel.core.adjudication.adjudication_service import (
     AdjudicationService,
 )
-from molabel.core.types import AdjudicationResolution, ReviewDecision
+from molabel.core.types import (
+    CANONICAL_REVIEW_DECISION,
+    AdjudicationResolution,
+    DeprecatedReviewDecision,
+    ReviewDecision,
+)
 
 router = APIRouter(tags=["queue"])
 
@@ -146,8 +151,9 @@ class SubmitRequest(BaseModel):
     """Request body for submitting a review."""
 
     labels: dict[str, Any] = Field(..., description="Review labels/annotations")
-    decision: ReviewDecision | None = Field(
-        default=None, description="Optional review decision (accept/reject/etc.)"
+    decision: ReviewDecision | DeprecatedReviewDecision | None = Field(
+        default=None,
+        description="accept, edit, or reject. Deprecated aliases are normalized.",
     )
     rationale: str | None = Field(
         default=None, description="Optional reviewer rationale"
@@ -164,6 +170,7 @@ class SubmitResponse(BaseModel):
     next_task: BlindReviewTaskResponse | None = None
     queue_empty: bool = False
     message: str = "submitted"
+    deprecations: list[str] = Field(default_factory=list)
 
 
 class SkipResponse(BaseModel):
@@ -208,8 +215,9 @@ class CorrectionRequest(BaseModel):
     """Request body for submitting a review correction (RV-004)."""
 
     labels: dict[str, Any] = Field(..., description="Corrected labels")
-    decision: ReviewDecision | None = Field(
-        default=None, description="Updated review decision"
+    decision: ReviewDecision | DeprecatedReviewDecision | None = Field(
+        default=None,
+        description="accept, edit, or reject. Deprecated aliases are normalized.",
     )
     rationale: str | None = Field(
         default=None, description="Rationale for the correction"
@@ -241,6 +249,7 @@ class CorrectionResponse(BaseModel):
 
     event: CorrectionEventResponse
     message: str = "correction_submitted"
+    deprecations: list[str] = Field(default_factory=list)
 
 
 class QueueActiveReviewer(BaseModel):
@@ -326,6 +335,19 @@ def _add_notification_headers(
         response.headers["X-MoLabel-Expired-Count"] = str(len(notifications))
 
 
+def _canonical_decision(
+    decision: ReviewDecision | DeprecatedReviewDecision | None,
+) -> tuple[ReviewDecision | None, list[str]]:
+    """Map a deprecated decision name to its canonical decision."""
+    if not isinstance(decision, DeprecatedReviewDecision):
+        return decision, []
+    canonical = CANONICAL_REVIEW_DECISION[decision]
+    return canonical, [
+        f"Decision '{decision.value}' is deprecated; use '{canonical.value}'. "
+        "Whether the AI suggestion was shown is recorded as ai_revealed."
+    ]
+
+
 # ---------------------------------------------------------------------------
 # SE-006: Queue claim endpoints
 # ---------------------------------------------------------------------------
@@ -392,6 +414,7 @@ async def submit_review_endpoint(
     engine = get_engine(request)
 
     _add_notification_headers(response, reviewer.id)
+    decision, deprecations = _canonical_decision(body.decision)
 
     try:
         submitted = submit_review(
@@ -399,7 +422,7 @@ async def submit_review_endpoint(
             task_id,
             reviewer.id,
             body.labels,
-            body.decision,
+            decision,
             body.rationale,
         )
     except ValueError as exc:
@@ -429,6 +452,7 @@ async def submit_review_endpoint(
         next_task=next_task_resp,
         queue_empty=queue_empty,
         message="submitted",
+        deprecations=deprecations,
     )
 
 
@@ -608,6 +632,7 @@ async def submit_correction_endpoint(
     engine = get_engine(request)
 
     _add_notification_headers(response, reviewer.id)
+    decision, deprecations = _canonical_decision(body.decision)
 
     try:
         result = submit_correction(
@@ -615,7 +640,7 @@ async def submit_correction_endpoint(
             task_id,
             reviewer.id,
             body.labels,
-            body.decision,
+            decision,
             body.rationale,
         )
     except ValueError as exc:
@@ -630,6 +655,7 @@ async def submit_correction_endpoint(
     return CorrectionResponse(
         event=CorrectionEventResponse(**result),
         message="correction_submitted",
+        deprecations=deprecations,
     )
 
 
