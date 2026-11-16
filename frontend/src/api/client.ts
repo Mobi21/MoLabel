@@ -13,6 +13,15 @@ client.interceptors.response.use((response, request) => {
   return response
 })
 
+/** The code of an API error body, `{ error: { code } }`, such as CONFLICT. */
+export function errorCode(error: unknown): string | null {
+  if (typeof error === 'object' && error !== null && 'error' in error) {
+    const body = (error as { error?: { code?: unknown } }).error
+    if (typeof body?.code === 'string') return body.code
+  }
+  return null
+}
+
 /** The message of an API error body, `{ error: { message } }`, or a fallback. */
 export function errorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'error' in error) {

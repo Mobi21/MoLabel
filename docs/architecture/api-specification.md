@@ -2093,13 +2093,17 @@ class AdjudicationOutcome(BaseModel):
 
 Store a resolution and return the updated `DisagreementDetail`. `resolve` needs
 `resolved_labels`, which are normalized and validated against the task schema
-(422 when invalid). 409 when the disagreement is already resolved.
+(422 when invalid). `review_event_ids` names the `review_event_id` of each
+`reviewer_labels` entry the caller read. 409 when the disagreement's review
+events differ from them or it is gone, so the caller reloads it, and 409 when
+it is already resolved.
 
 ```python
 class ResolveDisagreement(BaseModel):
     resolution: str = "resolve"
     resolved_labels: dict[str, Any] | None
     rationale: str | None
+    review_event_ids: list[str]          # required
 ```
 
 ---

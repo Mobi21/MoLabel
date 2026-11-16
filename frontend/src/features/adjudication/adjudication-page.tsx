@@ -6,7 +6,7 @@ import type {
   DisagreementDetail,
   DisagreementSummary,
 } from '@/api/generated/types.gen'
-import { errorMessage } from '@/api/client'
+import { errorCode, errorMessage } from '@/api/client'
 import {
   disagreementQuery,
   disagreementsQuery,
@@ -200,6 +200,7 @@ function Disagreement(props: DisagreementProps) {
     () => rubricFields(schema.data?.label_fields ?? []),
     [schema.data],
   )
+  const [reloaded, setReloaded] = useState(false)
   if (detail.isError) {
     return (
       <p role="alert" className="text-sm text-signal">
@@ -210,7 +211,20 @@ function Disagreement(props: DisagreementProps) {
   if (!detail.isSuccess || !schema.isSuccess) {
     return <p className="text-sm text-faint">Loading the disagreement…</p>
   }
-  return <Resolver {...props} detail={detail.data} fields={fields} />
+  // A reloaded disagreement with other review events starts a fresh resolution.
+  const events = detail.data.reviewer_labels.map((s) => s.review_event_id)
+  return (
+    <Resolver
+      key={events.join(' ')}
+      {...props}
+      detail={detail.data}
+      fields={fields}
+      reloaded={reloaded}
+      onConflict={() => {
+        setReloaded(true)
+      }}
+    />
+  )
 }
 
 function Resolver({
@@ -222,9 +236,14 @@ function Resolver({
   onPrevious,
   hasNext,
   hasPrevious,
+  reloaded,
+  onConflict,
 }: DisagreementProps & {
   detail: DisagreementDetail
   fields: readonly RubricField[]
+  /** The disagreement changed under a resolve and was read again. */
+  reloaded: boolean
+  onConflict: () => void
 }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -263,6 +282,15 @@ function Resolver({
     },
     onError: (error) => {
       setProblem(errorMessage(error))
+      if (errorCode(error) === 'CONFLICT') {
+        onConflict()
+        void queryClient.invalidateQueries({
+          queryKey: disagreementQuery(queueId, detail.record_id).queryKey,
+        })
+        void queryClient.invalidateQueries({
+          queryKey: disagreementsQuery(queueId).queryKey,
+        })
+      }
     },
   })
 
@@ -306,6 +334,7 @@ function Resolver({
         resolution: 'resolve',
         resolved_labels: rawLabels(labels),
         rationale: rationale.trim() === '' ? null : rationale.trim(),
+        review_event_ids: detail.reviewer_labels.map((s) => s.review_event_id),
       },
     })
   }
@@ -516,6 +545,15 @@ function Resolver({
           </div>
         ) : (
           <div className="space-y-4">
+            {reloaded && (
+              <p
+                role="status"
+                className="rounded-[3px] border border-signal/40 bg-signal-soft px-3 py-2 text-sm text-signal"
+              >
+                This disagreement changed since you opened it, so it was
+                reloaded. Check it again before you resolve.
+              </p>
+            )}
             <h3 className="font-mono text-xs text-faint">
               Resolution · take a column or write a value
             </h3>

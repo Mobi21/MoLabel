@@ -6,6 +6,14 @@ export interface Call {
   body: unknown
 }
 
+/** A canned reply with a status other than 200. */
+export class Reply {
+  constructor(
+    readonly status: number,
+    readonly body: unknown,
+  ) {}
+}
+
 type Route = [method: string, path: RegExp, reply: (call: Call) => unknown]
 
 /**
@@ -32,8 +40,10 @@ export function fakeApi(routes: Route[]) {
       if (!route) {
         throw new Error(`no fake route for ${call.method} ${call.path}`)
       }
-      return new Response(JSON.stringify(route[2](call)), {
-        status: 200,
+      const result = route[2](call)
+      const reply = result instanceof Reply ? result : new Reply(200, result)
+      return new Response(JSON.stringify(reply.body), {
+        status: reply.status,
         headers: { 'content-type': 'application/json' },
       })
     },

@@ -147,6 +147,12 @@ class ResolveDisagreement(BaseModel):
         default=None, description="Required for resolve"
     )
     rationale: str | None = None
+    review_event_ids: list[str] = Field(
+        description=(
+            "The review_event_id of each reviewer_labels entry as read. 409 when "
+            "the disagreement's review events differ, so the caller reloads it"
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -297,11 +303,18 @@ def _queue_disagreements(conn: Any, queue: _Queue) -> list[_Disagreement]:
     return disagreements
 
 
-def _find(conn: Any, queue: _Queue, record_id: str) -> _Disagreement:
+def _find_or_none(conn: Any, queue: _Queue, record_id: str) -> _Disagreement | None:
     for disagreement in _queue_disagreements(conn, queue):
         if str(disagreement.item.record_id) == record_id:
             return disagreement
-    raise HTTPException(status_code=404, detail="No disagreement on this record")
+    return None
+
+
+def _find(conn: Any, queue: _Queue, record_id: str) -> _Disagreement:
+    disagreement = _find_or_none(conn, queue, record_id)
+    if disagreement is None:
+        raise HTTPException(status_code=404, detail="No disagreement on this record")
+    return disagreement
 
 
 def _detail(
@@ -440,7 +453,9 @@ async def resolve_queue_disagreement(
     """Resolve a disagreement and store the outcome (AJ-003, AJ-007).
 
     A disagreement is resolved once for the review events it covers. A new
-    review on the record makes a new disagreement to resolve.
+    review on the record makes a new disagreement to resolve. The request
+    names the review events it read, and a disagreement whose events differ,
+    or that is gone, answers 409.
     """
     resolve_with_labels = body.resolution == AdjudicationResolution.resolve
     if resolve_with_labels and not body.resolved_labels:
@@ -448,7 +463,12 @@ async def resolve_queue_disagreement(
 
     with get_engine(request).begin() as conn:
         queue = _queue(conn, queue_id, reviewer.workspace_id)
-        disagreement = _find(conn, queue, record_id)
+        disagreement = _find_or_none(conn, queue, record_id)
+        if disagreement is None or disagreement.event_ids != set(body.review_event_ids):
+            raise HTTPException(
+                status_code=409,
+                detail="This disagreement changed since it was read; reload it",
+            )
         if disagreement.outcome is not None:
             raise HTTPException(
                 status_code=409, detail="This disagreement is already resolved"

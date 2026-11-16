@@ -82,9 +82,14 @@ async def test_a_resolution_is_stored_and_never_counts_as_a_rater(
     record_id = _external_ids(app)["r3"]
     path = f"/api/v1/adjudication/queues/{queue_id}/disagreements/{record_id}"
 
+    shown = (await client.get(path, headers=_as(tokens[0]))).json()
     resolved = await client.post(
         f"{path}/resolve",
-        json={"resolved_labels": {"sentiment": "neutral"}, "rationale": "Hedged."},
+        json={
+            "resolved_labels": {"sentiment": "neutral"},
+            "rationale": "Hedged.",
+            "review_event_ids": _event_ids(shown),
+        },
         headers=_as(tokens[0]),
     )
     assert resolved.status_code == 200, resolved.text
@@ -102,7 +107,10 @@ async def test_a_resolution_is_stored_and_never_counts_as_a_rater(
 
     again = await client.post(
         f"{path}/resolve",
-        json={"resolved_labels": {"sentiment": "negative"}},
+        json={
+            "resolved_labels": {"sentiment": "negative"},
+            "review_event_ids": _event_ids(shown),
+        },
         headers=_as(tokens[0]),
     )
     assert again.status_code == 409
@@ -198,3 +206,77 @@ async def test_a_record_is_not_adjudicated_while_a_blind_copy_is_open(
     assert [a["labels"]["sentiment"] for a in shown["agent_labels"]] == [
         OFFLINE_SENTIMENT[split]
     ]
+
+
+def _event_ids(detail):
+    return [s["review_event_id"] for s in detail["reviewer_labels"]]
+
+
+async def _correct_second_review(client, queue_id, token, labels):
+    trail = await client.get(f"/api/v1/queues/{queue_id}/my-tasks", headers=_as(token))
+    (task,) = [t for t in trail.json()["items"] if t["record_external_id"] == "r3"]
+    corrected = await client.post(
+        f"/api/v1/review-tasks/{task['task_id']}/correct",
+        json={"decision": "edit", "labels": labels},
+        headers=_as(token),
+    )
+    assert corrected.status_code == 200, corrected.text
+
+
+@pytest.mark.asyncio
+async def test_resolve_refuses_a_disagreement_that_changed_since_it_was_read(
+    client, app, tmp_path
+):
+    _, tokens, queue = await _start_review(client, app, tmp_path)
+    queue_id = queue["queue_id"]
+    await _review_both(client, queue_id, tokens)
+    record_id = _external_ids(app)["r3"]
+    path = f"/api/v1/adjudication/queues/{queue_id}/disagreements/{record_id}"
+    read = (await client.get(path, headers=_as(tokens[0]))).json()
+    await _correct_second_review(client, queue_id, tokens[1], {"sentiment": "positive"})
+
+    stale = await client.post(
+        f"{path}/resolve",
+        json={
+            "resolved_labels": {"sentiment": "neutral"},
+            "review_event_ids": _event_ids(read),
+        },
+        headers=_as(tokens[0]),
+    )
+    assert stale.status_code == 409, stale.text
+    with app.state.engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM adjudications")).scalar()
+    assert count == 0
+
+    reread = (await client.get(path, headers=_as(tokens[0]))).json()
+    assert _event_ids(reread) != _event_ids(read)
+    fresh = await client.post(
+        f"{path}/resolve",
+        json={
+            "resolved_labels": {"sentiment": "neutral"},
+            "review_event_ids": _event_ids(reread),
+        },
+        headers=_as(tokens[0]),
+    )
+    assert fresh.status_code == 200, fresh.text
+
+
+@pytest.mark.asyncio
+async def test_resolve_refuses_a_disagreement_that_is_gone(client, app, tmp_path):
+    _, tokens, queue = await _start_review(client, app, tmp_path)
+    queue_id = queue["queue_id"]
+    await _review_both(client, queue_id, tokens)
+    record_id = _external_ids(app)["r3"]
+    path = f"/api/v1/adjudication/queues/{queue_id}/disagreements/{record_id}"
+    read = (await client.get(path, headers=_as(tokens[0]))).json()
+    await _correct_second_review(client, queue_id, tokens[1], {"sentiment": "negative"})
+
+    gone = await client.post(
+        f"{path}/resolve",
+        json={
+            "resolved_labels": {"sentiment": "neutral"},
+            "review_event_ids": _event_ids(read),
+        },
+        headers=_as(tokens[0]),
+    )
+    assert gone.status_code == 409, gone.text

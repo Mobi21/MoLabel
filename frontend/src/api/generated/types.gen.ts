@@ -5566,6 +5566,12 @@ export type ResolveDisagreement = {
    * Rationale
    */
   rationale?: string | null
+  /**
+   * Review Event Ids
+   *
+   * The review_event_id of each reviewer_labels entry as read. 409 when the disagreement's review events differ, so the caller reloads it
+   */
+  review_event_ids: Array<string>
 }
 
 /**

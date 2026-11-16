@@ -3734,7 +3734,9 @@ export const getQueueDisagreementOptions = (
  * Resolve a disagreement and store the outcome (AJ-003, AJ-007).
  *
  * A disagreement is resolved once for the review events it covers. A new
- * review on the record makes a new disagreement to resolve.
+ * review on the record makes a new disagreement to resolve. The request
+ * names the review events it read, and a disagreement whose events differ,
+ * or that is gone, answers 409.
  */
 export const resolveQueueDisagreementMutation = (
   options?: Partial<Options<ResolveQueueDisagreementData>>,
