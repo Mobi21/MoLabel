@@ -1109,6 +1109,40 @@ async def test_an_offline_step_runs_on_the_offline_profile_it_pins(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("agent_step_type", "pin_key"), PINNING_STEPS)
+async def test_a_model_name_shaped_like_a_profile_id_runs_as_that_model(
+    client, app, tmp_path, hosted_calls, agent_step_type, pin_key
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    model = str(uuid.uuid4())
+    profile_id = _seed_model_profile(
+        app.state.engine,
+        workspace_id,
+        provider_type="openai_compatible",
+        model=model,
+        slug="uuid-named-model",
+    )
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        {**_pinning(pin_key, model), "provider_type": "openai_compatible"},
+        agent_step_type,
+    )
+
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["error_summary"] is None
+    run_count = 2 if agent_step_type == "agent_compare" else 1
+    assert (
+        _agent_run_profiles(app.state.engine, workspace_id)
+        == [(profile_id, "openai_compatible", str(workspace_id))] * run_count
+    )
+    assert hosted_calls == [("openai_compatible", model)] * 3 * run_count
+
+
+@pytest.mark.asyncio
 async def test_execute_workflow_reaches_review_queue(client, app, tmp_path):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     token = _seed_reviewer(app.state.engine, workspace_id)
