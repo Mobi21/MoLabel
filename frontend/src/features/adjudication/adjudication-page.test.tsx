@@ -202,4 +202,36 @@ describe('AdjudicationPage', () => {
       expect(queryClient.getQueryState(agreement)?.isInvalidated).toBe(true)
     })
   })
+
+  it('shows a failed task schema read with a retry, and recovers', async () => {
+    let broken = true
+    fakeApi([
+      ['GET', /^\/api\/v1\/queues$/, () => ({ items: [] })],
+      [
+        'GET',
+        /\/task-schemas\/s1$/,
+        () =>
+          broken
+            ? new Reply(500, { error: { message: 'database is locked' } })
+            : SCHEMA,
+      ],
+      [
+        'GET',
+        /\/disagreements$/,
+        () => ({ queue_id: 'q1', items: [SUMMARY], total: 1, unresolved: 1 }),
+      ],
+      ['GET', /\/disagreements\/rec1$/, () => READ],
+    ])
+    renderAdjudication()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'database is locked',
+    )
+    broken = false
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'ticket-1' }),
+    ).toBeVisible()
+  })
 })

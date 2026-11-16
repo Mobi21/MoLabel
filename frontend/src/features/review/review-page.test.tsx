@@ -18,7 +18,7 @@ import {
   disagreementsQuery,
   meQuery,
 } from '@/api/queries'
-import { fakeApi, type Call } from '@/test/fake-api'
+import { Reply, fakeApi, type Call } from '@/test/fake-api'
 import { ReviewPage } from './review-page'
 
 const PROPOSAL = { intent: 'refund', urgent: false, note: '' }
@@ -567,4 +567,50 @@ describe('ReviewPage', () => {
       expect(invalidated()).toEqual([true, true, true])
     })
   })
+
+  it.each(['item', 'task schema'] as const)(
+    'shows a failed %s read with a retry, and recovers',
+    async (failing) => {
+      let broken = true
+      const unless = (body: unknown) => () =>
+        broken
+          ? new Reply(500, { error: { message: 'database is locked' } })
+          : body
+      fakeApi([
+        ['GET', /^\/api\/v1\/queues$/, () => ({ items: [] })],
+        [
+          'GET',
+          /\/my-tasks$/,
+          () => ({
+            queue_id: 'q1',
+            items: [{ task_id: 't1', record_id: 'rec1', status: 'claimed' }],
+          }),
+        ],
+        [
+          'GET',
+          /\/review-tasks\/t1$/,
+          failing === 'item'
+            ? unless(task('show_agent_outputs', true))
+            : () => task('show_agent_outputs', true),
+        ],
+        [
+          'GET',
+          /\/task-schemas\/s1$/,
+          failing === 'task schema' ? unless(SCHEMA) : () => SCHEMA,
+        ],
+      ])
+      renderReview()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'database is locked',
+      )
+      expect(screen.getByRole('link', { name: 'Back to queues' })).toBeVisible()
+      broken = false
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+      expect(
+        await screen.findByRole('heading', { name: 'ticket-1' }),
+      ).toBeVisible()
+    },
+  )
 })

@@ -14,6 +14,7 @@ import {
   taskSchemaQuery,
 } from '@/api/queries'
 import { Kbd, KeyLegend } from '@/components/key-legend'
+import { ReadFailed } from '@/components/read-failed'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { QueueHeader } from '@/features/queues/queue-header'
@@ -203,11 +204,18 @@ function Disagreement(props: DisagreementProps) {
     [schema.data],
   )
   const [reloaded, setReloaded] = useState(false)
-  if (detail.isError) {
+  if (
+    (detail.data === undefined && detail.isError) ||
+    (schema.data === undefined && schema.isError)
+  ) {
     return (
-      <p role="alert" className="text-sm text-signal">
-        {errorMessage(detail.error)}
-      </p>
+      <ReadFailed
+        error={detail.error ?? schema.error}
+        onRetry={() => {
+          if (detail.isError) void detail.refetch()
+          if (schema.isError) void schema.refetch()
+        }}
+      />
     )
   }
   if (!detail.isSuccess || !schema.isSuccess) {

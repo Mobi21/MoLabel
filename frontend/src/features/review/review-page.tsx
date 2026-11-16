@@ -14,6 +14,7 @@ import type {
 import { errorMessage } from '@/api/client'
 import { invalidateQueueOutcomes, taskSchemaQuery } from '@/api/queries'
 import { KeyLegend } from '@/components/key-legend'
+import { ReadFailed } from '@/components/read-failed'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { QueueHeader } from '@/features/queues/queue-header'
@@ -79,6 +80,19 @@ export function ReviewPage() {
         session={session}
         onOpen={(screen) => {
           void navigate(`/queues/${queueId}/${screen}`)
+        }}
+      />
+    )
+  } else if (
+    (item === undefined && session.item.isError) ||
+    (schema.data === undefined && schema.isError)
+  ) {
+    body = (
+      <ReadFailed
+        error={session.item.error ?? schema.error}
+        onRetry={() => {
+          if (session.item.isError) void session.item.refetch()
+          if (schema.isError) void schema.refetch()
         }}
       />
     )
