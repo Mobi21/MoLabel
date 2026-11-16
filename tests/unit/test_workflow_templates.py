@@ -221,3 +221,15 @@ class TestTemplateInputBinding:
         assert steps["review"]["config"] == next(
             step["config"] for step in definition["steps"] if step["id"] == "review"
         )
+
+
+def test_every_template_gates_agreement_at_krippendorffs_reliable_alpha() -> None:
+    thresholds = {
+        (template["id"], step["id"]): step["config"]["min_agreement"]
+        for template in list_templates()
+        for step in yaml.safe_load(get_template_yaml(template["id"]))["steps"]
+        if "min_agreement" in (step.get("config") or {})
+    }
+
+    assert thresholds
+    assert set(thresholds.values()) == {0.80}, thresholds

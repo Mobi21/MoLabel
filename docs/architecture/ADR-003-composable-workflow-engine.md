@@ -62,7 +62,8 @@ steps:
   - id: quality
     type: quality_check
     config:
-      min_agreement: 0.85
+      # Krippendorff's alpha; >= .800 is reliable (Content Analysis, 2004, p. 241)
+      min_agreement: 0.80
       min_coverage: 0.95
 
   - id: refinement_loop

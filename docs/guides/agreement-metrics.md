@@ -219,8 +219,20 @@ measured field's alpha is below the threshold, whatever the pooled alpha is.
 Alpha is defined for any number of raters and handles missing values, so the
 gate works for three or more reviewers. Earlier versions compared
 `min_agreement` with `agreement.kappa`. That is Cohen's kappa, which is null
-with three or more raters, so those workflows always failed the gate. Configs
-keep the `min_agreement` key, and its threshold now applies to alpha.
+with three or more raters, so those workflows always failed the gate.
+
+### Thresholds
+
+`min_agreement` now means Krippendorff's alpha, not Cohen's kappa. Configs keep
+the `min_agreement` key, and its threshold now applies to alpha. A threshold
+chosen for kappa is worth checking against the alpha standard below.
+
+Krippendorff (2004, p. 241) asks for alpha of at least .800 to rely on a
+variable. A variable between .667 and .800 supports only tentative
+conclusions, and one below .667 should not be relied on. Every bundled template
+sets `min_agreement: 0.80` and cites this standard. MoLabel does not rewrite
+existing workflow files, so a workflow created from an earlier template keeps
+the threshold it was created with.
 
 ### Null fields
 
@@ -243,7 +255,8 @@ did not report it, or when its alpha is below the threshold.
 - id: quality
   type: quality_check
   config:
-    min_agreement: 0.6
+    # Reliable alpha per Krippendorff (2004, p. 241).
+    min_agreement: 0.80
     fields: [sentiment, topic]
 ```
 
@@ -270,7 +283,7 @@ that failed, and the fields it skipped:
 {
   "check": "min_agreement",
   "metric": "krippendorff_alpha",
-  "threshold": 0.6,
+  "threshold": 0.8,
   "actual": 0.125,
   "passed": false,
   "fields": {"sentiment": 1.0, "topic": 0.125, "flag": null},
@@ -323,6 +336,9 @@ those rows nor the 0.430 have been checked against a copy of the paper.
   *Educational and Psychological Measurement*, 20(1), 37-46.
 - Fleiss, J. L. (1971). Measuring nominal scale agreement among many raters.
   *Psychological Bulletin*, 76(5), 378-382.
+- Krippendorff, K. (2004). *Content Analysis: An Introduction to Its
+  Methodology* (2nd ed.). Sage. The reliability chapter, p. 241, sets the
+  .800 and .667 standards.
 - Krippendorff, K. (2011). Computing Krippendorff's alpha-reliability.
   Departmental Papers (ASC) 43, University of Pennsylvania. Version 2011.1.25,
   literature updated 2013.9.13.
