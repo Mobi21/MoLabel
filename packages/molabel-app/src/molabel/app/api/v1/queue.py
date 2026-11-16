@@ -11,9 +11,9 @@ to avoid triggering SQLAlchemy mapper configuration for the full model graph.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from molabel.app.middleware.session import CurrentReviewer
@@ -21,11 +21,13 @@ from molabel.app.services.claims import (
     apply_blind_review_policy,
     claim_next,
     get_queue_status,
+    get_reviewer_task,
     get_reviewer_visibility,
     list_queues,
     pop_expired_notifications,
     release_claim,
     reveal_ai,
+    reviewer_queue_tasks,
     save_draft,
     skip_task,
     submit_correction,
@@ -268,16 +270,27 @@ class QueueActiveReviewer(BaseModel):
 
 
 class QueueSummary(BaseModel):
-    """One review queue with its per-status task counts."""
+    """One review queue with its per-status task counts.
+
+    ``kind`` names the workflow step that created the queue, or is None for
+    a queue no workflow step created. ``my_remaining`` and ``my_submitted``
+    count the caller's own work: records they can still claim or hold, and
+    tasks they submitted.
+    """
 
     queue_id: str
     workspace_id: str
     task_schema_id: str
+    task_schema_title: str | None = None
+    kind: Literal["review", "triage", "calibrate", "adjudicate"] | None = None
+    blind_review_policy: str | None = None
     total: int
     available: int
     claimed: int
     submitted: int
     skipped: int
+    my_remaining: int = 0
+    my_submitted: int = 0
     created_at: str
 
 
@@ -285,6 +298,42 @@ class QueueListResponse(BaseModel):
     """Response for listing review queues."""
 
     items: list[QueueSummary]
+
+
+class ReviewerTaskSummary(BaseModel):
+    """One task the caller claimed, submitted, or skipped in a queue."""
+
+    task_id: str
+    record_id: str
+    record_external_id: str | None = None
+    status: str
+    decision: str | None = None
+    submitted_at: str | None = None
+    ai_revealed: bool = False
+
+
+class ReviewerTasksResponse(BaseModel):
+    """The caller's latest tasks in a queue, oldest first, a held claim last."""
+
+    queue_id: str
+    items: list[ReviewerTaskSummary]
+
+
+class SubmittedReview(BaseModel):
+    """The caller's counted review event for a task."""
+
+    review_event_id: str
+    decision: str | None = None
+    labels: dict[str, Any]
+    rationale: str | None = None
+    ai_was_revealed: bool = False
+    created_at: str
+
+
+class ReviewItemResponse(BlindReviewTaskResponse):
+    """A task the caller worked on, with the agent output their claim showed."""
+
+    review: SubmittedReview | None = None
 
 
 class QueueStatusResponse(BaseModel):
@@ -688,8 +737,40 @@ async def list_queues_endpoint(
 ) -> QueueListResponse:
     """List review queues, optionally limited to one workspace."""
     _add_notification_headers(response, reviewer.id)
-    queues = list_queues(get_engine(request), workspace_id)
+    queues = list_queues(get_engine(request), workspace_id, reviewer.id)
     return QueueListResponse(items=[QueueSummary(**queue) for queue in queues])
+
+
+@router.get("/queues/{queue_id}/my-tasks", response_model=ReviewerTasksResponse)
+async def list_my_queue_tasks_endpoint(
+    request: Request,
+    queue_id: str,
+    reviewer: CurrentReviewer,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+) -> ReviewerTasksResponse:
+    """List the caller's latest tasks in a queue, to step back through them."""
+    items = reviewer_queue_tasks(get_engine(request), queue_id, reviewer.id, limit)
+    return ReviewerTasksResponse(
+        queue_id=queue_id,
+        items=[ReviewerTaskSummary(**item) for item in items],
+    )
+
+
+@router.get("/review-tasks/{task_id}", response_model=ReviewItemResponse)
+async def get_review_task_endpoint(
+    request: Request,
+    task_id: uuid.UUID,
+    reviewer: CurrentReviewer,
+) -> ReviewItemResponse:
+    """Read a task the caller claimed, submitted, or skipped.
+
+    It shows the agent output the claim or reveal showed, so a read never
+    reveals a blind proposal, and the caller's counted review event.
+    """
+    task = get_reviewer_task(get_engine(request), task_id, reviewer.id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Review task not found")
+    return ReviewItemResponse(**task)
 
 
 @router.get(

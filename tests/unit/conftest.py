@@ -247,6 +247,15 @@ def engine():
         )
         conn.execute(
             text("""
+            CREATE TABLE workflow_step_executions (
+                id TEXT PRIMARY KEY,
+                step_type TEXT NOT NULL,
+                result TEXT
+            )
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE INDEX idx_review_tasks_queue_status
                 ON review_tasks(queue_id, status, priority DESC, created_at ASC)
         """)
