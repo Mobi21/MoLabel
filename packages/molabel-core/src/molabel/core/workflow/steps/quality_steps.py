@@ -20,6 +20,13 @@ from molabel.core.workflow.steps.base import StepExecutor, StepResult
 
 logger = logging.getLogger(__name__)
 
+NO_AGREEMENT_RECORDS = "NO_AGREEMENT_RECORDS"
+NO_AGREEMENT_RECORDS_REASON = (
+    "No agreement records were analyzed, so agreement was not measured. Run "
+    "agreement_analysis after a review that gives records two or more raters, "
+    "such as a human_review step with overlap_count: 2."
+)
+
 
 class QualityCheckExecutor(StepExecutor):
     """Executor for quality_check steps (WF-015).
@@ -29,7 +36,8 @@ class QualityCheckExecutor(StepExecutor):
     to context. Does NOT block the workflow -- use conditional/gate after.
     min_agreement compares Krippendorff's alpha, which holds for any number
     of raters and for missing values. Every field that agreement_analysis
-    reported must reach it, and a field whose alpha is null fails.
+    reported must reach it, and a field whose alpha is null fails. With no
+    agreement records analyzed, the check fails with NO_AGREEMENT_RECORDS.
     """
 
     def validate(
@@ -56,14 +64,15 @@ class QualityCheckExecutor(StepExecutor):
         min_confidence = config.get("min_confidence")
 
         # Read current metrics from context
+        records_analyzed = context.variables.get("agreement.record_count", 0)
         field_alphas: dict[str, float | None] = {
             field: summary.get("krippendorff_alpha")
             for field, summary in context.variables.get("agreement.fields", {}).items()
         }
         current_agreement = (
             min(0.0 if alpha is None else alpha for alpha in field_alphas.values())
-            if field_alphas
-            else context.metrics.get("agreement.krippendorff_alpha", 0.0)
+            if records_analyzed and field_alphas
+            else None
         )
         current_coverage = context.metrics.get("review.coverage", 0.0)
         current_confidence = context.metrics.get("agent.avg_confidence", 0.0)
@@ -75,8 +84,6 @@ class QualityCheckExecutor(StepExecutor):
                     config=config,
                     metrics=context.metrics,
                 )
-                if not field_alphas:
-                    current_agreement = result.get("agreement", current_agreement)
                 current_coverage = result.get("coverage", current_coverage)
                 current_confidence = result.get("confidence", current_confidence)
             except Exception as e:
@@ -89,6 +96,7 @@ class QualityCheckExecutor(StepExecutor):
         # Evaluate thresholds
         passed = True
         details: list[dict[str, Any]] = []
+        warnings: list[str] = []
 
         if min_agreement is not None:
             threshold = float(min_agreement)
@@ -97,7 +105,13 @@ class QualityCheckExecutor(StepExecutor):
                 for field, alpha in field_alphas.items()
                 if alpha is None or alpha < threshold
             }
-            check_passed = current_agreement >= threshold and not failing_fields
+            check_passed = (
+                current_agreement is not None
+                and current_agreement >= threshold
+                and not failing_fields
+            )
+            code = None if records_analyzed else NO_AGREEMENT_RECORDS
+            reason = NO_AGREEMENT_RECORDS_REASON if code else None
             details.append(
                 {
                     "check": "min_agreement",
@@ -107,8 +121,12 @@ class QualityCheckExecutor(StepExecutor):
                     "passed": check_passed,
                     "fields": field_alphas,
                     "failing_fields": failing_fields,
+                    "code": code,
+                    "reason": reason,
                 }
             )
+            if code:
+                warnings.append(f"{code}: {reason}")
             if not check_passed:
                 passed = False
 
@@ -139,7 +157,10 @@ class QualityCheckExecutor(StepExecutor):
                 passed = False
 
         # Write metrics and variables
-        context.metrics["quality.agreement"] = current_agreement
+        if current_agreement is None:
+            context.metrics.pop("quality.agreement", None)
+        else:
+            context.metrics["quality.agreement"] = current_agreement
         context.metrics["quality.coverage"] = current_coverage
         context.metrics["quality.confidence"] = current_confidence
         context.variables["quality.passed"] = passed
@@ -156,6 +177,7 @@ class QualityCheckExecutor(StepExecutor):
                     "coverage": current_coverage,
                     "confidence": current_confidence,
                 },
+                warnings=warnings,
             ),
         )
 
@@ -238,6 +260,7 @@ class AgreementAnalysisExecutor(StepExecutor):
             for name, summary in analysis_result.fields.items()
         }
         context.variables["agreement.fields"] = fields
+        context.variables["agreement.record_count"] = len(records)
 
         for field_name, breakdown in analysis_result.human_agent_by_field.items():
             metric_prefix = f"agreement.human_agent.by_field.{_metric_key(field_name)}"
@@ -267,6 +290,7 @@ class AgreementAnalysisExecutor(StepExecutor):
                 step_type="agreement_analysis",
                 summary={
                     "analysis_type": analysis_type,
+                    "record_count": len(records),
                     "pooled": overall.model_dump(),
                     "fields": fields,
                     "kappa": analysis_result.overall.cohen_kappa,

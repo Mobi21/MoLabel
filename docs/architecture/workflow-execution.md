@@ -113,7 +113,7 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 
 **`human_review`**
 
-- Inputs: reads `record_sets[active_record_set_id]`; reads `config.sample_strategy` and `config.sample_size` (optional, to review a subset); reads `config.task_schema_id`; reads `config.breakpoint` (defaults to `true`)
+- Inputs: reads `record_sets[active_record_set_id]`; reads `config.sample_strategy` and `config.sample_size` (optional, to review a subset); reads `config.task_schema_id`; reads `config.breakpoint` (defaults to `true`); reads `config.overlap_count` (defaults to 1), the number of review tasks each record gets. The queue never hands one reviewer two tasks for the same record, so `overlap_count: 2` gives each record two reviewers, which `agreement_analysis` needs for inter-annotator agreement
 - Outputs: appends to `review_queue_ids`; writes `record_sets[step_id]` (records that were reviewed); sets `active_record_set_id`; writes `step_outputs[step_id]` with review summary (reviewed count, accept/edit/reject counts, avg time per record); writes `metrics["review.coverage"]`, `metrics["review.accept_ai_rate"]`
 - Side effects: creates `review_tasks` rows in SQLite; review events are written as reviewers complete work (append-only `review_events` table); step remains in `running` state until all queue items are completed or the operator advances
 - Blocking: this step always pauses the workflow. It transitions from `running` to `waiting_for_human` and resumes only when the queue is fully processed or the operator explicitly advances.
@@ -143,15 +143,15 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 
 **`quality_check`**
 
-- Inputs: reads `record_sets[active_record_set_id]`; reads `metrics` for current quality state; reads `config.min_agreement`, `config.min_coverage`, `config.min_confidence` (optional thresholds). `min_agreement` is compared with Krippendorff's alpha of each field in `variables["agreement.fields"]`, and fails when any field is below it or null. With no per-field summaries it is compared with `metrics["agreement.krippendorff_alpha"]`. It never reads Cohen's kappa
+- Inputs: reads `record_sets[active_record_set_id]`; reads `metrics` for current quality state; reads `config.min_agreement`, `config.min_coverage`, `config.min_confidence` (optional thresholds). `min_agreement` is compared with Krippendorff's alpha of each field in `variables["agreement.fields"]`, and fails when any field is below it or null. When no agreement records were analyzed, the check fails with code `NO_AGREEMENT_RECORDS`. It never reads Cohen's kappa
 - Outputs: writes `step_outputs[step_id]` with pass/fail result and details; writes `metrics["quality.agreement"]`, `metrics["quality.coverage"]`, `metrics["quality.confidence"]`; writes `variables["quality.passed"]` as boolean
 - Side effects: creates a `validation_runs` row in SQLite with the quality report; writes audit entry
 - Note: this step does NOT block the workflow — it writes metrics and a pass/fail signal. Use a `conditional` step after it to branch on the result, or a `gate` step to require human approval.
 
 **`agreement_analysis`**
 
-- Inputs: reads `record_sets[active_record_set_id]`; reads `review_queue_ids` to find review events; reads `agent_run_ids` to find agent outputs; reads `config.analysis_type` (inter_annotator, human_agent, or both)
-- Outputs: writes `step_outputs[step_id]` with the agreement report (percent agreement, Cohen's kappa, Fleiss' kappa, Krippendorff's alpha and `null_reasons`, once per field and once pooled, plus per-field human-agent agreement and the confusion matrix); writes the pooled `metrics["agreement.kappa"]` (Cohen's kappa), `metrics["agreement.percent_agreement"]`, `metrics["agreement.fleiss_kappa"]`, `metrics["agreement.krippendorff_alpha"]` and `metrics["agreement.human_agent_agreement"]`; writes the per-field summaries to `variables["agreement.fields"]`
+- Inputs: reads `record_sets[active_record_set_id]`; reads `review_queue_ids` to find review events; reads `agent_run_ids` to find agent outputs; reads `config.analysis_type` (inter_annotator, human_agent, or both). [Agreement metrics](../guides/agreement-metrics.md#records-from-review-events) says which review event counts and which labels each decision gives
+- Outputs: writes `step_outputs[step_id]` with the agreement report (percent agreement, Cohen's kappa, Fleiss' kappa, Krippendorff's alpha and `null_reasons`, once per field and once pooled, plus per-field human-agent agreement and the confusion matrix) and the number of records analyzed as `record_count`; writes the pooled `metrics["agreement.kappa"]` (Cohen's kappa), `metrics["agreement.percent_agreement"]`, `metrics["agreement.fleiss_kappa"]`, `metrics["agreement.krippendorff_alpha"]` and `metrics["agreement.human_agent_agreement"]`; writes the per-field summaries to `variables["agreement.fields"]` and the record count to `variables["agreement.record_count"]`
 - Null metrics: a metric the data leave undefined is null in the report and removed from `metrics`. [Agreement metrics](../guides/agreement-metrics.md) gives each formula and the cases that make it null
 - Side effects: stores agreement report as a derived artifact; writes audit entry
 

@@ -7,6 +7,8 @@ output steps (WF-018 through WF-020), and control steps (WF-021 through WF-034).
 
 from __future__ import annotations
 
+import pytest
+
 from molabel.core.agents.agent_run_orchestrator import AgentRunBatchResult
 from molabel.core.workflow.context import (
     RecordSet,
@@ -501,6 +503,17 @@ class TestHumanReview:
         assert result.success
         assert ctx.metrics["review.accept_ai_rate"] == 0.7
 
+    @pytest.mark.parametrize(
+        ("overlap_count", "valid"), [(2, True), (0, False), ("two", False)]
+    )
+    def test_overlap_count_is_a_positive_integer(
+        self, overlap_count: object, valid: bool
+    ) -> None:
+        errors = HumanReviewExecutor().validate(
+            "review", {"overlap_count": overlap_count}, _ctx_with_records()
+        )
+        assert (errors == []) is valid
+
 
 class TestHumanTriage:
     def test_creates_queue(self) -> None:
@@ -551,11 +564,27 @@ class TestHumanAdjudication:
 # ---------------------------------------------------------------------------
 
 
+def _analyze_two_raters(ctx: WorkflowContext, pairs: list[tuple[str, str]]) -> None:
+    records = [
+        {
+            "record_id": f"u{index}",
+            "annotations": [
+                {"source": "human", "rater_id": rater, "labels": {"label": value}}
+                for rater, value in zip(("a", "b"), pair, strict=True)
+            ],
+        }
+        for index, pair in enumerate(pairs)
+    ]
+    AgreementAnalysisExecutor().execute(
+        "agreement", {"agreement_records": records}, ctx
+    )
+
+
 class TestQualityCheck:
     def test_all_pass(self) -> None:
         executor = QualityCheckExecutor()
         ctx = _ctx_with_records()
-        ctx.metrics["agreement.krippendorff_alpha"] = 0.95
+        _analyze_two_raters(ctx, [("x", "x"), ("y", "y")])
         ctx.metrics["review.coverage"] = 0.98
         ctx.metrics["agent.avg_confidence"] = 0.90
 
@@ -570,7 +599,7 @@ class TestQualityCheck:
     def test_agreement_fails(self) -> None:
         executor = QualityCheckExecutor()
         ctx = _ctx_with_records()
-        ctx.metrics["agreement.krippendorff_alpha"] = 0.50
+        _analyze_two_raters(ctx, [("x", "x"), ("y", "x")])
 
         result = executor.execute(
             "quality",

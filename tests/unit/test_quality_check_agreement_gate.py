@@ -150,3 +150,30 @@ def test_an_injected_checker_cannot_fail_fields_that_all_agree() -> None:
 
     assert detail["actual"] == pytest.approx(1.0)
     assert ctx.variables["quality.passed"] is True
+
+
+@pytest.mark.parametrize("analyzed", [False, True], ids=["no-analysis", "no-records"])
+def test_min_agreement_fails_when_no_agreement_records_were_analyzed(
+    analyzed: bool,
+) -> None:
+    ctx = WorkflowContext(
+        workspace_id="ws-1", workflow_execution_id="exec-1", workflow_version=1
+    )
+    ctx.metrics["quality.agreement"] = 0.9
+    if analyzed:
+        AgreementAnalysisExecutor().execute(
+            "agreement", {"agreement_records": [], "fields": ["code"]}, ctx
+        )
+
+    check = QualityCheckExecutor().execute("quality", {"min_agreement": 0.8}, ctx)
+
+    assert check.output is not None
+    detail = check.output.summary["details"][0]
+    assert (detail["passed"], detail["actual"], detail["code"]) == (
+        False,
+        None,
+        "NO_AGREEMENT_RECORDS",
+    )
+    assert check.output.warnings == [f"NO_AGREEMENT_RECORDS: {detail['reason']}"]
+    assert ctx.variables["quality.passed"] is False
+    assert "quality.agreement" not in ctx.metrics

@@ -26,7 +26,8 @@ class HumanReviewExecutor(StepExecutor):
 
     Creates a review queue from the active record set. Always pauses the
     workflow (waiting_for_human state) until the queue is processed or the
-    operator advances.
+    operator advances. ``overlap_count: N`` gives each record N review tasks,
+    and the queue never hands one reviewer two tasks for the same record.
     """
 
     def validate(
@@ -38,6 +39,9 @@ class HumanReviewExecutor(StepExecutor):
         errors: list[str] = []
         if not context.active_record_set_id:
             errors.append("human_review requires an active record set")
+        overlap_count = config.get("overlap_count", 1)
+        if type(overlap_count) is not int or overlap_count < 1:
+            errors.append("human_review overlap_count must be an integer of 1 or more")
         return errors
 
     def execute(

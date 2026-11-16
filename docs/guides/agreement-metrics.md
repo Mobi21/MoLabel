@@ -147,6 +147,46 @@ All of the formulas above then apply to those pairs.
 - `fleiss_kappa` on two-value units equals Scott's pi.
 - `krippendorff_alpha` is the two-rater alpha over the same pairs.
 
+## Records from review events
+
+In a running workflow, `agreement_analysis` reads its records from the
+workflow's review events and agent outputs, unless the step's
+`agreement_records` config or the `agreement.records` context variable passes
+records in. `molabel.core.quality.review_agreement` builds them.
+
+- The records are the workflow's active record set.
+- Each reviewer is one rater. The annotation's source is `human` and its
+  `rater_id` is the reviewer's id.
+- Each agent run of the workflow is one rater. The annotation's source is
+  `agent`, its `rater_id` is the agent run's id, and its labels are the run's
+  output for the record. `inter_annotator` leaves these out, and the human-agent
+  summary pairs them with the reviewers' values.
+- Only events on tasks in the workflow's review queues count.
+
+A reviewer can leave several events on one record. One of them counts.
+
+- A correction supersedes the event before it, so the head of the correction
+  chain counts: the event no other event supersedes.
+- A reviewer can have two chain heads for one record, from two tasks in
+  different queues, such as a loop pass that reviews the record again. The
+  latest head counts.
+
+The counted event's decision, after `canonical_review_decision` maps a legacy
+name such as `accept_ai` or `correct`, gives the reviewer's value.
+
+| Decision | Value |
+| --- | --- |
+| `accept` | The labels of the proposal the task showed. A task with no proposal has none to take, so the labels the reviewer sent count. |
+| `edit` | The labels the reviewer submitted. |
+| no decision | The labels the reviewer submitted. |
+| `reject` | No value. Rejecting a proposal does not say which label is right. |
+| `skip` | No value. |
+
+Two reviewers see the same record only when the queue holds two tasks for it.
+A `human_review` step with `overlap_count: 2` creates two tasks per record, and
+the queue never hands one reviewer both. The step resumes once every task is
+submitted, so each record then has two reviewers.
+
 ## Workflow outputs
 
 The `agreement_analysis` step's summary holds `pooled`, `fields`, `human_agent`
@@ -164,18 +204,23 @@ The step also writes the pooled `agreement.kappa` (`cohen_kappa`),
 `context.variables["agreement.fields"]`.
 
 A null metric is removed from `context.metrics`, which also clears a value from
-an earlier loop pass. `quality_check`, readiness gates and conditional
-predicates read a missing metric as 0.0. A loop with a `metric` termination
-keeps running while its metric is missing. The step summary keeps every key,
-with null for an undefined metric.
+an earlier loop pass. Readiness gates and conditional predicates read a missing
+metric as 0.0. A loop with a `metric` termination keeps running while its metric
+is missing. The step summary keeps every key, with null for an undefined metric.
+The step also writes the number of records it analyzed to its summary's
+`record_count` and to `context.variables["agreement.record_count"]`.
 
 ## The quality_check gate
 
 `quality_check` compares `config.min_agreement` with Krippendorff's alpha of
 each field in `context.variables["agreement.fields"]`. The check fails when any
 field's alpha is below the threshold or null, whatever the pooled alpha is.
-With no per-field summaries, because no `agreement_analysis` step has run, it
-compares the pooled `agreement.krippendorff_alpha` metric instead.
+
+When no agreement records were analyzed, because no `agreement_analysis` step
+ran or it found no records, nothing was measured. The check then fails with
+`code` `NO_AGREEMENT_RECORDS`, a `reason`, and a null `actual`, and the step
+result's `warnings` repeat the code and reason. It never reads a missing
+agreement as 0.0.
 
 Alpha is defined for any number of raters and handles missing values, so the
 gate works for three or more reviewers. Earlier versions compared
@@ -201,7 +246,9 @@ fields that failed:
   "actual": 0.125,
   "passed": false,
   "fields": {"sentiment": 1.0, "topic": 0.125},
-  "failing_fields": {"topic": 0.125}
+  "failing_fields": {"topic": 0.125},
+  "code": null,
+  "reason": null
 }
 ```
 
@@ -209,7 +256,9 @@ fields that failed:
 null field read as 0.0. So `quality.agreement` reaches a positive threshold
 exactly when every field does, and a loop that terminates on it stops when the
 gate would pass. In this example the pooled alpha is 0.6875, above the
-threshold, and the gate still fails on `topic`.
+threshold, and the gate still fails on `topic`. With no agreement records,
+`actual` is null and `quality_check` removes `quality.agreement`, so a loop
+that terminates on it keeps running.
 
 ## Level of measurement
 

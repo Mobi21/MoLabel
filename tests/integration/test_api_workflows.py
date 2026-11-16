@@ -152,9 +152,9 @@ def _seed_workflow(
     ingest_config: dict | None = None,
     agent_config: dict | None = None,
     agent_step_type: str = "agent_run",
+    review_config: dict | None = None,
+    after_review: list[dict] | None = None,
 ):
-    workflow_id = uuid.uuid4()
-    now = datetime.now(UTC).isoformat()
     steps = [
         {
             "step_id": "ingest",
@@ -173,8 +173,9 @@ def _seed_workflow(
         {
             "step_id": "review",
             "step_type": "human_review",
-            "config": {},
+            "config": review_config or {},
         },
+        *(after_review or []),
     ]
     if include_export:
         steps.append(
@@ -187,6 +188,12 @@ def _seed_workflow(
                 },
             }
         )
+    return _insert_workflow(engine, workspace_id, steps)
+
+
+def _insert_workflow(engine, workspace_id, steps):
+    workflow_id = uuid.uuid4()
+    now = datetime.now(UTC).isoformat()
     with engine.connect() as conn:
         conn.execute(
             text(
@@ -1718,3 +1725,243 @@ async def test_a_compared_model_left_unset_fails_before_any_call(
     assert resp.json()["error"]["code"] == "MODEL_UNRESOLVED"
     assert _execution_count(app.state.engine, workspace_id) == 0
     assert hosted_calls == []
+
+
+SENTIMENT_RECORDS = {
+    "r1": "A positive review.",
+    "r2": "A negative review.",
+    "r3": "A neutral review.",
+    "r4": "Mostly negative.",
+    "r5": "Nothing to say.",
+    "r6": "Neutral at best.",
+}
+OFFLINE_SENTIMENT = {
+    "r1": "positive",
+    "r2": "negative",
+    "r3": "neutral",
+    "r4": "negative",
+    "r5": "positive",
+    "r6": "neutral",
+}
+TWO_REVIEWERS = [
+    {
+        "r1": ("accept", {}),
+        "r2": ("accept", {}),
+        "r3": ("edit", {"sentiment": "negative"}),
+        "r4": ("accept", {}),
+        "r5": ("reject", {"sentiment": "negative"}),
+        "r6": ("edit", {"sentiment": "positive"}),
+    },
+    {
+        "r1": ("accept", {}),
+        "r2": ("edit", {"sentiment": "neutral"}),
+        "r3": ("accept", {}),
+        "r4": ("accept", {}),
+        "r5": ("accept", {}),
+        "r6": ("accept", {}),
+    },
+]
+FIRST_REVIEWER_CORRECTS = {
+    "r6": {"decision": "edit", "labels": {"sentiment": "neutral"}}
+}
+
+
+async def _review_queue(client, queue_id, token, decisions):
+    headers = {"Cookie": f"molabel_session={token}"}
+    task_ids = {}
+    while True:
+        claim = await client.post(f"/api/v1/queues/{queue_id}/claim", headers=headers)
+        assert claim.status_code == 200, claim.text
+        if claim.json()["queue_empty"]:
+            return task_ids
+        task = claim.json()["task"]
+        external_id = task["record_external_id"]
+        assert task["agent_output"]["labels"] == {
+            "sentiment": OFFLINE_SENTIMENT[external_id]
+        }
+        decision, labels = decisions[external_id]
+        submitted = await client.post(
+            f"/api/v1/review-tasks/{task['id']}/submit",
+            json={"decision": decision, "labels": labels, "auto_claim_next": False},
+            headers=headers,
+        )
+        assert submitted.status_code == 200, submitted.text
+        task_ids[external_id] = task["id"]
+
+
+async def _run_two_reviewer_workflow(client, app, tmp_path, after_review):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    tokens = [_seed_reviewer(app.state.engine, workspace_id) for _ in range(2)]
+    _seed_task_schema(app.state.engine, workspace_id)
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "reviews.jsonl").write_text(
+        "".join(
+            json.dumps({"id": record_id, "text": text_value}) + "\n"
+            for record_id, text_value in SENTIMENT_RECORDS.items()
+        ),
+        encoding="utf-8",
+    )
+    workflow_id = _seed_workflow(
+        app.state.engine,
+        workspace_id,
+        agent_config={"provider_type": "offline", "prompt_ref": "prompts/default.yaml"},
+        review_config={"overlap_count": 2},
+        after_review=after_review,
+    )
+    started = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={tokens[0]}"},
+    )
+    assert started.json()["current_step_id"] == "review", started.text
+    with app.state.engine.connect() as conn:
+        (queue_id,) = conn.execute(
+            text("SELECT DISTINCT queue_id FROM review_tasks WHERE workspace_id = :w"),
+            {"w": str(workspace_id)},
+        ).one()
+
+    reviewed = [
+        await _review_queue(client, queue_id, token, decisions)
+        for token, decisions in zip(tokens, TWO_REVIEWERS, strict=True)
+    ]
+    assert [sorted(task_ids) for task_ids in reviewed] == [
+        sorted(SENTIMENT_RECORDS)
+    ] * 2
+    for external_id, correction in FIRST_REVIEWER_CORRECTS.items():
+        corrected = await client.post(
+            f"/api/v1/review-tasks/{reviewed[0][external_id]}/correct",
+            json=correction,
+            headers={"Cookie": f"molabel_session={tokens[0]}"},
+        )
+        assert corrected.status_code == 200, corrected.text
+
+    advanced = await client.post(
+        f"/api/v1/workflows/{workflow_id}/executions/"
+        f"{started.json()['execution_id']}/steps/review/advance",
+        headers={"Cookie": f"molabel_session={tokens[0]}"},
+    )
+    assert advanced.status_code == 200, advanced.text
+    return advanced.json()
+
+
+def _step_results(execution):
+    return {state["step_id"]: state["result"] for state in execution["step_states"]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("analysis_type", "alpha", "comparisons", "agreements", "passed"),
+    [
+        # Reviewer pairs, with r5 left one value by the reject:
+        # r1 pos/pos, r2 neg/neu, r3 neg/neu, r4 neg/neg, r6 neu/neu (corrected).
+        # n = 10 with pos = 2, neg = 4, neu = 4, and 2 + 2 mismatching
+        # coincidences: alpha = 1 - 9 * 4 / (100 - 4 - 16 - 16) = 28 / 64.
+        ("inter_annotator", 28 / 64, 5, 3, False),
+        # Each human value against the offline proposal: 5 pairs for the first
+        # reviewer and 6 for the second, 2 mismatched. n = 22 with pos = 6,
+        # neg = 8, neu = 8: alpha = 1 - 21 * 4 / (484 - 36 - 64 - 64) = 236 / 320.
+        ("human_agent", 236 / 320, 11, 9, True),
+    ],
+)
+async def test_agreement_on_a_live_workflow_comes_from_its_review_events(
+    client, app, tmp_path, analysis_type, alpha, comparisons, agreements, passed
+):
+    execution = await _run_two_reviewer_workflow(
+        client,
+        app,
+        tmp_path,
+        [
+            {
+                "step_id": "agreement",
+                "step_type": "agreement_analysis",
+                "config": {"analysis_type": analysis_type},
+            },
+            {
+                "step_id": "quality",
+                "step_type": "quality_check",
+                "config": {"min_agreement": 0.7},
+            },
+        ],
+    )
+
+    assert execution["status"] == "completed", execution["error_summary"]
+    results = _step_results(execution)
+    sentiment = results["agreement"]["summary"]["fields"]["sentiment"]
+    assert sentiment["krippendorff_alpha"] == pytest.approx(alpha)
+    assert (sentiment["comparisons"], sentiment["agreements"]) == (
+        comparisons,
+        agreements,
+    )
+    check = results["quality"]["summary"]["details"][0]
+    assert check["actual"] == pytest.approx(alpha)
+    assert check["fields"] == pytest.approx({"sentiment": alpha})
+    assert check["passed"] is passed
+    assert check["code"] is None
+
+
+@pytest.mark.asyncio
+async def test_two_reviewers_give_a_cohen_kappa_on_a_live_workflow(
+    client, app, tmp_path
+):
+    execution = await _run_two_reviewer_workflow(
+        client,
+        app,
+        tmp_path,
+        [
+            {
+                "step_id": "agreement",
+                "step_type": "agreement_analysis",
+                "config": {"analysis_type": "inter_annotator"},
+            }
+        ],
+    )
+
+    sentiment = _step_results(execution)["agreement"]["summary"]["fields"]["sentiment"]
+    # Pairs (first, second): pos/pos, neg/neu, neg/neu, neg/neg, neu/neu.
+    # p_o = 3/5. Marginals pos 1/1, neg 3/1, neu 1/3, so p_e = 7/25.
+    assert sentiment["cohen_kappa"] == pytest.approx((3 / 5 - 7 / 25) / (18 / 25))
+
+
+@pytest.mark.asyncio
+async def test_a_workflow_with_no_agreement_records_fails_the_gate(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _write_demo_reviews(tmp_path)
+    workflow_id = _insert_workflow(
+        app.state.engine,
+        workspace_id,
+        [
+            {
+                "step_id": "ingest",
+                "step_type": "data_ingest",
+                "config": {"source": "data/reviews.jsonl"},
+            },
+            {"step_id": "agreement", "step_type": "agreement_analysis", "config": {}},
+            {
+                "step_id": "quality",
+                "step_type": "quality_check",
+                "config": {"min_agreement": 0.8},
+            },
+        ],
+    )
+
+    headers = {"Cookie": f"molabel_session={token}"}
+    started = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute", json={}, headers=headers
+    )
+    execution = await client.get(
+        f"/api/v1/workflows/{workflow_id}/executions/{started.json()['execution_id']}",
+        headers=headers,
+    )
+
+    quality = _step_results(execution.json())["quality"]
+    check = quality["summary"]["details"][0]
+    assert quality["summary"]["passed"] is False
+    assert (check["passed"], check["actual"], check["code"]) == (
+        False,
+        None,
+        "NO_AGREEMENT_RECORDS",
+    )
+    assert [w for w in quality["warnings"] if w.startswith("NO_AGREEMENT_RECORDS")]
