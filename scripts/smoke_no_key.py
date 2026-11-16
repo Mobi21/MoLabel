@@ -69,7 +69,7 @@ def keyless_env(**overrides: str) -> dict[str, str]:
     env = {
         name: value
         for name, value in os.environ.items()
-        if not name.endswith("_API_KEY")
+        if not name.endswith(("_API_KEY", "_AUTH_TOKEN"))
         and not name.startswith("MOLABEL_")
         and name not in {"ANTHROPIC_BASE_URL", "MINIMAX_BASE_URL"}
     }
