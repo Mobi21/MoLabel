@@ -20,8 +20,10 @@ import { useQueue } from '@/features/queues/queues'
 import { RecordView } from '@/features/review/record-view'
 import {
   formatValue,
+  invalidFields,
   missingRequired,
   pickKey,
+  rawLabels,
   rubricFields,
   type Labels,
   type RubricField,
@@ -292,11 +294,17 @@ function Resolver({
       setActive(fields.findIndex((f) => f.name === missing[0]))
       return
     }
+    const invalid = invalidFields(fields, labels)
+    if (invalid.length > 0) {
+      setProblem(`Fix the JSON in ${invalid.join(', ')} first.`)
+      setActive(fields.findIndex((f) => f.name === invalid[0]))
+      return
+    }
     resolve.mutate({
       path: { queue_id: queueId, record_id: detail.record_id },
       body: {
         resolution: 'resolve',
-        resolved_labels: labels,
+        resolved_labels: rawLabels(labels),
         rationale: rationale.trim() === '' ? null : rationale.trim(),
       },
     })

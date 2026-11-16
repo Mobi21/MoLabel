@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  JsonDraft,
+  invalidFields,
   keyedValue,
   missingRequired,
   parseLabels,
@@ -103,5 +105,59 @@ describe('missingRequired', () => {
     expect(missingRequired(fields, { intent: 'bug', urgent: false })).toEqual(
       [],
     )
+  })
+})
+
+describe('a JSON field', () => {
+  const json = rubricFields([
+    {
+      name: 'intent',
+      field_type: 'categorical',
+      required: false,
+      options: ['refund', 'bug'],
+    },
+    { name: 'entities', field_type: 'json', required: true },
+  ])
+  const entities = [{ text: 'Ada', type: 'PERSON', span: [0, 3] }]
+  const proposed = { intent: 'refund', entities }
+
+  it('keeps arrays and objects from the API', () => {
+    expect(parseLabels(json, proposed)).toEqual(proposed)
+    expect(parseLabels(json, { entities: { a: 1 } })).toEqual({
+      entities: { a: 1 },
+    })
+  })
+
+  it('accepts when the typed JSON equals the proposal, whatever its key order', () => {
+    const typed = new JsonDraft('[{"span":[0,3],"type":"PERSON","text":"Ada"}]')
+    const outcome = submission(
+      json,
+      { intent: 'refund', entities: typed },
+      proposed,
+    )
+    expect(outcome.decision).toBe('accept')
+  })
+
+  it('sends typed JSON parsed, as an edit when it differs', () => {
+    const typed = new JsonDraft('[]')
+    const outcome = submission(
+      json,
+      { intent: 'refund', entities: typed },
+      proposed,
+    )
+    expect(outcome).toMatchObject({
+      decision: 'edit',
+      changed: ['entities'],
+      labels: { intent: 'refund', entities: [] },
+    })
+    expect(missingRequired(json, { entities: typed })).toEqual([])
+  })
+
+  it('names a field whose text does not parse, and counts empty text as unset', () => {
+    const labels = { entities: new JsonDraft('[{') }
+    expect(invalidFields(json, labels)).toEqual(['entities'])
+    expect(missingRequired(json, { entities: new JsonDraft('  ') })).toEqual([
+      'entities',
+    ])
   })
 })

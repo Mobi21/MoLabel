@@ -1,6 +1,7 @@
 import { Kbd } from '@/components/key-legend'
 import { cn } from '@/lib/utils'
 import {
+  JsonDraft,
   choices,
   formatValue,
   isList,
@@ -22,6 +23,60 @@ interface RubricFormProps {
   marked?: ReadonlySet<string>
   disabled?: boolean
   textRef?: (name: string, element: HTMLTextAreaElement | null) => void
+}
+
+/** A JSON field as editable text, which keeps what the reviewer typed. */
+function JsonInput({
+  name,
+  value,
+  disabled,
+  placeholder,
+  textRef,
+  onFocus,
+  onChange,
+}: {
+  name: string
+  value: LabelValue | undefined
+  disabled: boolean
+  placeholder: string
+  textRef: (element: HTMLTextAreaElement | null) => void
+  onFocus: () => void
+  onChange: (draft: JsonDraft) => void
+}) {
+  const text =
+    value instanceof JsonDraft
+      ? value.text
+      : value === undefined
+        ? ''
+        : JSON.stringify(value, null, 2)
+  const error = value instanceof JsonDraft ? value.error : null
+  return (
+    <>
+      <textarea
+        ref={textRef}
+        aria-label={name}
+        aria-invalid={error !== null}
+        disabled={disabled}
+        value={text}
+        spellCheck={false}
+        onFocus={onFocus}
+        onChange={(event) => {
+          onChange(new JsonDraft(event.target.value))
+        }}
+        rows={Math.min(12, Math.max(3, text.split('\n').length))}
+        placeholder={placeholder}
+        className={cn(
+          'mt-2 w-full resize-y rounded-[3px] border bg-paper px-2.5 py-1.5 font-mono text-xs placeholder:text-faint',
+          error === null ? 'border-rule' : 'border-signal',
+        )}
+      />
+      {error !== null && (
+        <p className="mt-1 font-mono text-[11px] text-signal">
+          Not valid JSON: {error}
+        </p>
+      )}
+    </>
+  )
 }
 
 function isPicked(field: RubricField, labels: Labels, value: LabelValue) {
@@ -52,6 +107,7 @@ export function RubricForm({
     <ol className="divide-y divide-rule border-y border-rule">
       {fields.map((field, index) => {
         const isActive = index === active
+        const value = labels[field.name]
         const values = choices(field)
         const descriptions =
           field.kind === 'choice' || field.kind === 'multi'
@@ -107,11 +163,7 @@ export function RubricForm({
                 min={field.min ?? undefined}
                 max={field.max ?? undefined}
                 disabled={disabled}
-                value={
-                  typeof labels[field.name] === 'number'
-                    ? String(labels[field.name])
-                    : ''
-                }
+                value={typeof value === 'number' ? String(value) : ''}
                 onFocus={() => {
                   onActivate(index)
                 }}
@@ -132,11 +184,7 @@ export function RubricForm({
                 }}
                 aria-label={field.name}
                 disabled={disabled}
-                value={
-                  typeof labels[field.name] === 'string'
-                    ? (labels[field.name] as string)
-                    : ''
-                }
+                value={typeof value === 'string' ? value : ''}
                 onFocus={() => {
                   onActivate(index)
                 }}
@@ -147,6 +195,22 @@ export function RubricForm({
                 placeholder={isActive ? 'Enter to write, Esc to leave' : ''}
                 className="mt-2 w-full resize-y rounded-[3px] border border-rule bg-paper px-2.5 py-1.5 text-sm placeholder:text-faint"
               />
+            ) : field.kind === 'json' ? (
+              <JsonInput
+                name={field.name}
+                value={value}
+                disabled={disabled}
+                placeholder={isActive ? 'Enter to write, Esc to leave' : ''}
+                textRef={(element) => {
+                  textRef?.(field.name, element)
+                }}
+                onFocus={() => {
+                  onActivate(index)
+                }}
+                onChange={(draft) => {
+                  onChange({ ...labels, [field.name]: draft })
+                }}
+              />
             ) : (
               values.length > 0 && (
                 <div
@@ -154,10 +218,10 @@ export function RubricForm({
                   aria-label={field.name}
                   className="mt-2 flex flex-wrap gap-1.5"
                 >
-                  {values.map((value) => {
-                    const picked = isPicked(field, labels, value)
-                    const text = formatValue(value)
-                    const key = keyFor(field, value)
+                  {values.map((choice) => {
+                    const picked = isPicked(field, labels, choice)
+                    const text = formatValue(choice)
+                    const key = keyFor(field, choice)
                     return (
                       <button
                         key={text}
@@ -170,7 +234,7 @@ export function RubricForm({
                         title={descriptions[text]}
                         onClick={() => {
                           onActivate(index)
-                          onChange(pickValue(field, labels, value))
+                          onChange(pickValue(field, labels, choice))
                         }}
                         className={cn(
                           'flex items-center gap-2 rounded-[3px] border px-2 py-1 text-sm transition-colors',

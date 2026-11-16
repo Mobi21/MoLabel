@@ -30,7 +30,35 @@ const SCHEMA = {
   updated_at: '2026-11-16T00:00:00Z',
 }
 
-function task(policy: string, withProposal: boolean) {
+interface Fixture {
+  schema: typeof SCHEMA
+  proposal: Record<string, unknown>
+}
+
+const TRIAGE: Fixture = { schema: SCHEMA, proposal: PROPOSAL }
+
+const ENTITIES = [
+  { text: 'order 42', type: 'ORDER', span: [12, 20] },
+  { text: 'Ada', type: 'PERSON', span: [0, 3] },
+]
+
+const EXTRACTION: Fixture = {
+  schema: {
+    ...SCHEMA,
+    label_fields: [
+      {
+        name: 'intent',
+        field_type: 'categorical',
+        required: true,
+        options: ['refund', 'bug', 'shipping', 'other'],
+      },
+      { name: 'entities', field_type: 'json', required: true },
+    ],
+  },
+  proposal: { intent: 'refund', entities: ENTITIES },
+}
+
+function task(policy: string, withProposal: boolean, fixture = TRIAGE) {
   return {
     id: 't1',
     queue_id: 'q1',
@@ -53,14 +81,14 @@ function task(policy: string, withProposal: boolean) {
           record_id: 'rec1',
           task_schema_id: 's1',
           output_type: 'labels',
-          labels: PROPOSAL,
+          labels: fixture.proposal,
           workspace_id: 'w1',
         }
       : null,
   }
 }
 
-function serve(policy: string) {
+function serve(policy: string, fixture = TRIAGE) {
   const blind = policy === 'hide_agent_outputs_by_default'
   return fakeApi([
     [
@@ -91,13 +119,13 @@ function serve(policy: string) {
     [
       'POST',
       /\/queues\/q1\/claim$/,
-      () => ({ task: task(policy, !blind), queue_empty: false }),
+      () => ({ task: task(policy, !blind, fixture), queue_empty: false }),
     ],
-    ['GET', /\/task-schemas\/s1$/, () => SCHEMA],
+    ['GET', /\/task-schemas\/s1$/, () => fixture.schema],
     [
       'POST',
       /\/reveal-ai$/,
-      () => ({ task: { ...task(policy, true), ai_revealed: true } }),
+      () => ({ task: { ...task(policy, true, fixture), ai_revealed: true } }),
     ],
     [
       'POST',
@@ -108,7 +136,11 @@ function serve(policy: string) {
         queue_empty: true,
       }),
     ],
-    ['GET', /\/review-tasks\/t1$/, () => ({ ...task(policy, !blind) })],
+    [
+      'GET',
+      /\/review-tasks\/t1$/,
+      () => ({ ...task(policy, !blind, fixture) }),
+    ],
   ])
 }
 
@@ -212,6 +244,48 @@ describe('ReviewPage', () => {
     expect(await submitted(calls)).toMatchObject({
       decision: null,
       labels: { intent: 'bug', urgent: true },
+    })
+  })
+
+  it('keeps a JSON field structured through an edit of another field', async () => {
+    const calls = serve('show_agent_outputs', EXTRACTION)
+    renderReview()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+    const entities = screen.getByRole('textbox', { name: 'entities' })
+    expect(JSON.parse((entities as HTMLTextAreaElement).value)).toEqual(
+      ENTITIES,
+    )
+
+    press('2')
+    press('Enter', { ctrlKey: true })
+
+    expect(await submitted(calls)).toMatchObject({
+      decision: 'edit',
+      labels: { intent: 'bug', entities: ENTITIES },
+    })
+  })
+
+  it('will not submit JSON that does not parse, and sends it parsed once it does', async () => {
+    const calls = serve('show_agent_outputs', EXTRACTION)
+    renderReview()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+    const entities = screen.getByRole('textbox', { name: 'entities' })
+
+    fireEvent.change(entities, { target: { value: '[{"text": "Ada"' } })
+    press('Enter', { ctrlKey: true })
+    expect(await screen.findByRole('alert')).toHaveTextContent('entities')
+    expect(calls.some((c) => c.path.endsWith('/submit'))).toBe(false)
+
+    fireEvent.change(entities, {
+      target: { value: '[{"text": "Ada", "type": "PERSON"}]' },
+    })
+    press('Enter', { ctrlKey: true })
+    expect(await submitted(calls)).toMatchObject({
+      decision: 'edit',
+      labels: {
+        intent: 'refund',
+        entities: [{ text: 'Ada', type: 'PERSON' }],
+      },
     })
   })
 })

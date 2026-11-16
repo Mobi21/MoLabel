@@ -30,9 +30,11 @@ import { RecordView } from './record-view'
 import {
   changedFields,
   formatValue,
+  invalidFields,
   missingRequired,
   parseLabels,
   pickKey,
+  rawLabels,
   rubricFields,
   submission,
   type Labels,
@@ -306,6 +308,12 @@ function ReviewItem({
   function save(decision: 'reject' | null = null) {
     if (busy || isSkipped) return
     const rationaleText = rationale.trim() === '' ? null : rationale.trim()
+    const invalid = invalidFields(fields, form)
+    if (invalid.length > 0) {
+      setActive(fields.findIndex((f) => f.name === invalid[0]))
+      setProblem(`Fix the JSON in ${invalid.join(', ')} first.`)
+      return
+    }
     if (decision === null && missing.length > 0) {
       setActive(fields.findIndex((f) => f.name === missing[0]))
       setProblem(`Pick a value for ${missing.join(', ')} first.`)
@@ -313,7 +321,7 @@ function ReviewItem({
     }
     const body =
       decision === 'reject'
-        ? { decision, labels: form }
+        ? { decision, labels: rawLabels(form) }
         : { decision: outcome.decision, labels: outcome.labels }
     if (!isHead) {
       if (corrections.length === 0 && decision === null) {
@@ -373,9 +381,9 @@ function ReviewItem({
       label: 'Write in a text field',
       match: plainKey('Enter'),
       run: () => {
-        if (field?.kind === 'text') texts.current.get(field.name)?.focus()
+        if (field) texts.current.get(field.name)?.focus()
       },
-      disabled: field?.kind !== 'text',
+      disabled: field?.kind !== 'text' && field?.kind !== 'json',
     },
     {
       id: 'leave-text',
