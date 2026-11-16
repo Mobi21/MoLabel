@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from molabel.app.api.v1.model_profiles import SHARED_PROFILE_WORKSPACE
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
@@ -876,49 +877,40 @@ def _ensure_model_profile(
     auth_ref: str | None = None,
     base_url: str | None = None,
 ) -> str:
-    row = conn.execute(
+    """Return the model profile an agent step runs on, creating one if none fits.
+
+    A profile fits when its id, slug, or model id is ``model_identifier``, it
+    belongs to the step's workspace or to the shared profile workspace, and,
+    when ``provider_type`` is given, it has that provider. The step's own
+    workspace wins over the shared one.
+    """
+    requested_provider = _normalize_provider_type(provider_type)
+    rows = conn.execute(
         text(
-            "SELECT id FROM model_profiles "
-            "WHERE workspace_id = :wid AND id = :model "
-            "ORDER BY created_at DESC LIMIT 1"
+            "SELECT id, provider_type FROM model_profiles "
+            "WHERE workspace_id IN (:wid, :shared) "
+            "AND (id = :model OR model_identifier = :model "
+            "OR model_profile_slug = :model) "
+            "ORDER BY workspace_id = :wid DESC, id = :model DESC, created_at DESC"
         ),
-        {"wid": workspace_id, "model": model_identifier},
-    ).first()
-    if row is not None:
-        return str(row[0])
-    row = conn.execute(
-        text(
-            "SELECT id FROM model_profiles "
-            "WHERE id = :model "
-            "ORDER BY created_at DESC LIMIT 1"
-        ),
-        {"model": model_identifier},
-    ).first()
-    if row is not None:
-        return str(row[0])
-    row = conn.execute(
-        text(
-            "SELECT id FROM model_profiles "
-            "WHERE workspace_id = :wid "
-            "AND (model_identifier = :model OR model_profile_slug = :model) "
-            "ORDER BY created_at DESC LIMIT 1"
-        ),
-        {"wid": workspace_id, "model": model_identifier},
-    ).first()
-    if row is not None:
-        return str(row[0])
-    # Fall back to any workspace (the model-profile endpoint may use a
-    # default workspace_id that differs from the workflow's workspace).
-    row = conn.execute(
-        text(
-            "SELECT id FROM model_profiles "
-            "WHERE model_identifier = :model OR model_profile_slug = :model "
-            "ORDER BY created_at DESC LIMIT 1"
-        ),
-        {"model": model_identifier},
-    ).first()
-    if row is not None:
-        return str(row[0])
+        {
+            "wid": workspace_id,
+            "shared": str(SHARED_PROFILE_WORKSPACE),
+            "model": model_identifier,
+        },
+    ).fetchall()
+    for profile_id, profile_provider in rows:
+        if requested_provider is None or profile_provider == requested_provider:
+            return str(profile_id)
+        if profile_id == model_identifier:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Model profile {model_identifier} uses provider "
+                    f"{profile_provider}, but the step sets provider_type "
+                    f"{requested_provider}"
+                ),
+            )
 
     profile_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()

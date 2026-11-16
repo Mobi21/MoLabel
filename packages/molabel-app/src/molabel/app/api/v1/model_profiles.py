@@ -24,8 +24,9 @@ router = APIRouter(prefix="/model-profiles", tags=["model-profiles"])
 # In-memory fallback for endpoints that don't need DB yet.
 _service = ModelProfileService()
 
-# Default workspace for placeholder endpoints.
-_DEFAULT_WORKSPACE = UUID("00000000-0000-0000-0000-000000000001")
+# Every profile this API creates lands here, and agent steps in any workspace
+# can use it.
+SHARED_PROFILE_WORKSPACE = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def _get_service(request: Request) -> ModelProfileService:
@@ -58,7 +59,7 @@ async def create_model_profile(
 ) -> ModelProfileResponse:
     """Create a new model profile."""
     service = _get_service(request)
-    return service.create(data, workspace_id=_DEFAULT_WORKSPACE)
+    return service.create(data, workspace_id=SHARED_PROFILE_WORKSPACE)
 
 
 @router.get("", response_model=list[ModelProfileResponse])
@@ -69,7 +70,7 @@ async def list_model_profiles(
     """List model profiles, optionally filtered by provider type."""
     service = _get_service(request)
     return service.list_profiles(
-        _DEFAULT_WORKSPACE,
+        SHARED_PROFILE_WORKSPACE,
         provider_type=provider_type,
     )
 

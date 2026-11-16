@@ -19,7 +19,14 @@ from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
 from molabel.core.database import get_engine
 from molabel.core.migration_runner import upgrade_database
+from molabel.core.providers import (
+    AnthropicAdapter,
+    OllamaAdapter,
+    OpenAIAdapter,
+    OpenRouterAdapter,
+)
 from molabel.core.providers.base import ProviderError
+from molabel.core.types import CompletionResult
 
 TEST_SECRET = "workflow-test-secret"
 
@@ -589,6 +596,223 @@ async def test_an_offline_workflow_reaches_review_without_a_key(
         assert confidence == 0.0
         assert adapter == "builtin.offline"
         assert provider == "offline"
+
+
+SHARED_PROFILE_WORKSPACE = "00000000-0000-0000-0000-000000000001"
+
+
+@pytest.fixture()
+def hosted_calls(monkeypatch):
+    for name in PROVIDER_KEYS:
+        monkeypatch.delenv(name, raising=False)
+    calls: list[tuple[str, str]] = []
+
+    def complete(self, messages, model, **_kwargs):
+        calls.append((self.provider_type, model))
+        labels = {"sentiment": "neutral"}
+        return CompletionResult(
+            content=json.dumps(labels), parsed=labels, model_id=model
+        )
+
+    for adapter in (AnthropicAdapter, OpenAIAdapter, OpenRouterAdapter, OllamaAdapter):
+        monkeypatch.setattr(adapter, "complete", complete)
+    return calls
+
+
+def _seed_other_workspace(engine, root_path, workspace_id):
+    now = datetime.now(UTC).isoformat()
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO workspaces "
+                "(id, workspace_name, workspace_slug, core_version, root_path, "
+                "manifest_path, created_at, updated_at) "
+                "VALUES (:id, 'Other', :slug, '0.1.0', :root_path, :manifest, "
+                ":now, :now)"
+            ),
+            {
+                "id": workspace_id,
+                "slug": f"other-{workspace_id}",
+                "root_path": str(root_path),
+                "manifest": str(root_path / "workbench.project.yaml"),
+                "now": now,
+            },
+        )
+        conn.commit()
+
+
+def _seed_model_profile(engine, workspace_id, *, provider_type, model, slug=None):
+    profile_id = str(uuid.uuid4())
+    now = datetime.now(UTC).isoformat()
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO model_profiles "
+                "(id, model_profile_slug, provider_type, provider_name, "
+                "model_identifier, transport, auth_ref, supports_structured_output, "
+                "supports_tool_use, is_available, created_at, updated_at, "
+                "workspace_id) "
+                "VALUES (:id, :slug, :provider_type, 'Seeded', :model, 'https', "
+                "'ANTHROPIC_API_KEY', 1, 0, 1, :now, :now, :wid)"
+            ),
+            {
+                "id": profile_id,
+                "slug": slug or model,
+                "provider_type": provider_type,
+                "model": model,
+                "now": now,
+                "wid": str(workspace_id),
+            },
+        )
+        conn.commit()
+    return profile_id
+
+
+def _agent_run_profiles(engine, workspace_id):
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT p.id, p.provider_type, p.workspace_id FROM agent_runs a "
+                "JOIN model_profiles p ON p.id = a.model_profile_id "
+                "WHERE a.workspace_id = :wid"
+            ),
+            {"wid": str(workspace_id)},
+        ).fetchall()
+    return [(str(row[0]), str(row[1]), str(row[2])) for row in rows]
+
+
+async def _execute_sentiment_workflow(
+    client, app, tmp_path, workspace_id, agent_config
+):
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    workflow_id = _seed_workflow(
+        app.state.engine,
+        workspace_id,
+        agent_config={**agent_config, "prompt_ref": "prompts/default.yaml"},
+    )
+    _write_demo_reviews(tmp_path)
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+    return resp
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("profile_provider", "model", "step_provider"),
+    [
+        ("anthropic", "offline-heuristic", "offline"),
+        ("offline", "claude-sonnet-4-20250514", "anthropic"),
+    ],
+    ids=["offline-step-over-anthropic-profile", "anthropic-step-over-offline-profile"],
+)
+async def test_an_explicit_provider_never_reuses_a_profile_of_another_provider(
+    client, app, tmp_path, hosted_calls, profile_provider, model, step_provider
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    _seed_model_profile(
+        app.state.engine, workspace_id, provider_type=profile_provider, model=model
+    )
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        {"model": model, "provider_type": step_provider},
+    )
+
+    assert resp.json()["error_summary"] is None
+    assert [
+        provider
+        for _id, provider, _wid in _agent_run_profiles(app.state.engine, workspace_id)
+    ] == [step_provider]
+    expected_calls = [] if step_provider == "offline" else [(step_provider, model)] * 3
+    assert hosted_calls == expected_calls
+
+
+@pytest.mark.asyncio
+async def test_a_step_that_pins_a_profile_of_another_provider_fails(
+    client, app, tmp_path, hosted_calls
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    profile_id = _seed_model_profile(
+        app.state.engine,
+        workspace_id,
+        provider_type="offline",
+        model="claude-sonnet-4-20250514",
+    )
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        {"model": profile_id, "provider_type": "anthropic"},
+    )
+
+    assert (
+        f"Model profile {profile_id} uses provider offline, but the step sets "
+        "provider_type anthropic"
+    ) in resp.json()["error_summary"]
+    assert _agent_run_profiles(app.state.engine, workspace_id) == []
+    assert hosted_calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_profile_from_another_workspace_is_never_reused(
+    client, app, tmp_path, hosted_calls
+):
+    other_workspace = str(uuid.uuid4())
+    _seed_other_workspace(app.state.engine, tmp_path / "other", other_workspace)
+    _seed_model_profile(
+        app.state.engine,
+        other_workspace,
+        provider_type="offline",
+        model="claude-sonnet-4-20250514",
+    )
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+
+    resp = await _execute_sentiment_workflow(
+        client, app, tmp_path, workspace_id, {"model": "claude-sonnet-4-20250514"}
+    )
+
+    assert resp.json()["error_summary"] is None
+    [(_id, provider, profile_workspace)] = _agent_run_profiles(
+        app.state.engine, workspace_id
+    )
+    assert (provider, profile_workspace) == ("anthropic", str(workspace_id))
+    assert hosted_calls == [("anthropic", "claude-sonnet-4-20250514")] * 3
+
+
+@pytest.mark.asyncio
+async def test_a_profile_in_the_shared_profile_workspace_is_reused(
+    client, app, tmp_path, hosted_calls
+):
+    _seed_other_workspace(
+        app.state.engine, tmp_path / "shared", SHARED_PROFILE_WORKSPACE
+    )
+    profile_id = _seed_model_profile(
+        app.state.engine,
+        SHARED_PROFILE_WORKSPACE,
+        provider_type="anthropic",
+        model="claude-sonnet-4-20250514",
+        slug="team-claude",
+    )
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+
+    resp = await _execute_sentiment_workflow(
+        client, app, tmp_path, workspace_id, {"model": "team-claude"}
+    )
+
+    assert resp.json()["error_summary"] is None
+    assert _agent_run_profiles(app.state.engine, workspace_id) == [
+        (profile_id, "anthropic", SHARED_PROFILE_WORKSPACE)
+    ]
+    assert hosted_calls == [("anthropic", "claude-sonnet-4-20250514")] * 3
 
 
 @pytest.mark.asyncio
