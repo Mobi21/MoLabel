@@ -32,6 +32,7 @@ Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 - Alembic stores the current schema version in the `alembic_version` table of the server database. There is one server database for all workspaces (see `docs/guides/how-molabel-works-today.md` section 4.2)
 - On startup, the server runs `upgrade_database`, which is `alembic upgrade head`
 - A database created by `create_all` before Alembic owned the schema has tables but no `alembic_version`. It is stamped at `001`, whose DDL is frozen at exactly that schema, and then upgraded
+- Before stamping, the server checks that such a database has every table and column that `001` creates. If any are missing, startup stops with an error that lists them, and the database is not changed
 
 ## Migration Lifecycle
 

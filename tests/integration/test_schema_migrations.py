@@ -16,6 +16,7 @@ from sqlmodel import SQLModel
 import molabel.core
 import molabel.core.models  # noqa: F401
 from molabel.app.main import create_app
+from molabel.core.migration_runner import IncompleteBaselineError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LEGACY_FIXTURES = REPO_ROOT / "fixtures" / "migrations"
@@ -131,3 +132,30 @@ def test_backup_of_a_wal_database_holds_its_uncheckpointed_tables(
         assert _table_names(backup) == legacy_tables
     finally:
         backup.close()
+
+
+def test_database_missing_part_of_the_baseline_is_refused_and_left_alone(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = tmp_path / "partial.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        (LEGACY_FIXTURES / "pre-alembic-create-all.sql").read_text(encoding="utf-8")
+    )
+    conn.execute("DROP TABLE saved_views")
+    conn.execute("ALTER TABLE workspaces DROP COLUMN reference_app")
+    conn.commit()
+    tables_before = _table_names(conn)
+    conn.close()
+
+    with pytest.raises(IncompleteBaselineError) as refused:
+        _start_server(monkeypatch, db_path)
+
+    assert "saved_views" in str(refused.value)
+    assert "workspaces.reference_app" in str(refused.value)
+    conn = sqlite3.connect(db_path)
+    try:
+        assert _table_names(conn) == tables_before
+    finally:
+        conn.close()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["partial.db"]
