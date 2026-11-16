@@ -68,7 +68,7 @@ async def test_workflows_crud_execute_pause_cancel(
                         "step_id": "agent",
                         "step_type": "agent_run",
                         "label": "Run Agent",
-                        "config": {},
+                        "config": {"provider_type": "offline"},
                     },
                 ],
                 "edges": [{"source_step_id": "ingest", "target_step_id": "agent"}],
