@@ -11,6 +11,17 @@ export function registerQueueCommands(
   const queue = program.command('queue').description('Queue operations')
 
   queue
+    .command('list')
+    .description('List review queues and their task counts')
+    .option('--workspace-id <id>', 'Only list queues in this workspace')
+    .action(async function (this: Command) {
+      await runQueueList(
+        getRuntimeOptions(program, runtime),
+        this.opts<{ workspaceId?: string }>().workspaceId,
+      )
+    })
+
+  queue
     .command('status <queue-id>')
     .description('Show the status of a review queue')
     .action(async (queueId: string) => {
@@ -37,6 +48,18 @@ export function registerQueueCommands(
     .action(async () => {
       await runQueueReviewers(getRuntimeOptions(program, runtime))
     })
+}
+
+async function runQueueList(
+  options: CliRuntimeOptions,
+  workspaceId?: string,
+): Promise<void> {
+  const client = await requireClient(options, 'queue list')
+  const query = workspaceId
+    ? `?${new URLSearchParams({ workspace_id: workspaceId }).toString()}`
+    : ''
+  const response = await client.getJson(`/api/v1/queues${query}`)
+  await emit(response, outputMode(options))
 }
 
 async function runQueueStatus(

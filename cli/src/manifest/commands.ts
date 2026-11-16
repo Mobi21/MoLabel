@@ -314,6 +314,17 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       description: 'Cancel a workflow execution',
     },
     {
+      name: 'queue list',
+      group: 'queue',
+      description: 'List review queues and their task counts',
+      flags: [
+        {
+          name: '--workspace-id',
+          description: 'Only list queues in this workspace',
+        },
+      ],
+    },
+    {
       name: 'queue status',
       group: 'queue',
       description: 'Show queue status',
