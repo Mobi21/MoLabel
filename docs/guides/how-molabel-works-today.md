@@ -224,7 +224,9 @@ The decision is one of:
 Whether the AI suggestion was shown is stored separately as `ai_revealed`.
 The older names `accept_ai`, `edit_ai`, `reject_ai`, and `correct` are still
 accepted for one release. The API maps them to the names above and returns a
-`deprecations` note. Skipping is its own action, `molabel review skip`.
+`deprecations` note. Skipping is its own action, `molabel review skip`. A
+submit with the old `skip` decision still skips the task, stores no review
+event or labels, and returns a `deprecations` note.
 
 The append-only review event stream is important. The benchmark framework uses
 final persisted review decisions rather than trusting free-form operator text.

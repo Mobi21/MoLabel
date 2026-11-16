@@ -680,21 +680,29 @@ class TestSubmitSkipRelease:
         event = _review_events_for_task(engine, uuid.UUID(task_id))[0]
         assert event[7] == canonical
 
-    def test_submit_api_rejects_skip_as_decision(self, client, reviewer, tasks) -> None:
-        """'skip' is an action with its own endpoint, not a submit decision."""
+    def test_submit_api_skips_task_for_deprecated_skip_decision(
+        self, client, engine, reviewer, tasks
+    ) -> None:
+        """A pre-rename client submitting decision 'skip' skips the task."""
         _login(client, reviewer)
         task_id = client.post(f"/api/v1/queues/{QUEUE_ID}/claim").json()["task"]["id"]
 
         resp = client.post(
             f"/api/v1/review-tasks/{task_id}/submit",
-            json={
-                "labels": {"sentiment": "positive"},
-                "decision": "skip",
-                "auto_claim_next": False,
-            },
+            json={"labels": {"sentiment": "positive"}, "decision": "skip"},
         )
 
-        assert resp.status_code == 422
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "skipped"
+        assert data["submitted_task"]["id"] == task_id
+        assert data["submitted_task"]["status"] == "skipped"
+        assert data["next_task"]["id"] != task_id
+        assert len(data["deprecations"]) == 1
+        assert "skip" in data["deprecations"][0]
+        assert _review_events_for_task(engine, uuid.UUID(task_id)) == []
+        status = client.get(f"/api/v1/queues/{QUEUE_ID}/status").json()
+        assert (status["skipped"], status["submitted"]) == (1, 0)
 
     def test_submit_api_duplicate_submit_fails_cleanly(
         self, client, engine, reviewer, tasks

@@ -11,7 +11,7 @@ to avoid triggering SQLAlchemy mapper configuration for the full model graph.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -151,9 +151,14 @@ class SubmitRequest(BaseModel):
     """Request body for submitting a review."""
 
     labels: dict[str, Any] = Field(..., description="Review labels/annotations")
-    decision: ReviewDecision | DeprecatedReviewDecision | None = Field(
-        default=None,
-        description="accept, edit, or reject. Deprecated aliases are normalized.",
+    decision: ReviewDecision | DeprecatedReviewDecision | Literal["skip"] | None = (
+        Field(
+            default=None,
+            description=(
+                "accept, edit, or reject. Deprecated aliases are normalized. "
+                "The deprecated 'skip' skips the task like POST .../skip."
+            ),
+        )
     )
     rationale: str | None = Field(
         default=None, description="Optional reviewer rationale"
@@ -414,19 +419,29 @@ async def submit_review_endpoint(
     engine = get_engine(request)
 
     _add_notification_headers(response, reviewer.id)
-    decision, deprecations = _canonical_decision(body.decision)
 
-    try:
-        submitted = submit_review(
-            engine,
-            task_id,
-            reviewer.id,
-            body.labels,
-            decision,
-            body.rationale,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if body.decision == "skip":
+        submitted = skip_task(engine, task_id, reviewer.id)
+        message = "skipped"
+        deprecations = [
+            "Decision 'skip' is deprecated; use POST /review-tasks/{task_id}/skip "
+            "(molabel review skip). The task was skipped and its labels and "
+            "rationale were not stored."
+        ]
+    else:
+        decision, deprecations = _canonical_decision(body.decision)
+        try:
+            submitted = submit_review(
+                engine,
+                task_id,
+                reviewer.id,
+                body.labels,
+                decision,
+                body.rationale,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        message = "submitted"
 
     if submitted is None:
         raise HTTPException(
@@ -451,7 +466,7 @@ async def submit_review_endpoint(
         submitted_task=submitted_task,
         next_task=next_task_resp,
         queue_empty=queue_empty,
-        message="submitted",
+        message=message,
         deprecations=deprecations,
     )
 
