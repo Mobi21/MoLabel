@@ -137,6 +137,11 @@ listed in `workbench.project.yaml`:
 | Prompt | `workbench/prompts/<slug>.yaml` | `prompts` |
 | Workflow | `workbench/workflows/<slug>.yaml` | `workflows` |
 
+A workflow file is in the core format, the one the bundled templates use and
+`molabel workflow create --file` reads: each step has `id`, `type` and
+`config`. The API names a step's fields `step_id` and `step_type`, and
+translates when it writes or reindexes the file.
+
 The database row for each is an index of its file, and the file wins when the
 two disagree:
 

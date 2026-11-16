@@ -22,6 +22,7 @@ from sqlmodel import create_engine
 
 from molabel.app.main import create_app
 from molabel.core.migration_runner import upgrade_database
+from molabel.core.workflow.parser import parse_workflow_yaml
 
 SCHEMA = {
     "task_schema_slug": "sentiment",
@@ -472,3 +473,73 @@ async def test_a_read_only_manifest_refuses_the_import_and_keeps_no_records(
     assert _files(workspace) == before
     records = await client.get(f"/api/v1/datasets/{dataset['dataset_id']}/records")
     assert records.json()["items"] == []
+
+
+NATIVE_WORKFLOW = """\
+name: Native review
+description: Written by hand in the core format.
+steps:
+  - id: ingest
+    type: data_ingest
+    config:
+      source: data/reviews.jsonl
+  - id: review
+    type: human_review
+    config:
+      sample_strategy: all
+"""
+
+
+async def _bootstrap_conflicts(client: AsyncClient, root: Path) -> list[dict]:
+    resp = await client.post(
+        "/api/v1/cli/workspaces/bootstrap", json={"path": str(root)}
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["conflicts"]
+
+
+def _steps(workflow: dict) -> list[tuple[str, str, dict]]:
+    return [(s["step_id"], s["step_type"], s["config"]) for s in workflow["steps"]]
+
+
+@pytest.mark.asyncio
+async def test_a_workflow_written_by_the_api_parses_and_reindexes(client, workspace):
+    workflow = await _create(client, "/api/v1/workflows", WORKFLOW)
+    workflow_file = workspace / "workbench/workflows/label-reviews.yaml"
+
+    parsed = parse_workflow_yaml(workflow_file)
+    conflicts = await _bootstrap_conflicts(client, workspace)
+    reindexed = await client.get(f"/api/v1/workflows/{workflow['workflow_id']}")
+
+    assert parsed.name == WORKFLOW["name"]
+    assert [(s.id, s.type, s.config) for s in parsed.steps] == [
+        ("ingest", "data_ingest", {"source": "data/reviews.jsonl"})
+    ]
+    assert conflicts == []
+    assert _steps(reindexed.json()) == _steps(workflow)
+
+
+@pytest.mark.asyncio
+async def test_a_native_workflow_file_reindexes_into_its_row(client, workspace):
+    workflow_file = workspace / "workbench/workflows/native-review.yaml"
+    workflow_file.parent.mkdir(parents=True)
+    workflow_file.write_text(NATIVE_WORKFLOW, encoding="utf-8")
+    registered = await _create(
+        client,
+        "/api/v1/workflows",
+        {
+            "name": "Native review",
+            "workflow_slug": "native-review",
+            "file_path": "workbench/workflows/native-review.yaml",
+        },
+    )
+
+    conflicts = await _bootstrap_conflicts(client, workspace)
+    reindexed = await client.get(f"/api/v1/workflows/{registered['workflow_id']}")
+
+    assert conflicts == []
+    assert _steps(reindexed.json()) == [
+        ("ingest", "data_ingest", {"source": "data/reviews.jsonl"}),
+        ("review", "human_review", {"sample_strategy": "all"}),
+    ]
+    assert workflow_file.read_text(encoding="utf-8") == NATIVE_WORKFLOW

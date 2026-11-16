@@ -2394,7 +2394,6 @@ _WORKFLOW_DOCUMENT_FIELDS = {
     "workflow_slug",
     "name",
     "description",
-    "steps",
     "is_template",
     "template_source",
 }
@@ -2407,17 +2406,49 @@ _WORKFLOW_DETAIL_SQL = text(
 )
 
 
-def _workflow_document(workflow: BaseModel) -> dict[str, Any]:
-    return workflow.model_dump(
+def _workflow_document(workflow: WorkflowCreate | WorkflowDetail) -> dict[str, Any]:
+    """The workflow file: the core format that ``parse_workflow_yaml`` reads.
+
+    The API names a step's fields ``step_id`` and ``step_type``; the file
+    names them ``id`` and ``type``.
+    """
+    document = workflow.model_dump(
         mode="json", include=_WORKFLOW_DOCUMENT_FIELDS, exclude_none=True
     )
+    document["steps"] = [
+        {
+            "id": step.step_id,
+            "type": step.step_type,
+            **step.model_dump(
+                mode="json", include={"label", "config", "position"}, exclude_none=True
+            ),
+        }
+        for step in workflow.steps
+    ]
+    return document
+
+
+def _api_step(step: Any) -> dict[str, Any]:
+    if not isinstance(step, dict):
+        raise ValueError("each workflow step must be a mapping")
+    fields = {k: v for k, v in step.items() if k in {"label", "config", "position"}}
+    return {"step_id": step.get("id"), "step_type": step.get("type"), **fields}
 
 
 def index_workflow(
     conn: Any, *, workspace_id: str, slug: str, document: dict[str, Any], file_path: str
 ) -> None:
     """Rewrite the index row for a workflow file from the file's contents."""
-    body = WorkflowCreate(**{**document, "workspace_id": workspace_id})
+    steps = document.get("steps") or []
+    if not isinstance(steps, list):
+        raise ValueError("steps must be a list")
+    body = WorkflowCreate(
+        **{
+            **document,
+            "steps": [_api_step(step) for step in steps],
+            "workspace_id": workspace_id,
+        }
+    )
     slug = body.workflow_slug or slug
     params = {
         "slug": slug,
