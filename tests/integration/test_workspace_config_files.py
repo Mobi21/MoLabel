@@ -317,6 +317,29 @@ async def test_config_writes_keep_hand_written_comments_and_key_order(
     assert manifest_file.read_text(encoding="utf-8") == created
 
 
+@pytest.mark.parametrize(
+    "broken",
+    ["title: Sentiment\ntitle: Twice\n", "title: [never closed\n"],
+    ids=["duplicate-key", "unparseable"],
+)
+@pytest.mark.asyncio
+async def test_an_update_rewrites_a_hand_edited_file_it_cannot_round_trip(
+    client, workspace, broken
+):
+    schema = await _create(client, "/api/v1/task-schemas", SCHEMA)
+    schema_file = workspace / "workbench/config/task-schemas/sentiment.yaml"
+    schema_file.write_text(broken, encoding="utf-8")
+
+    resp = await client.put(
+        f"/api/v1/task-schemas/{schema['task_schema_id']}",
+        json={"title": "Review sentiment"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert _yaml(schema_file)["title"] == "Review sentiment"
+    assert _yaml(schema_file)["label_fields"][0]["options"] == ["positive", "negative"]
+
+
 @pytest.mark.asyncio
 async def test_config_for_a_workspace_without_a_folder_is_refused(
     client, tmp_path: Path

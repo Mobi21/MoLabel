@@ -1,8 +1,4 @@
-"""Write YAML files that people also edit by hand.
-
-``dump_yaml`` renders new data over the text it replaces, so the comments,
-key order, quoting and indentation of every key that survives are kept.
-"""
+"""Write YAML files that people also edit by hand."""
 
 from __future__ import annotations
 
@@ -10,7 +6,7 @@ import io
 from collections.abc import Mapping
 from typing import Any
 
-from ruamel.yaml import YAML
+from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.representer import RoundTripRepresenter
 from ruamel.yaml.resolver import VersionedResolver
@@ -41,6 +37,7 @@ def _round_trip_yaml() -> YAML:
     yaml.Resolver = _Yaml11Resolver
     yaml.Representer = _Representer
     yaml.preserve_quotes = True
+    yaml.allow_duplicate_keys = True
     yaml.width = 4096
     return yaml
 
@@ -75,12 +72,18 @@ def dump_yaml(data: Mapping[str, Any], previous: str | None = None) -> str:
     *previous* is the text of the file being replaced. Keys and list items
     that *data* still has keep their comments, order, quoting and the file's
     indentation. Keys *data* lacks are removed and new keys go at the end.
+    A *previous* that does not parse is replaced outright.
     """
     yaml = _round_trip_yaml()
     document: Any = data
     sequence_indent, offset = 4, 2
     if previous is not None:
-        loaded, indent, block_seq_indent = load_yaml_guess_indent(previous, yaml=yaml)
+        try:
+            loaded, indent, block_seq_indent = load_yaml_guess_indent(
+                previous, yaml=yaml
+            )
+        except YAMLError:
+            loaded, indent, block_seq_indent = None, None, None
         document = _merge(loaded, data)
         if indent is not None and block_seq_indent is not None:
             sequence_indent, offset = indent, block_seq_indent
