@@ -4,24 +4,27 @@
 
 Core library for MoLabel. Owns the data model, workflow engine, plugin system, provider adapters, and all domain logic that is not GUI-specific.
 
-## Planned Modules
+## Modules
 
-These modules will be created under `src/molabel/` as development progresses (see PRD section 18.3):
+Code lives under `src/molabel/core/`:
 
-- `core` — app settings, workspace lifecycle, audit logging, service wiring
-- `storage` — SQLite models, canonical file I/O, migrations, transactions
-- `indexing` — file scanning, metadata extraction, record projection, drift detection
-- `tasks` — queue creation, task configuration, assignment rules
-- `workflow` — stage model, completion criteria, blockers, next-action computation
-- `providers` — model provider adapters, runtime profiles, routing rules
-- `agents` — agent adapter interface, run orchestration, output normalization
-- `monitoring` — live run status, event timelines, log aggregation
-- `review` — review state machine, blind review, overlap, adjudication inputs
-- `quality` — agreement metrics, delta analysis, readiness summaries
-- `curation` — filtering, mining, clustering, derived subsets
-- `exports` — labeled dataset packaging, export formats, release bundles
-- `validation` — plugin-defined checks, release gates, report generation
-- `plugins` — plugin loading, metadata, lifecycle management
+- `models/` — SQLModel tables
+- `migrations/`, `migration_runner.py` — Alembic migrations and the startup upgrade
+- `database.py` — engine and session helpers
+- `manifest.py` — reads and writes `workbench.project.yaml`
+- `data/` — workspace bootstrap, artifact indexing, dataset operations, pre-label import, snapshots, label mappings
+- `workflow/` — workflow parser, engine, lifecycle, step types, bundled templates
+- `agents/` — agent run orchestration, output validation, confidence, comparison, feedback loop
+- `providers/` — model provider adapters (Anthropic, OpenAI, OpenRouter, Ollama, custom), detection, cost tracking
+- `prompts/` — prompt manager
+- `review/` — calibration, overlap, queue ordering
+- `adjudication/` — disagreement resolution
+- `quality/` — agreement, drift, readiness, grounded benchmark scoring
+- `export/` — export building and atomic file writes
+- `release/` — release manager and frozen views
+- `plugins/` — plugin protocols, entry-point discovery, registry
+- `services/` — model and runtime profile services
+- `types.py` — shared enums and types
 
 ## Rules
 
