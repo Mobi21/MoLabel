@@ -40,6 +40,12 @@ jobs:
       - name: Install dependencies
         run: cd frontend && npm ci
 
+      - name: Lint
+        run: cd frontend && npx eslint .
+
+      - name: Format check (prettier)
+        run: cd frontend && npx prettier --check .
+
       - name: Type check
         run: cd frontend && npx tsc -b
 
