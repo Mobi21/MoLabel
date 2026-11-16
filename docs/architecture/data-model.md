@@ -18,7 +18,7 @@ MoLabel uses three storage layers with explicit ownership rules for every domain
 
 **Layer 3 -- Derived cache (derived).** Row-count caches, sampled preview caches, analytical materialized views, and clustering outputs. Authoritative for nothing; always regenerable from layers 1 and 2.
 
-If the database and canonical files disagree, the application surfaces the conflict, identifies which side is canonical for that object type, and offers a repair path. The application never silently chooses one side.
+For task schemas, prompts and workflows, the file is canonical and the database row is its index: API writes go to the file in the same request, and `workspace bootstrap` rewrites the rows from the files. Listed files that cannot be read are reported as bootstrap conflicts. Dataset records and all review state are canonical in SQLite.
 
 ## Enum Types
 
@@ -1373,6 +1373,6 @@ The data model supports all explicit join paths required by PRD Section 19.5:
 
 7. **Cached projections**: Fields like `record.latest_label`, `record.composite_confidence`, `dataset.record_count`, and `reviewer_profile.stats` are denormalized caches. They improve read performance for common queries (queue ordering, dashboard stats) but must be refreshed after writes to the underlying data. These fields are marked as derived in their descriptions.
 
-8. **File-canonical sync**: For objects that are file-canonical with a DB projection (task_schema, workflow_definition, prompt_template, label_mapping), the DB row includes a `file_path` field. On startup and after file change detection, the application re-reads the file and updates the DB projection. If the file and DB disagree, the file wins.
+8. **File-canonical sync**: For task schemas, workflow definitions and prompt templates, the DB row is an index of a file and includes its `file_path`. API creates and updates write the file in the same request; `workspace bootstrap` re-reads every file the manifest lists and rewrites the rows. If the file and DB disagree, the file wins. See `docs/guides/how-molabel-works-today.md` section 4.1.
 
 9. **ORM choice: SQLModel.** SQLModel is chosen because it integrates Pydantic validation (already used throughout the stack) with SQLAlchemy's ORM capabilities, reducing boilerplate for defining models that serve as both database schemas and API response types.

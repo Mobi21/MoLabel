@@ -101,7 +101,7 @@ class WorkspaceBootstrapper:
             return ProjectDetectionResult(
                 is_project=True,
                 detection_mode="heuristic",
-                data_files=[str(f.relative_to(folder)) for f in data_files],
+                data_files=[f.relative_to(folder).as_posix() for f in data_files],
                 suggested_name=folder.name,
             )
 

@@ -17,6 +17,7 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import TASK_SCHEMA, workspace_folder, write_config
 
 router = APIRouter(prefix="/task-schemas", tags=["task-schemas"])
 
@@ -370,80 +371,151 @@ async def get_task_schema(
     return _row_to_detail(row)
 
 
+_DOCUMENT_FIELDS = {
+    "task_schema_slug",
+    "task_type",
+    "title",
+    "instructions",
+    "record_selector",
+    "label_fields",
+    "required_fields",
+    "optional_fields",
+    "blind_review_policy",
+    "overlap_policy",
+    "adjudication_policy",
+    "supported_agent_roles",
+    "default_model_profile_id",
+    "export_mapping",
+}
+
+_DEFINITION_COLUMNS = {
+    "task_type": "task_type",
+    "title": "title",
+    "instructions": "instructions",
+    "record_selector": "record_selector",
+    "label_fields": "label_fields",
+    "required_fields": "required_fields",
+    "optional_fields": "optional_fields",
+    "blind_review_policy": "blind_review_policy",
+    "overlap_policy": "overlap_policy",
+    "adjudication_policy": "adjudication_policy",
+    "supported_agent_roles": "agent_roles",
+    "default_model_profile_id": "model_profile_id",
+    "export_mapping": "export_mapping",
+}
+
+_INSERT_SQL = text(
+    "INSERT INTO task_schemas "
+    "(id, task_schema_slug, version, task_type, title, instructions, "
+    "record_selector, label_fields, required_fields, optional_fields, "
+    "blind_review_policy, overlap_policy, adjudication_policy, "
+    "supported_agent_roles, default_model_profile_id, export_mapping, "
+    "is_active, is_frozen, file_path, "
+    "workspace_id, created_at, updated_at) "
+    "VALUES (:id, :slug, 1, :task_type, :title, :instructions, "
+    ":record_selector, :label_fields, :required_fields, :optional_fields, "
+    ":blind_review_policy, :overlap_policy, :adjudication_policy, "
+    ":agent_roles, :model_profile_id, :export_mapping, "
+    "1, 0, :file_path, :wid, :now, :now)"
+)
+
+
+def _model_json(value: BaseModel | None) -> str | None:
+    return json.dumps(value.model_dump(mode="json")) if value is not None else None
+
+
+def _definition_params(body: TaskSchemaCreate) -> dict[str, Any]:
+    return {
+        "task_type": body.task_type,
+        "title": body.title,
+        "instructions": body.instructions,
+        "record_selector": _model_json(body.record_selector),
+        "label_fields": json.dumps(
+            [f.model_dump(mode="json") for f in body.label_fields]
+        ),
+        "required_fields": json.dumps(body.required_fields),
+        "optional_fields": json.dumps(
+            [f.model_dump(mode="json") for f in body.optional_fields]
+        ),
+        "blind_review_policy": body.blind_review_policy,
+        "overlap_policy": _model_json(body.overlap_policy),
+        "adjudication_policy": _model_json(body.adjudication_policy),
+        "agent_roles": json.dumps(body.supported_agent_roles),
+        "model_profile_id": body.default_model_profile_id,
+        "export_mapping": _model_json(body.export_mapping),
+    }
+
+
+def _document(schema: BaseModel) -> dict[str, Any]:
+    return schema.model_dump(mode="json", include=_DOCUMENT_FIELDS, exclude_none=True)
+
+
+def index_task_schema(
+    conn: Any, *, workspace_id: str, slug: str, document: dict[str, Any], file_path: str
+) -> None:
+    """Rewrite the index row for a task schema file from the file's contents."""
+    body = TaskSchemaCreate(
+        **{**document, "workspace_id": workspace_id, "file_path": file_path}
+    )
+    slug = body.task_schema_slug or slug
+    params = {
+        **_definition_params(body),
+        "slug": slug,
+        "file_path": file_path,
+        "wid": workspace_id,
+        "now": datetime.now(UTC).isoformat(),
+    }
+    existing = conn.execute(
+        text(
+            "SELECT id FROM task_schemas "
+            "WHERE workspace_id = :wid AND task_schema_slug = :slug"
+        ),
+        {"wid": workspace_id, "slug": slug},
+    ).first()
+    if existing is None:
+        conn.execute(_INSERT_SQL, {**params, "id": str(uuid.uuid4())})
+        return
+    assignments = ", ".join(
+        f"{column} = :{param}" for column, param in _DEFINITION_COLUMNS.items()
+    )
+    conn.execute(
+        text(
+            f"UPDATE task_schemas SET {assignments}, "  # noqa: S608
+            "file_path = :file_path, updated_at = :now WHERE id = :id"
+        ),
+        {**params, "id": str(existing[0])},
+    )
+
+
 @router.post("", response_model=TaskSchemaDetail, status_code=201)
 async def create_task_schema(
     request: Request,
     body: TaskSchemaCreate,
     _reviewer: CurrentReviewer,
 ) -> TaskSchemaDetail:
-    """Create a new task schema (API-031)."""
+    """Create a new task schema (API-031) and write its file."""
     engine = get_engine(request)
+    folder = workspace_folder(engine, body.workspace_id)
     schema_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     slug = body.task_schema_slug or body.title.lower().replace(" ", "-")
-
-    label_fields_json = json.dumps(
-        [f.model_dump(mode="json") for f in body.label_fields]
-    )
-    required_fields_json = json.dumps(body.required_fields)
-    optional_fields_json = json.dumps(
-        [f.model_dump(mode="json") for f in body.optional_fields]
-    )
-    record_selector_json = (
-        json.dumps(body.record_selector.model_dump(mode="json"))
-        if body.record_selector
-        else None
-    )
-    overlap_json = (
-        json.dumps(body.overlap_policy.model_dump(mode="json"))
-        if body.overlap_policy
-        else None
-    )
-    adjudication_json = (
-        json.dumps(body.adjudication_policy.model_dump(mode="json"))
-        if body.adjudication_policy
-        else None
-    )
-    agent_roles_json = json.dumps(body.supported_agent_roles)
-    export_json = (
-        json.dumps(body.export_mapping.model_dump(mode="json"))
-        if body.export_mapping
-        else None
+    file_path = write_config(
+        folder,
+        TASK_SCHEMA,
+        slug=slug,
+        document=_document(body.model_copy(update={"task_schema_slug": slug})),
+        file_path=body.file_path,
+        overwrite=False,
     )
 
     with engine.connect() as conn:
         conn.execute(
-            text(
-                "INSERT INTO task_schemas "
-                "(id, task_schema_slug, version, task_type, title, instructions, "
-                "record_selector, label_fields, required_fields, optional_fields, "
-                "blind_review_policy, overlap_policy, adjudication_policy, "
-                "supported_agent_roles, default_model_profile_id, export_mapping, "
-                "is_active, is_frozen, file_path, "
-                "workspace_id, created_at, updated_at) "
-                "VALUES (:id, :slug, 1, :task_type, :title, :instructions, "
-                ":record_selector, :label_fields, :required_fields, :optional_fields, "
-                ":blind_review_policy, :overlap_policy, :adjudication_policy, "
-                ":agent_roles, :model_profile_id, :export_mapping, "
-                "1, 0, :file_path, :wid, :now, :now)"
-            ),
+            _INSERT_SQL,
             {
+                **_definition_params(body),
                 "id": schema_id,
                 "slug": slug,
-                "task_type": body.task_type,
-                "title": body.title,
-                "instructions": body.instructions,
-                "record_selector": record_selector_json,
-                "label_fields": label_fields_json,
-                "required_fields": required_fields_json,
-                "optional_fields": optional_fields_json,
-                "blind_review_policy": body.blind_review_policy,
-                "overlap_policy": overlap_json,
-                "adjudication_policy": adjudication_json,
-                "agent_roles": agent_roles_json,
-                "model_profile_id": body.default_model_profile_id,
-                "export_mapping": export_json,
-                "file_path": body.file_path,
+                "file_path": file_path,
                 "wid": body.workspace_id,
                 "now": now,
             },
@@ -474,7 +546,7 @@ async def update_task_schema(
 
     with engine.connect() as conn:
         existing = conn.execute(
-            text("SELECT id, is_frozen FROM task_schemas WHERE id = :id"),
+            text("SELECT id, is_frozen, workspace_id FROM task_schemas WHERE id = :id"),
             {"id": str(task_schema_id)},
         ).first()
         if existing is None:
@@ -484,7 +556,9 @@ async def update_task_schema(
                 status_code=409,
                 detail="Task schema is frozen and cannot be updated",
             )
+    folder = workspace_folder(engine, str(existing[2]))
 
+    with engine.connect() as conn:
         updates: list[str] = ["updated_at = :now"]
         params: dict[str, Any] = {"id": str(task_schema_id), "now": now}
 
@@ -543,8 +617,6 @@ async def update_task_schema(
             ),
             params,
         )
-        conn.commit()
-
         row = conn.execute(
             text(
                 f"SELECT {_DETAIL_COLUMNS} "  # noqa: S608
@@ -552,5 +624,21 @@ async def update_task_schema(
             ),
             {"id": str(task_schema_id)},
         ).first()
+        detail = _row_to_detail(row)
+        file_path = write_config(
+            folder,
+            TASK_SCHEMA,
+            slug=detail.task_schema_slug,
+            document=_document(detail),
+            file_path=detail.file_path,
+            overwrite=True,
+        )
+        if file_path != detail.file_path:
+            conn.execute(
+                text("UPDATE task_schemas SET file_path = :fp WHERE id = :id"),
+                {"fp": file_path, "id": str(task_schema_id)},
+            )
+            detail = detail.model_copy(update={"file_path": file_path})
+        conn.commit()
 
-    return _row_to_detail(row)
+    return detail

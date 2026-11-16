@@ -21,6 +21,7 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import WORKFLOW, workspace_folder, write_config
 from molabel.app.workspace_paths import resolve_in_workspace
 from molabel.core.agents.queue_binding import serialize_agent_output_ids
 from molabel.core.providers.model_defaults import (
@@ -2389,38 +2390,106 @@ async def get_workflow(
     return _row_to_detail(row)
 
 
+_WORKFLOW_DOCUMENT_FIELDS = {
+    "workflow_slug",
+    "name",
+    "description",
+    "steps",
+    "is_template",
+    "template_source",
+}
+
+_WORKFLOW_DETAIL_SQL = text(
+    "SELECT id, workflow_slug, version, name, steps, "
+    "description, is_template, template_source, file_path, "
+    "is_active, workspace_id, created_at, updated_at "
+    "FROM workflow_definitions WHERE id = :id"
+)
+
+
+def _workflow_document(workflow: BaseModel) -> dict[str, Any]:
+    return workflow.model_dump(
+        mode="json", include=_WORKFLOW_DOCUMENT_FIELDS, exclude_none=True
+    )
+
+
+def index_workflow(
+    conn: Any, *, workspace_id: str, slug: str, document: dict[str, Any], file_path: str
+) -> None:
+    """Rewrite the index row for a workflow file from the file's contents."""
+    body = WorkflowCreate(**{**document, "workspace_id": workspace_id})
+    slug = body.workflow_slug or slug
+    params = {
+        "slug": slug,
+        "name": body.name,
+        "steps": json.dumps([s.model_dump(mode="json") for s in body.steps]),
+        "desc": body.description,
+        "is_template": 1 if body.is_template else 0,
+        "template_source": body.template_source,
+        "fp": file_path,
+        "wid": workspace_id,
+        "now": datetime.now(UTC).isoformat(),
+    }
+    existing = conn.execute(
+        text(
+            "SELECT id FROM workflow_definitions "
+            "WHERE workspace_id = :wid AND workflow_slug = :slug"
+        ),
+        {"wid": workspace_id, "slug": slug},
+    ).first()
+    if existing is None:
+        conn.execute(_WORKFLOW_INSERT_SQL, {**params, "id": str(uuid.uuid4())})
+        return
+    conn.execute(
+        text(
+            "UPDATE workflow_definitions SET name = :name, steps = :steps, "
+            "description = :desc, is_template = :is_template, "
+            "template_source = :template_source, file_path = :fp, "
+            "updated_at = :now WHERE id = :id"
+        ),
+        {**params, "id": str(existing[0])},
+    )
+
+
+_WORKFLOW_INSERT_SQL = text(
+    "INSERT INTO workflow_definitions "
+    "(id, workflow_slug, version, name, steps, description, "
+    "is_template, template_source, file_path, is_active, "
+    "workspace_id, created_at, updated_at) "
+    "VALUES (:id, :slug, 1, :name, :steps, :desc, "
+    ":is_template, :template_source, :fp, 1, :wid, :now, :now)"
+)
+
+
 @router.post("", response_model=WorkflowDetail, status_code=201)
 async def create_workflow(
     request: Request,
     body: WorkflowCreate,
     _reviewer: CurrentReviewer,
 ) -> WorkflowDetail:
-    """Create a new workflow definition (API-021)."""
-    import json
-
+    """Create a new workflow definition (API-021) and write its file."""
     engine = get_engine(request)
+    folder = workspace_folder(engine, body.workspace_id)
     workflow_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     slug = body.workflow_slug or body.name.lower().replace(" ", "-")
-    file_path = body.file_path or f"workflows/{slug}.yaml"
-
-    steps_json = json.dumps([s.model_dump(mode="json") for s in body.steps])
+    file_path = write_config(
+        folder,
+        WORKFLOW,
+        slug=slug,
+        document=_workflow_document(body.model_copy(update={"workflow_slug": slug})),
+        file_path=body.file_path,
+        overwrite=False,
+    )
 
     with engine.connect() as conn:
         conn.execute(
-            text(
-                "INSERT INTO workflow_definitions "
-                "(id, workflow_slug, version, name, steps, description, "
-                "is_template, template_source, file_path, is_active, "
-                "workspace_id, created_at, updated_at) "
-                "VALUES (:id, :slug, 1, :name, :steps, :desc, "
-                ":is_template, :template_source, :fp, 1, :wid, :now, :now)"
-            ),
+            _WORKFLOW_INSERT_SQL,
             {
                 "id": workflow_id,
                 "slug": slug,
                 "name": body.name,
-                "steps": steps_json,
+                "steps": json.dumps([s.model_dump(mode="json") for s in body.steps]),
                 "desc": body.description,
                 "is_template": 1 if body.is_template else 0,
                 "template_source": body.template_source,
@@ -2430,16 +2499,7 @@ async def create_workflow(
             },
         )
         conn.commit()
-
-        row = conn.execute(
-            text(
-                "SELECT id, workflow_slug, version, name, steps, "
-                "description, is_template, template_source, file_path, "
-                "is_active, workspace_id, created_at, updated_at "
-                "FROM workflow_definitions WHERE id = :id"
-            ),
-            {"id": workflow_id},
-        ).first()
+        row = conn.execute(_WORKFLOW_DETAIL_SQL, {"id": workflow_id}).first()
 
     return _row_to_detail(row)
 
@@ -2451,20 +2511,20 @@ async def update_workflow(
     body: WorkflowUpdate,
     _reviewer: CurrentReviewer,
 ) -> WorkflowDetail:
-    """Update a workflow definition (API-022)."""
-    import json
-
+    """Update a workflow definition (API-022) and rewrite its file."""
     engine = get_engine(request)
     now = datetime.now(UTC).isoformat()
 
     with engine.connect() as conn:
         existing = conn.execute(
-            text("SELECT id FROM workflow_definitions WHERE id = :id"),
+            text("SELECT id, workspace_id FROM workflow_definitions WHERE id = :id"),
             {"id": str(workflow_id)},
         ).first()
         if existing is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
+    folder = workspace_folder(engine, str(existing[1]))
 
+    with engine.connect() as conn:
         updates: list[str] = ["updated_at = :now"]
         params: dict[str, Any] = {"id": str(workflow_id), "now": now}
 
@@ -2490,19 +2550,26 @@ async def update_workflow(
             ),
             params,
         )
+        detail = _row_to_detail(
+            conn.execute(_WORKFLOW_DETAIL_SQL, {"id": str(workflow_id)}).first()
+        )
+        file_path = write_config(
+            folder,
+            WORKFLOW,
+            slug=detail.workflow_slug,
+            document=_workflow_document(detail),
+            file_path=detail.file_path,
+            overwrite=True,
+        )
+        if file_path != detail.file_path:
+            conn.execute(
+                text("UPDATE workflow_definitions SET file_path = :fp WHERE id = :id"),
+                {"fp": file_path, "id": str(workflow_id)},
+            )
+            detail = detail.model_copy(update={"file_path": file_path})
         conn.commit()
 
-        row = conn.execute(
-            text(
-                "SELECT id, workflow_slug, version, name, steps, "
-                "description, is_template, template_source, file_path, "
-                "is_active, workspace_id, created_at, updated_at "
-                "FROM workflow_definitions WHERE id = :id"
-            ),
-            {"id": str(workflow_id)},
-        ).first()
-
-    return _row_to_detail(row)
+    return detail
 
 
 # ---------------------------------------------------------------------------

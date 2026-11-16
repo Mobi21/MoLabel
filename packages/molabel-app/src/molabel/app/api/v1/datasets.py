@@ -19,7 +19,13 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import (
+    add_dataset_source,
+    list_dataset,
+    workspace_folder,
+)
 from molabel.app.workspace_paths import registered_root, resolve_in_workspace
+from molabel.core.manifest import DatasetManifestEntry
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -455,11 +461,22 @@ async def create_dataset(
     body: DatasetCreate,
     _reviewer: CurrentReviewer,
 ) -> DatasetDetail:
-    """Create a new dataset (API-009)."""
+    """Create a new dataset (API-009) and list it in the workspace manifest."""
     engine = get_engine(request)
+    folder = workspace_folder(engine, body.workspace_id)
     dataset_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     slug = body.dataset_name.lower().replace(" ", "-")
+    list_dataset(
+        folder,
+        DatasetManifestEntry(
+            dataset_id=slug,
+            loader_plugin=body.loader_plugin,
+            record_kind=body.record_kind,
+            canonical_id_strategy=body.canonical_id_strategy,
+            indexing_mode=body.indexing_mode,
+        ),
+    )
 
     with engine.connect() as conn:
         conn.execute(
@@ -526,10 +543,14 @@ async def import_dataset(
     records_imported = 0
     records_skipped = 0
     deferred_import = False
+    imported_file: str | None = None
 
     with engine.connect() as conn:
         row = conn.execute(
-            text("SELECT id, workspace_id, record_kind FROM datasets WHERE id = :id"),
+            text(
+                "SELECT id, workspace_id, record_kind, dataset_slug "
+                "FROM datasets WHERE id = :id"
+            ),
             {"id": str(dataset_id)},
         ).first()
         if row is None:
@@ -556,7 +577,7 @@ async def import_dataset(
             import_rows = []
             deferred_import = True
         else:
-            workspace_root = registered_root(engine, workspace_id)
+            workspace_root = registered_root(conn, workspace_id)
             if workspace_root is None:
                 raise HTTPException(
                     status_code=400,
@@ -568,6 +589,7 @@ async def import_dataset(
                     status_code=400,
                     detail=f"Source file not found: {source_uri}",
                 )
+            imported_file = source_path.relative_to(workspace_root).as_posix()
             for line in source_path.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
@@ -673,6 +695,11 @@ async def import_dataset(
             },
         )
         conn.commit()
+
+    if imported_file is not None:
+        add_dataset_source(
+            workspace_folder(engine, workspace_id), str(row[3]), imported_file
+        )
 
     return ImportStatus(
         job_id=job_id,

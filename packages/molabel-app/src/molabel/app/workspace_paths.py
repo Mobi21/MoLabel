@@ -84,13 +84,12 @@ def resolve_in_workspace(root: Path, raw: str) -> Path:
     return resolved
 
 
-def registered_root(engine, workspace_id: str) -> Path | None:
+def registered_root(conn, workspace_id: str) -> Path | None:
     """The resolved root of workspace *workspace_id*, or None if it has none."""
-    with engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT root_path FROM workspaces WHERE id = :id"),
-            {"id": workspace_id},
-        ).first()
+    row = conn.execute(
+        text("SELECT root_path FROM workspaces WHERE id = :id"),
+        {"id": workspace_id},
+    ).first()
     if row is None or not row[0]:
         return None
     return Path(str(row[0])).expanduser().resolve()

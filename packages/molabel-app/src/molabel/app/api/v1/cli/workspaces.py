@@ -6,10 +6,14 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from molabel.app.api.v1.prompts import index_prompt
+from molabel.app.api.v1.task_schemas import index_task_schema
+from molabel.app.api.v1.workflows import index_workflow
 from molabel.app.services.session import (
     AVATAR_COLORS,
     COOKIE_HTTPONLY,
@@ -20,8 +24,17 @@ from molabel.app.services.session import (
     create_session_token,
 )
 from molabel.app.utils import get_engine
-from molabel.app.workspace_paths import new_workspace_root
+from molabel.app.workspace_config import (
+    MANIFEST_FILENAME,
+    PROMPT,
+    TASK_SCHEMA,
+    WORKFLOW,
+    WorkspaceFolder,
+    read_config,
+)
+from molabel.app.workspace_paths import WorkspacePathError, new_workspace_root
 from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
+from molabel.core.manifest import load_manifest
 
 router = APIRouter(prefix="", tags=["cli"])
 
@@ -83,6 +96,49 @@ class WorkspaceBootstrapResponse(BaseModel):
 
 def _detect_workspace(path: Path) -> object:
     return WorkspaceBootstrapper().detect_project(path)
+
+
+def _reindex_config_files(engine, folder: WorkspaceFolder) -> list[ManifestConflict]:
+    """Rewrite the index rows of every listed config file from the file.
+
+    Missing files are already reported by manifest conflict detection; a file
+    that cannot be read as its kind is reported here and its row left alone.
+    """
+    manifest = load_manifest(folder.path / MANIFEST_FILENAME)
+    listed = [
+        (kind, entry, index)
+        for kind, entries, index in (
+            (TASK_SCHEMA, manifest.task_schemas, index_task_schema),
+            (PROMPT, manifest.prompts, index_prompt),
+            (WORKFLOW, manifest.workflows, index_workflow),
+        )
+        for entry in entries
+    ]
+    problems: list[ManifestConflict] = []
+    with engine.begin() as conn:
+        for kind, entry, index in listed:
+            slug = getattr(entry, kind.id_field)
+            path = entry.definition_path
+            if not path or not (folder.path / path).is_file():
+                continue
+            try:
+                index(
+                    conn,
+                    workspace_id=folder.workspace_id,
+                    slug=slug,
+                    document=read_config(folder, path),
+                    file_path=path,
+                )
+            except (ValueError, yaml.YAMLError, WorkspacePathError) as exc:
+                problems.append(
+                    ManifestConflict(
+                        conflict_type="schema_mismatch",
+                        entity_type=kind.id_field.removesuffix("_id"),
+                        entity_id=slug,
+                        message=f"{path} was not indexed: {exc}",
+                    )
+                )
+    return problems
 
 
 @router.get("/status", response_model=CLIStatusResponse)
@@ -153,12 +209,18 @@ async def bootstrap_workspace(
     workspace_path = new_workspace_root(body.path)
     workspace_path.mkdir(parents=True, exist_ok=True)
 
+    engine = get_engine(request)
     result = WorkspaceBootstrapper().bootstrap(
         workspace_path,
-        engine=get_engine(request),
+        engine=engine,
         workspace_name=body.workspace_name,
     )
-    engine = get_engine(request)
+    index_problems = _reindex_config_files(
+        engine,
+        WorkspaceFolder(
+            str(result.workspace_id), result.workspace_name, Path(result.root_path)
+        ),
+    )
     reviewer_id: uuid.UUID | None = None
     with engine.connect() as conn:
         row = conn.execute(
@@ -218,7 +280,8 @@ async def bootstrap_workspace(
                 message=conflict["message"],
             )
             for conflict in result.conflicts
-        ],
+        ]
+        + index_problems,
         missing_requirements=list(result.missing_requirements),
         session_created=reviewer_id is not None,
         reviewer_id=str(reviewer_id) if reviewer_id is not None else None,

@@ -123,34 +123,52 @@ Frontend only talks to backend through the API.
 
 ## 4. Storage Ownership
 
-MoLabel uses three storage layers with explicit ownership rules.
+Config is files in the workspace folder. Review in progress is SQLite.
+Released gold sets will be files too (planned, P8).
 
-### 4.1 Files On Disk
+### 4.1 Config Files
 
-Files are canonical for portable project artifacts:
+Task schemas, prompts and workflows are YAML files in the workspace folder,
+listed in `workbench.project.yaml`:
 
-- raw input data,
-- workflow definitions,
-- task schemas and prompts,
-- exports,
-- benchmark authority material,
-- release manifests and reports.
+| Kind | File | Manifest list |
+|---|---|---|
+| Task schema | `workbench/config/task-schemas/<slug>.yaml` | `task_schemas` |
+| Prompt | `workbench/prompts/<slug>.yaml` | `prompts` |
+| Workflow | `workbench/workflows/<slug>.yaml` | `workflows` |
 
-These artifacts should survive a database reset and should remain inspectable in
-the workspace tree.
+The database row for each is an index of its file, and the file wins when the
+two disagree:
 
-### 4.2 SQLite Operational State
+- `POST` (create) and `PUT` (update) write the file in the same request, then
+  the row. Create never overwrites: if a file already sits at the target path,
+  it is left as it is and the request registers it. That is what
+  `molabel task-schema create --file workbench/config/task-schemas/x.yaml` does.
+- An edit made to a file outside the API, by hand or with `molabel artifact
+  write`, reaches the database at the next `molabel workspace bootstrap`. Bootstrap
+  re-reads every file the manifest lists and rewrites its row. A listed file it
+  cannot read is reported in `conflicts` and its row is left alone.
+- Creating config needs the workspace folder on disk. A workspace registered
+  without one gets `409 WORKSPACE_FOLDER_MISSING`.
 
-SQLite is canonical for operational coordination:
+A dataset is listed in the manifest's `datasets` with its loader settings, and
+each workspace file imported into it is added to its `source_paths`. The
+dataset's imported records are review state and live only in SQLite.
 
+Raw input data, exports, benchmark authority material, and release manifests
+and reports are files in the workspace tree as well.
+
+### 4.2 SQLite Review State
+
+SQLite holds the review in progress:
+
+- dataset records,
 - queue state,
 - review events and drafts,
 - agent run records,
 - claims and sessions,
 - audit events,
 - runtime metadata.
-
-SQLite is not where the canonical project definition is supposed to live.
 
 The server keeps one SQLite database for every workspace it serves. A
 workspace has no database of its own; its rows carry its `workspace_id`. The
@@ -171,8 +189,6 @@ server at a different database and leaves the secret in the data directory.
 Derived caches and analytics outputs can be regenerated. They are authoritative
 for nothing.
 
-The key rule is simple: if the DB and the canonical files disagree, MoLabel
-should surface the conflict and identify which side owns the truth.
 
 ## 5. Canonical Workspace Shape
 
