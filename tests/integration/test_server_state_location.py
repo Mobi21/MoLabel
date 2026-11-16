@@ -59,8 +59,13 @@ def test_bootstrap_records_the_workspace_in_the_server_database(
         datasets = client.get("/api/v1/datasets").json()["items"]
 
     assert [d["dataset_slug"] for d in datasets] == ["data"]
-    files = sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*"))
+    files = sorted(
+        p.relative_to(workspace).as_posix()
+        for p in workspace.rglob("*")
+        if p.relative_to(workspace).parts[0] != ".molabel"
+    )
     assert files == ["data", "data/items.jsonl", "workbench.project.yaml"]
+    assert (workspace / ".molabel" / ".gitignore").read_text() == "*\n"
 
 
 LEGACY_SCHEMA = (
