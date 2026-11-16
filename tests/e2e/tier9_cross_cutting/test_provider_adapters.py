@@ -1,9 +1,9 @@
 """Tier 9 — Cross-Cutting: Provider Adapters (T9-10).
 
 Tests:
-    T9-10: All 5 provider adapters (openai_compatible, openrouter, ollama,
-           anthropic, custom) instantiate without error and list_models()
-           returns a list (may be empty without credentials).
+    T9-10: All 6 provider adapters (openai_compatible, openrouter, ollama,
+           anthropic, custom, offline) instantiate without error and
+           list_models() returns a list (may be empty without credentials).
 """
 
 from __future__ import annotations
@@ -27,10 +27,10 @@ async def test_provider_adapters(
 ) -> None:
     """T9-10: All provider adapters instantiate and list_models() returns a list."""
 
-    with checkpoint(ctx, "provider_type_enum_has_5_values"):
+    with checkpoint(ctx, "provider_type_enum_has_6_values"):
         all_types = list(ProviderType)
-        assert len(all_types) == 5, (
-            f"Expected 5 ProviderType values, got {len(all_types)}: "
+        assert len(all_types) == 6, (
+            f"Expected 6 ProviderType values, got {len(all_types)}: "
             f"{[t.value for t in all_types]}"
         )
 
@@ -149,6 +149,7 @@ async def test_provider_adapters(
             ProviderType.openrouter,
             ProviderType.ollama,
             ProviderType.anthropic,
+            ProviderType.offline,
         ]:
             resp = await client.get(f"/api/v1/providers/models/{ptype.value}")
             assert resp.status_code == 200, (

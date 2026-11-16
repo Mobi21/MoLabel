@@ -6,7 +6,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from fastapi import APIRouter, HTTPException, Request
@@ -20,12 +20,14 @@ from molabel.app.workspace_paths import glob_in_workspace, resolve_in_workspace
 from molabel.core.agents.queue_binding import deserialize_agent_output_ids
 from molabel.core.data.snapshot_service import SnapshotService
 from molabel.core.models import Dataset, DatasetSnapshot, Record
-from molabel.core.types import canonical_review_decision
+from molabel.core.providers.offline_adapter import OFFLINE_MODEL_ID
+from molabel.core.types import ProviderType, canonical_review_decision
 from molabel.core.workflow.templates import (
     bind_template_inputs,
     get_template_path,
     get_template_yaml,
     list_templates,
+    template_has_agent_run,
     template_needs_dataset,
     template_needs_task_schema,
 )
@@ -121,12 +123,17 @@ async def get_workflow_template(
     workspace_id: str | None = None,
     dataset_id: str | None = None,
     task_schema_id: str | None = None,
+    provider: Literal["offline"] | None = None,
+    model: str | None = None,
 ) -> WorkflowTemplateDetail:
     """Return a built-in workflow template with its YAML content.
 
     With ``workspace_id``, the template's data and task-schema inputs are bound
     to that workspace: to the named dataset and task schema when given, else
     to the only one the workspace has.
+
+    With ``provider=offline`` or ``model``, every ``agent_run`` step labels
+    with the offline provider or that model instead of the template's model.
     """
     try:
         template_path = get_template_path(template_id)
@@ -134,9 +141,10 @@ async def get_workflow_template(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    definition = yaml.safe_load(yaml_text)
+    agent_model = _agent_model_binding(definition, provider=provider, model=model)
     bindings = None
     if workspace_id is not None:
-        definition = yaml.safe_load(yaml_text)
         with get_engine(request).connect() as conn:
             bindings = WorkflowTemplateBindings(
                 dataset_id=_pick_template_input(
@@ -154,18 +162,20 @@ async def get_workflow_template(
                     option="task_schema_id (molabel workflow create --task-schema)",
                 ),
             )
-        yaml_text = yaml.safe_dump(
-            bind_template_inputs(
-                definition,
-                dataset_id=bindings.dataset_id,
-                task_schema_id=bindings.task_schema_id,
-            ),
-            sort_keys=False,
-        )
     elif dataset_id is not None or task_schema_id is not None:
         raise HTTPException(
             status_code=400,
             detail="workspace_id is required to bind a dataset or task schema",
+        )
+    if bindings is not None or agent_model is not None:
+        yaml_text = yaml.safe_dump(
+            bind_template_inputs(
+                definition,
+                dataset_id=bindings.dataset_id if bindings else None,
+                task_schema_id=bindings.task_schema_id if bindings else None,
+                agent_model=agent_model,
+            ),
+            sort_keys=False,
         )
 
     template = next(
@@ -187,6 +197,26 @@ async def get_workflow_template(
         yaml=yaml_text,
         bindings=bindings,
     )
+
+
+def _agent_model_binding(
+    definition: dict[str, Any], *, provider: str | None, model: str | None
+) -> dict[str, str] | None:
+    if provider is None and model is None:
+        return None
+    if provider is not None and model is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Pass provider or model, not both",
+        )
+    if not template_has_agent_run(definition):
+        raise HTTPException(
+            status_code=400,
+            detail="This template has no agent_run step to bind a provider or model to",
+        )
+    if provider == ProviderType.offline:
+        return {"model": OFFLINE_MODEL_ID, "provider_type": ProviderType.offline.value}
+    return {"model": str(model)}
 
 
 def _workspace_datasets(conn: Any, workspace_id: str) -> list[tuple[str, str, str]]:

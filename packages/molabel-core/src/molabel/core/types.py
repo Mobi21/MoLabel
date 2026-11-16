@@ -112,6 +112,7 @@ class ProviderType(StrEnum):
     ollama = "ollama"
     anthropic = "anthropic"
     custom = "custom"
+    offline = "offline"
 
 
 class WorkflowExecutionStatus(StrEnum):

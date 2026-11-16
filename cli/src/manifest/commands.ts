@@ -7,7 +7,8 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
     {
       name: 'doctor',
       group: 'core',
-      description: 'Check local workspace and backend reachability',
+      description:
+        'Check local workspace, backend reachability, and the providers the backend can use',
       flags: [
         { name: '--base-url', description: 'Backend base URL' },
         { name: '--workspace', description: 'Workspace root override' },
@@ -265,6 +266,15 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
           name: '--task-schema',
           description: 'Task schema ID or slug the template labels with',
         },
+        {
+          name: '--provider',
+          description:
+            'offline: label the template with the offline provider, no API key',
+        },
+        {
+          name: '--model',
+          description: "Model ID that replaces the template's agent model",
+        },
         { name: '--workspace-id', description: 'Workspace ID override' },
         { name: '--name', description: 'Workflow name' },
         { name: '--slug', description: 'Workflow slug' },
@@ -286,6 +296,15 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
         {
           name: '--task-schema',
           description: 'Task schema ID or slug the template labels with',
+        },
+        {
+          name: '--provider',
+          description:
+            'offline: label the template with the offline provider, no API key',
+        },
+        {
+          name: '--model',
+          description: "Model ID that replaces the template's agent model",
         },
         { name: '--workspace-id', description: 'Workspace ID override' },
         { name: '--name', description: 'Workflow name' },

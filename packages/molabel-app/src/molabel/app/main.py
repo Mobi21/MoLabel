@@ -23,6 +23,10 @@ from sqlalchemy.pool import StaticPool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from molabel.app.api.v1 import router as v1_router
+from molabel.app.api.v1.workflows import (
+    UnresolvedModelError,
+    unresolved_model_error_handler,
+)
 from molabel.app.schemas import ErrorDetail, ErrorResponse, HealthResponse
 from molabel.app.server_state import (
     launch_folder_database,
@@ -146,6 +150,7 @@ def create_app() -> FastAPI:
     # ----- exception handlers -----
 
     app.add_exception_handler(WorkspacePathError, workspace_path_error_handler)
+    app.add_exception_handler(UnresolvedModelError, unresolved_model_error_handler)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(

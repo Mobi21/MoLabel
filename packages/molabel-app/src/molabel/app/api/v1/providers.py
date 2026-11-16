@@ -85,7 +85,8 @@ async def check_provider_health(
     """Check health of a specific provider.
 
     Args:
-        provider_type: One of: openai_compatible, openrouter, ollama, anthropic.
+        provider_type: One of: openai_compatible, openrouter, ollama, anthropic,
+            offline.
         base_url: Override base URL (query parameter).
         auth_ref: Override auth env var name (query parameter).
     """
@@ -169,6 +170,10 @@ def _model_is_known(provider_type: str, model_id: str | None) -> bool:
         from molabel.core.providers.anthropic_adapter import AnthropicAdapter
 
         models = AnthropicAdapter().list_models()
+    elif provider_type == ProviderType.offline:
+        from molabel.core.providers.offline_adapter import OfflineAdapter
+
+        models = OfflineAdapter().list_models()
     else:
         return False
     return any(model.model_id == model_id for model in models)
@@ -202,6 +207,11 @@ async def list_provider_models(
         from molabel.core.providers.anthropic_adapter import AnthropicAdapter
 
         models = AnthropicAdapter().list_models()
+
+    elif provider_type == ProviderType.offline:
+        from molabel.core.providers.offline_adapter import OfflineAdapter
+
+        models = OfflineAdapter().list_models()
 
     return ProviderModelsResponse(
         provider_type=provider_type,

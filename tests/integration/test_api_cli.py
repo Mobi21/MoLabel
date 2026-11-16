@@ -346,6 +346,58 @@ async def test_template_binding_rejects_an_unknown_dataset(client, app, tmp_path
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("params", "agent_config"),
+    [
+        (
+            {"provider": "offline"},
+            {"model": "offline-heuristic", "provider_type": "offline"},
+        ),
+        ({"model": "gpt-4o"}, {"model": "gpt-4o"}),
+    ],
+)
+async def test_template_binds_every_agent_run_to_the_named_provider_or_model(
+    client, app, tmp_path, params, agent_config
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    _, (schema_id,) = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=1, task_schemas=1
+    )
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={"workspace_id": str(workspace_id), **params},
+    )
+
+    assert resp.status_code == 200, resp.text
+    steps = {step["id"]: step for step in yaml.safe_load(resp.json()["yaml"])["steps"]}
+    assert steps["agent_label"]["config"] == {
+        "prompt_ref": "prompts/default.yaml",
+        "task_schema_id": schema_id,
+        **agent_config,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("template_id", "params", "status"),
+    [
+        ("human_in_the_loop", {"provider": "anthropic"}, 422),
+        ("human_in_the_loop", {"provider": "offline", "model": "gpt-4o"}, 400),
+        ("benchmark_authority", {"provider": "offline"}, 400),
+    ],
+)
+async def test_template_rejects_a_provider_or_model_it_cannot_bind(
+    client, template_id, params, status
+):
+    resp = await client.get(
+        f"/api/v1/cli/workflow-templates/{template_id}", params=params
+    )
+
+    assert resp.status_code == status, resp.text
+
+
+@pytest.mark.asyncio
 async def test_template_with_bound_inputs_needs_no_workspace_dataset(
     client, app, tmp_path
 ):

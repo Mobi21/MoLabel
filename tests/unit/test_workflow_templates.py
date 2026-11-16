@@ -199,3 +199,25 @@ class TestTemplateInputBinding:
         bind_template_inputs(definition, dataset_id="d", task_schema_id="s")
 
         assert yaml.safe_dump(definition) == before
+
+    def test_binding_an_agent_model_replaces_every_agent_run_provider(self) -> None:
+        definition = yaml.safe_load(get_template_yaml("grounded_classification_review"))
+
+        bound = bind_template_inputs(
+            definition,
+            dataset_id=None,
+            task_schema_id=None,
+            agent_model={"model": "offline-heuristic", "provider_type": "offline"},
+        )
+
+        steps = {step["id"]: step for step in bound["steps"]}
+        assert steps["propose_labels"]["config"] == {
+            "task_schema_id": "grounded-classification",
+            "prompt_ref": "grounded-classification-prompt",
+            "agent_role": "proposer",
+            "model": "offline-heuristic",
+            "provider_type": "offline",
+        }
+        assert steps["review"]["config"] == next(
+            step["config"] for step in definition["steps"] if step["id"] == "review"
+        )

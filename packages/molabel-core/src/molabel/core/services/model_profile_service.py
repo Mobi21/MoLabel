@@ -481,6 +481,11 @@ class ModelProfileService:
 
             return CustomAdapter()
 
+        if provider_type == ProviderType.offline:
+            from molabel.core.providers.offline_adapter import OfflineAdapter
+
+            return OfflineAdapter()
+
         raise ProviderError(
             f"Unknown provider type: {provider_type}",
             provider=str(provider_type),

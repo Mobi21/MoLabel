@@ -13,20 +13,34 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from molabel.app.api.v1.model_profiles import SHARED_PROFILE_WORKSPACE
 from molabel.app.middleware.session import CurrentReviewer
-from molabel.app.schemas import PaginatedResponse, QueryParams
+from molabel.app.schemas import (
+    ErrorDetail,
+    ErrorResponse,
+    PaginatedResponse,
+    QueryParams,
+)
 from molabel.app.utils import get_engine
 from molabel.app.workspace_config import WORKFLOW, workspace_files, workspace_folder
 from molabel.app.workspace_paths import resolve_in_workspace
 from molabel.core.agents.queue_binding import serialize_agent_output_ids
+from molabel.core.providers.base import ProviderError, resolve_api_key
+from molabel.core.providers.detection import ProviderDetector
 from molabel.core.providers.model_defaults import (
     MINIMAX_M27_HIGHSPEED,
     is_minimax_model,
+)
+from molabel.core.providers.offline_adapter import (
+    OFFLINE_CONFIDENCE,
+    OFFLINE_MODEL_ID,
 )
 from molabel.core.types import (
     BlindReviewPolicy,
@@ -361,6 +375,30 @@ def _json_dumps(value: Any) -> str | None:
     return json.dumps(value)
 
 
+def _with_offline_model(config: dict[str, Any]) -> dict[str, Any]:
+    """Select the offline provider's one model for ``provider_type: offline``.
+
+    ``model`` and ``model_profile_id`` each become that model, or ``model``
+    does when the step sets neither. A model profile the step pins by id
+    stays, so that its provider is checked against the step's.
+    """
+    if _normalize_provider_type(config.get("provider_type")) != ProviderType.offline:
+        return config
+    selected = {
+        key: str(config.get(key) or "").strip() for key in ("model", "model_profile_id")
+    }
+    if not any(selected.values()):
+        return {**config, "model": OFFLINE_MODEL_ID}
+    return {
+        **config,
+        **{
+            key: OFFLINE_MODEL_ID
+            for key, value in selected.items()
+            if value and _profile_id(value) is None
+        },
+    }
+
+
 def _build_workflow_definition(row: Any) -> WorkflowDefinitionParsed:
     steps_raw = _json_loads(row[4])
     steps_data = steps_raw if isinstance(steps_raw, list) else []
@@ -375,7 +413,7 @@ def _build_workflow_definition(row: Any) -> WorkflowDefinitionParsed:
         step = StepDefinition(
             id=str(item.get("step_id", item.get("id", f"step-{index + 1}"))),
             type=str(item.get("step_type", item.get("type", ""))),
-            config=dict(item.get("config", {})),
+            config=_with_offline_model(dict(item.get("config", {}))),
         )
         steps.append(step)
         step_index[step.id] = step
@@ -717,25 +755,6 @@ def _extract_external_record_id(
     return default_id
 
 
-def _infer_sentiment_labels(text_value: str) -> dict[str, str]:
-    lowered = text_value.lower()
-    positive_hits = sum(
-        token in lowered
-        for token in ("love", "great", "excellent", "good", "amazing", "helpful")
-    )
-    negative_hits = sum(
-        token in lowered
-        for token in ("bad", "awful", "terrible", "hate", "broken", "slow")
-    )
-    if positive_hits > negative_hits:
-        sentiment = "positive"
-    elif negative_hits > positive_hits:
-        sentiment = "negative"
-    else:
-        sentiment = "neutral"
-    return {"sentiment": sentiment}
-
-
 def _resolve_task_schema(
     conn: Any,
     *,
@@ -784,6 +803,14 @@ def _normalize_provider_type(value: Any) -> str | None:
     return normalized or None
 
 
+def _profile_id(value: str) -> str | None:
+    """``value`` as a profile id in canonical UUID form, or None if not a UUID."""
+    try:
+        return str(uuid.UUID(value))
+    except ValueError:
+        return None
+
+
 def _infer_profile_defaults(
     *,
     model_identifier: str,
@@ -801,12 +828,20 @@ def _infer_profile_defaults(
     inferred_base_url = base_url
 
     if inferred_provider_type is None:
-        if normalized_model.startswith("claude-") or is_minimax_model(model_identifier):
+        if normalized_model == OFFLINE_MODEL_ID:
+            inferred_provider_type = ProviderType.offline.value
+        elif normalized_model.startswith("claude-") or is_minimax_model(
+            model_identifier
+        ):
             inferred_provider_type = ProviderType.anthropic.value
         elif normalized_model.startswith(("gpt-", "o1", "o3", "o4")):
             inferred_provider_type = ProviderType.openai_compatible.value
 
-    if inferred_provider_type == ProviderType.anthropic.value:
+    if inferred_provider_type == ProviderType.offline.value:
+        inferred_provider_name = inferred_provider_name or "Offline heuristic"
+        inferred_auth_ref = None
+        inferred_base_url = None
+    elif inferred_provider_type == ProviderType.anthropic.value:
         if not inferred_provider_name:
             inferred_provider_name = (
                 MINIMAX_M27_HIGHSPEED.provider_name
@@ -842,6 +877,141 @@ def _infer_profile_defaults(
     )
 
 
+_DEFAULT_PROFILE_TRAITS: tuple[str, list[str], float | None] = (
+    "https",
+    ["workflow-auto-profile"],
+    None,
+)
+_BUILTIN_PROFILE_TRAITS: dict[str, tuple[str, list[str], float | None]] = {
+    ProviderType.offline.value: ("builtin", ["offline", "heuristic"], 0.0),
+}
+_RUNNABLE_PROVIDERS = frozenset(ProviderType) - {ProviderType.custom}
+_AGENT_STEP_TYPES = frozenset({"agent_run", "agent_labeling"})
+
+
+class UnresolvedModelError(Exception):
+    """An agent step names a model or provider that MoLabel cannot run."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        model: str,
+        provider_type: str | None,
+        step_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.model = model
+        self.provider_type = provider_type
+        self.step_id = step_id
+
+
+async def unresolved_model_error_handler(
+    _request: Request, exc: UnresolvedModelError
+) -> JSONResponse:
+    providers = await ProviderDetector().detect_all()
+    return JSONResponse(
+        status_code=400,
+        content=ErrorResponse(
+            error=ErrorDetail(
+                code="MODEL_UNRESOLVED",
+                message=str(exc),
+                details={
+                    "step_id": exc.step_id,
+                    "model": exc.model,
+                    "provider_type": exc.provider_type,
+                    "usable_providers": [
+                        {
+                            "provider_type": provider.provider_type,
+                            "name": provider.name,
+                            "models": provider.suggested_models,
+                        }
+                        for provider in providers
+                    ],
+                },
+            )
+        ).model_dump(mode="json"),
+    )
+
+
+def _resolve_step_model(
+    conn: Any, *, workspace_id: str, config: dict[str, Any]
+) -> str | None:
+    """The model profile an agent step runs on, or None if it names no model.
+
+    ``model`` and ``model_profile_id`` each select a profile through
+    ``_ensure_model_profile``, and the step runs on the one ``model`` selects.
+    When the step sets both, their profiles must have one provider, or
+    ``UnresolvedModelError`` is raised.
+    """
+    config = _with_offline_model(config)
+
+    def value(key: str) -> str | None:
+        raw = config.get(key)
+        return (str(raw).strip() or None) if raw is not None else None
+
+    settings = {
+        key: value(key)
+        for key in ("provider_type", "provider_name", "auth_ref", "base_url")
+    }
+    resolved = [
+        (
+            selector,
+            _ensure_model_profile(
+                conn, workspace_id=workspace_id, model_identifier=selector, **settings
+            ),
+        )
+        for selector in (value("model"), value("model_profile_id"))
+        if selector is not None
+    ]
+    if len(resolved) == 2:
+        (model, model_profile), (pinned, pinned_profile) = resolved
+        providers = dict(
+            conn.execute(
+                text(
+                    "SELECT id, provider_type FROM model_profiles "
+                    "WHERE id IN (:model_profile, :pinned_profile)"
+                ),
+                {"model_profile": model_profile, "pinned_profile": pinned_profile},
+            ).fetchall()
+        )
+        if providers[model_profile] != providers[pinned_profile]:
+            raise UnresolvedModelError(
+                f"Model profile {pinned} uses provider "
+                f"{providers[pinned_profile]}, but the step's model {model} uses "
+                f"provider {providers[model_profile]}",
+                model=pinned,
+                provider_type=settings["provider_type"],
+            )
+    return resolved[0][1] if resolved else None
+
+
+def _resolve_agent_models(
+    conn: Any, *, definition: WorkflowDefinitionParsed, workspace_id: str
+) -> None:
+    """Fail before any step runs when an agent step's model cannot run."""
+    for step in definition.steps:
+        if step.type in _AGENT_STEP_TYPES:
+            configs = [step.config]
+        elif step.type == "agent_compare":
+            configs = [
+                {**step.config, "model": model}
+                for model in step.config.get("models") or []
+            ]
+        else:
+            continue
+        for config in configs:
+            try:
+                _resolve_step_model(conn, workspace_id=workspace_id, config=config)
+            except UnresolvedModelError as exc:
+                raise UnresolvedModelError(
+                    f"Step '{step.id}': {exc}",
+                    model=exc.model,
+                    provider_type=exc.provider_type,
+                    step_id=step.id,
+                ) from None
+
+
 def _ensure_model_profile(
     conn: Any,
     *,
@@ -852,53 +1022,79 @@ def _ensure_model_profile(
     auth_ref: str | None = None,
     base_url: str | None = None,
 ) -> str:
-    row = conn.execute(
-        text(
-            "SELECT id FROM model_profiles "
-            "WHERE workspace_id = :wid AND id = :model "
-            "ORDER BY created_at DESC LIMIT 1"
-        ),
-        {"wid": workspace_id, "model": model_identifier},
-    ).first()
-    if row is not None:
-        return str(row[0])
-    row = conn.execute(
-        text(
-            "SELECT id FROM model_profiles "
-            "WHERE id = :model "
-            "ORDER BY created_at DESC LIMIT 1"
-        ),
-        {"model": model_identifier},
-    ).first()
-    if row is not None:
-        return str(row[0])
-    row = conn.execute(
-        text(
-            "SELECT id FROM model_profiles "
-            "WHERE workspace_id = :wid "
-            "AND (model_identifier = :model OR model_profile_slug = :model) "
-            "ORDER BY created_at DESC LIMIT 1"
-        ),
-        {"wid": workspace_id, "model": model_identifier},
-    ).first()
-    if row is not None:
-        return str(row[0])
-    # Fall back to any workspace (the model-profile endpoint may use a
-    # default workspace_id that differs from the workflow's workspace).
-    row = conn.execute(
-        text(
-            "SELECT id FROM model_profiles "
-            "WHERE model_identifier = :model OR model_profile_slug = :model "
-            "ORDER BY created_at DESC LIMIT 1"
-        ),
-        {"model": model_identifier},
-    ).first()
-    if row is not None:
-        return str(row[0])
+    """Return the model profile an agent step runs on, creating one if none fits.
 
-    profile_id = str(uuid.uuid4())
-    now = datetime.now(UTC).isoformat()
-    slug = model_identifier.lower().replace(" ", "-")
+    A ``model_identifier`` that is a profile's id pins that profile. MoLabel
+    must be able to run its provider, and it must have ``provider_type`` when
+    that is given, or ``UnresolvedModelError`` is raised. Otherwise a profile
+    fits when its slug or model id is ``model_identifier``, MoLabel can run its
+    provider, and, when ``provider_type`` is given, it has that provider.
+    Profiles come from the step's workspace or the shared profile workspace,
+    and the step's own workspace wins. Without a fitting profile, a
+    ``model_identifier`` shaped like a profile id raises
+    ``UnresolvedModelError``, so no provider receives it as a model. Any other
+    gets a new profile whose provider comes from ``provider_type`` or else from
+    the model id, and a model or provider MoLabel cannot run raises
+    ``UnresolvedModelError``.
+    """
+    requested_provider = _normalize_provider_type(provider_type)
+    pinned_id = _profile_id(model_identifier)
+    rows = conn.execute(
+        text(
+            "SELECT id, provider_type FROM model_profiles "
+            "WHERE workspace_id IN (:wid, :shared) "
+            "AND (id = :pinned_id OR model_identifier = :model "
+            "OR model_profile_slug = :model) "
+            "ORDER BY workspace_id = :wid DESC, created_at DESC"
+        ),
+        {
+            "wid": workspace_id,
+            "shared": str(SHARED_PROFILE_WORKSPACE),
+            "pinned_id": pinned_id,
+            "model": model_identifier,
+        },
+    ).fetchall()
+    pinned_provider = next(
+        (provider for pid, provider in rows if pid == pinned_id), None
+    )
+    if pinned_provider is not None:
+        if requested_provider not in (None, pinned_provider):
+            message = (
+                f"Model profile {model_identifier} uses provider "
+                f"{pinned_provider}, but the step sets provider_type "
+                f"{requested_provider}"
+            )
+        elif pinned_provider not in _RUNNABLE_PROVIDERS:
+            message = (
+                f"Model profile {model_identifier} uses provider "
+                f"{pinned_provider}, which MoLabel cannot run"
+            )
+        else:
+            return pinned_id
+        raise UnresolvedModelError(
+            message, model=model_identifier, provider_type=requested_provider
+        )
+    for existing_id, existing_provider in rows:
+        if existing_provider not in _RUNNABLE_PROVIDERS:
+            continue
+        if requested_provider is None or existing_provider == requested_provider:
+            return str(existing_id)
+    if pinned_id is not None:
+        raise UnresolvedModelError(
+            f"No model profile has id {model_identifier}, and no profile "
+            "MoLabel can run has it as its model",
+            model=model_identifier,
+            provider_type=requested_provider,
+        )
+
+    if requested_provider is not None and requested_provider not in (
+        _RUNNABLE_PROVIDERS
+    ):
+        raise UnresolvedModelError(
+            f"provider_type '{requested_provider}' is not a provider MoLabel can run",
+            model=model_identifier,
+            provider_type=requested_provider,
+        )
     (
         resolved_provider_type,
         resolved_provider_name,
@@ -911,9 +1107,24 @@ def _ensure_model_profile(
         auth_ref=auth_ref,
         base_url=base_url,
     )
+    if resolved_provider_type not in _RUNNABLE_PROVIDERS:
+        raise UnresolvedModelError(
+            f"Model '{model_identifier}' matches no model profile and no known "
+            "provider. Set provider_type on the step, or create a profile "
+            "for it with `molabel model-profile create`",
+            model=model_identifier,
+            provider_type=None,
+        )
+
+    profile_id = str(uuid.uuid4())
+    now = datetime.now(UTC).isoformat()
+    slug = model_identifier.lower().replace(" ", "-")
     routing_metadata = {}
     if resolved_base_url:
         routing_metadata["base_url"] = resolved_base_url
+    transport, capability_tags, token_cost = _BUILTIN_PROFILE_TRAITS.get(
+        resolved_provider_type, _DEFAULT_PROFILE_TRAITS
+    )
     conn.execute(
         text(
             """
@@ -927,7 +1138,7 @@ def _ensure_model_profile(
             VALUES (
                 :id, :slug, :provider_type, :provider_name, :model_identifier,
                 :transport, :auth_ref, 1, 0, NULL, :capability_tags,
-                :routing_metadata, NULL, NULL, 1,
+                :routing_metadata, :token_cost, :token_cost, 1,
                 :now, :now, :wid
             )
             """
@@ -936,22 +1147,15 @@ def _ensure_model_profile(
             "id": profile_id,
             "slug": slug,
             "provider_type": resolved_provider_type,
-            "provider_name": resolved_provider_name or "builtin-heuristic",
+            "provider_name": resolved_provider_name or resolved_provider_type,
             "model_identifier": model_identifier,
-            "transport": (
-                "https"
-                if resolved_provider_type != ProviderType.custom.value
-                else "builtin"
-            ),
+            "transport": transport,
             "auth_ref": resolved_auth_ref,
-            "capability_tags": _json_dumps(
-                ["workflow-auto-profile"]
-                if resolved_provider_type != ProviderType.custom.value
-                else ["heuristic", "workflow-demo"]
-            ),
+            "capability_tags": _json_dumps(capability_tags),
             "routing_metadata": (
                 _json_dumps(routing_metadata) if routing_metadata else None
             ),
+            "token_cost": token_cost,
             "now": now,
             "wid": workspace_id,
         },
@@ -1104,148 +1308,20 @@ class _WorkflowDataLoader:
         return records
 
 
-class _HeuristicAgentRunner:
-    def __init__(self, conn: Any, *, workspace_id: str) -> None:
-        self._conn = conn
-        self._workspace_id = workspace_id
+def _requires_api_key(provider_type: str, base_url: str | None) -> bool:
+    """Whether the provider is a hosted API that refuses calls without a key."""
+    if provider_type == ProviderType.openai_compatible:
+        return not base_url or urlparse(base_url).hostname == "api.openai.com"
+    return provider_type in (ProviderType.anthropic, ProviderType.openrouter)
 
-    def run(self, **kwargs: Any) -> dict[str, Any]:
-        record_ids = [str(record_id) for record_id in kwargs.get("record_ids", [])]
-        agent_run_id = str(kwargs.get("agent_run_id") or uuid.uuid4())
-        config = dict(kwargs.get("config", {}))
-        model_identifier = str(config.get("model") or "heuristic-agent")
-        task_schema_selector = config.get("task_schema_id")
-        now = datetime.now(UTC).isoformat()
 
-        if not record_ids:
-            return {
-                "agent_run_id": agent_run_id,
-                "status": "completed",
-                "total_records": 0,
-                "completed_records": 0,
-                "failed_records": 0,
-                "batch_size": 1,
-                "batch_count": 0,
-                "event_count": 0,
-            }
-
-        first_record = self._conn.execute(
-            text("SELECT dataset_id FROM records WHERE id = :record_id LIMIT 1"),
-            {"record_id": record_ids[0]},
-        ).first()
-        if first_record is None:
-            raise HTTPException(status_code=404, detail="Record not found")
-
-        dataset_id = str(first_record[0])
-        task_schema_id, blind_policy = _resolve_task_schema(
-            self._conn,
-            workspace_id=self._workspace_id,
-            selector=str(task_schema_selector)
-            if task_schema_selector is not None
-            else None,
-        )
-        model_profile_id = _ensure_model_profile(
-            self._conn,
-            workspace_id=self._workspace_id,
-            model_identifier=model_identifier,
-        )
-        self._conn.execute(
-            text(
-                """
-                INSERT INTO agent_runs (
-                    id, dataset_id, task_schema_id, model_profile_id,
-                    runtime_profile_id, prompt_template_id, prompt_version,
-                    agent_role, adapter_plugin, status, config, record_filter,
-                    total_records, completed_records, failed_records, retry_count,
-                    error_summary, cost_estimate, cost_actual, comparison_id,
-                    started_at, completed_at, created_at, updated_at,
-                    workspace_id, workflow_step_execution_id
-                )
-                VALUES (
-                    :id, :dataset_id, :task_schema_id, :model_profile_id,
-                    NULL, NULL, NULL, :agent_role, 'builtin.heuristic',
-                    'completed', :config, NULL, :total_records,
-                    :completed_records, 0, 0, NULL, NULL, NULL, NULL,
-                    :started_at, :completed_at, :created_at, :updated_at,
-                    :workspace_id, NULL
-                )
-                """
-            ),
-            {
-                "id": agent_run_id,
-                "dataset_id": dataset_id,
-                "task_schema_id": task_schema_id,
-                "model_profile_id": model_profile_id,
-                "agent_role": str(kwargs.get("agent_role") or "proposer"),
-                "config": _json_dumps(config),
-                "total_records": len(record_ids),
-                "completed_records": len(record_ids),
-                "started_at": now,
-                "completed_at": now,
-                "created_at": now,
-                "updated_at": now,
-                "workspace_id": self._workspace_id,
-            },
-        )
-
-        show_outputs = blind_policy == BlindReviewPolicy.show_agent_outputs.value
-        for record_id in record_ids:
-            record_row = self._conn.execute(
-                text("SELECT payload FROM records WHERE id = :record_id LIMIT 1"),
-                {"record_id": record_id},
-            ).first()
-            payload = _json_loads(record_row[0]) if record_row else {}
-            labels = _infer_sentiment_labels(_extract_record_text(payload))
-            self._conn.execute(
-                text(
-                    """
-                    INSERT INTO agent_outputs (
-                        id, agent_run_id, record_id, task_schema_id, output_type,
-                        labels, raw_response, confidence_self_reported,
-                        confidence_self_consistency, confidence_logprobs,
-                        composite_confidence, tokens_input, tokens_output,
-                        latency_ms, validation_passed, validation_errors,
-                        retry_attempt, is_visible_for_review,
-                        normalization_status, created_at, workspace_id
-                    )
-                    VALUES (
-                        :id, :agent_run_id, :record_id, :task_schema_id,
-                        'labels', :labels, :raw_response, NULL, NULL, NULL,
-                        :confidence, NULL, NULL, NULL, 1, NULL, 0,
-                        :is_visible_for_review, 'ready', :created_at,
-                        :workspace_id
-                    )
-                    """
-                ),
-                {
-                    "id": str(uuid.uuid4()),
-                    "agent_run_id": agent_run_id,
-                    "record_id": record_id,
-                    "task_schema_id": task_schema_id,
-                    "labels": _json_dumps(labels) or "{}",
-                    "raw_response": _json_dumps(
-                        {
-                            "strategy": "builtin-heuristic",
-                            "model": model_identifier,
-                        }
-                    ),
-                    "confidence": 0.6,
-                    "is_visible_for_review": 1 if show_outputs else 0,
-                    "created_at": now,
-                    "workspace_id": self._workspace_id,
-                },
-            )
-
-        return {
-            "agent_run_id": agent_run_id,
-            "status": "completed",
-            "total_records": len(record_ids),
-            "completed_records": len(record_ids),
-            "failed_records": 0,
-            "batch_size": max(1, len(record_ids)),
-            "batch_count": 1 if record_ids else 0,
-            "event_count": len(record_ids),
-        }
+def _missing_key_hint(auth_ref: str) -> str:
+    return (
+        f"{auth_ref} is not set. To label without an API key, recreate the "
+        "workflow with `molabel workflow create --template <template-id> "
+        "--provider offline`, or set `provider_type: offline` in this "
+        "agent_run step's config"
+    )
 
 
 class _LlmAgentRunner:
@@ -1271,26 +1347,9 @@ class _LlmAgentRunner:
         record_ids = [str(record_id) for record_id in kwargs.get("record_ids", [])]
         agent_run_id = str(kwargs.get("agent_run_id") or uuid.uuid4())
         config = dict(kwargs.get("config", {}))
-        model_identifier = str(config.get("model") or "")
         task_schema_selector = config.get("task_schema_id")
         prompt_ref = config.get("prompt_ref")
         agent_role = str(kwargs.get("agent_role") or "proposer")
-        provider_type = _normalize_provider_type(config.get("provider_type"))
-        provider_name = (
-            str(config["provider_name"]).strip()
-            if config.get("provider_name") is not None
-            else None
-        )
-        auth_ref = (
-            str(config["auth_ref"]).strip()
-            if config.get("auth_ref") is not None
-            else None
-        )
-        base_url = (
-            str(config["base_url"]).strip()
-            if config.get("base_url") is not None
-            else None
-        )
         now = datetime.now(UTC).isoformat()
 
         if not record_ids:
@@ -1321,15 +1380,15 @@ class _LlmAgentRunner:
             if task_schema_selector is not None
             else None,
         )
-        model_profile_id = _ensure_model_profile(
-            self._conn,
-            workspace_id=self._workspace_id,
-            model_identifier=model_identifier,
-            provider_type=provider_type,
-            provider_name=provider_name,
-            auth_ref=auth_ref,
-            base_url=base_url,
+        model_profile_id = _resolve_step_model(
+            self._conn, workspace_id=self._workspace_id, config=config
         )
+        if model_profile_id is None:
+            raise UnresolvedModelError(
+                "The step names no model",
+                model="",
+                provider_type=_normalize_provider_type(config.get("provider_type")),
+            )
 
         # Load full model profile for provider instantiation
         profile_row = self._conn.execute(
@@ -1421,12 +1480,14 @@ class _LlmAgentRunner:
         completed = 0
         failed = 0
         error_summary_parts: list[str] = []
+        auth_rejected = False
 
         for record_id in record_ids:
             try:
                 labels, raw_response, confidence, tokens_in, tokens_out, latency = (
                     self._label_record(
                         record_id=record_id,
+                        provider_type=provider_type,
                         adapter=adapter,
                         enforcer=enforcer,
                         db_model_id=db_model_id,
@@ -1477,6 +1538,8 @@ class _LlmAgentRunner:
                 completed += 1
             except Exception as exc:
                 failed += 1
+                if isinstance(exc, ProviderError) and exc.status_code in (401, 403):
+                    auth_rejected = True
                 error_summary_parts.append(
                     f"record {record_id}: {type(exc).__name__}: {exc}"
                 )
@@ -1493,6 +1556,14 @@ class _LlmAgentRunner:
             if failed == 0
             else ("partially_completed" if completed > 0 else "failed")
         )
+        if (
+            completed == 0
+            and auth_rejected
+            and auth_ref
+            and _requires_api_key(provider_type, base_url)
+            and resolve_api_key(auth_ref) is None
+        ):
+            error_summary_parts.insert(0, _missing_key_hint(auth_ref))
         error_summary = (
             "; ".join(error_summary_parts[:5]) if error_summary_parts else None
         )
@@ -1546,6 +1617,7 @@ class _LlmAgentRunner:
         self,
         *,
         record_id: str,
+        provider_type: str,
         adapter: Any,
         enforcer: Any,
         db_model_id: str,
@@ -1659,12 +1731,18 @@ class _LlmAgentRunner:
         ]
         normalized, _norm_errors = _normalize_labels(result.parsed, field_defs)
 
-        confidence = result.parsed.get("confidence", 0.8)
-        if not isinstance(confidence, (int, float)):
-            confidence = 0.8
+        if provider_type == ProviderType.offline:
+            confidence = OFFLINE_CONFIDENCE
+            strategy = "offline-heuristic"
+        else:
+            confidence = result.parsed.get("confidence", 0.8)
+            if not isinstance(confidence, (int, float)):
+                confidence = 0.8
+            strategy = "llm-structured-output"
 
         raw_response = {
-            "strategy": "llm-structured-output",
+            "strategy": strategy,
+            "provider_type": provider_type,
             "model": db_model_id,
             "attempts": result.attempts,
             "used_native": result.used_native,
@@ -1830,6 +1908,11 @@ class _LlmAgentRunner:
             if base_url:
                 kwargs["base_url"] = base_url
             return OllamaAdapter(**kwargs)
+
+        if provider_type == ProviderType.offline:
+            from molabel.core.providers.offline_adapter import OfflineAdapter
+
+            return OfflineAdapter()
 
         raise HTTPException(
             status_code=500,
@@ -2029,211 +2112,6 @@ def _restore_engine_state(
             engine._step_states[step_id] = WorkflowStepExecutionStatus(status)
 
 
-def _select_agent_runner(
-    conn: Any,
-    *,
-    definition: WorkflowDefinitionParsed,
-    workspace_id: str,
-) -> _LlmAgentRunner | _HeuristicAgentRunner:
-    """Pick the right agent runner based on the workflow's step configs.
-
-    If any agent_run / agent_labeling step references a real model
-    (i.e. not 'heuristic-agent') that has a model profile with a known
-    provider_type, use _LlmAgentRunner.  Otherwise fall back to
-    _HeuristicAgentRunner.
-    """
-    agent_step_types = {"agent_run", "agent_labeling"}
-
-    def _lookup_provider_type(
-        *,
-        model_identifier: str | None = None,
-        model_profile_id: str | None = None,
-    ) -> str | None:
-        if model_profile_id:
-            row = conn.execute(
-                text(
-                    "SELECT provider_type FROM model_profiles "
-                    "WHERE workspace_id = :wid AND id = :pid "
-                    "ORDER BY created_at DESC LIMIT 1"
-                ),
-                {"wid": workspace_id, "pid": model_profile_id},
-            ).first()
-            if row is None:
-                row = conn.execute(
-                    text(
-                        "SELECT provider_type FROM model_profiles "
-                        "WHERE id = :pid ORDER BY created_at DESC LIMIT 1"
-                    ),
-                    {"pid": model_profile_id},
-                ).first()
-            if row is not None:
-                return str(row[0])
-
-        if model_identifier:
-            row = conn.execute(
-                text(
-                    "SELECT provider_type FROM model_profiles "
-                    "WHERE workspace_id = :wid AND id = :model "
-                    "ORDER BY created_at DESC LIMIT 1"
-                ),
-                {"wid": workspace_id, "model": model_identifier},
-            ).first()
-            if row is None:
-                row = conn.execute(
-                    text(
-                        "SELECT provider_type FROM model_profiles "
-                        "WHERE id = :model ORDER BY created_at DESC LIMIT 1"
-                    ),
-                    {"model": model_identifier},
-                ).first()
-            if row is not None:
-                return str(row[0])
-
-            row = conn.execute(
-                text(
-                    "SELECT provider_type FROM model_profiles "
-                    "WHERE workspace_id = :wid "
-                    "AND (model_identifier = :model OR model_profile_slug = :model) "
-                    "ORDER BY created_at DESC LIMIT 1"
-                ),
-                {"wid": workspace_id, "model": model_identifier},
-            ).first()
-            if row is None:
-                row = conn.execute(
-                    text(
-                        "SELECT provider_type FROM model_profiles "
-                        "WHERE model_identifier = :model "
-                        "OR model_profile_slug = :model "
-                        "ORDER BY created_at DESC LIMIT 1"
-                    ),
-                    {"model": model_identifier},
-                ).first()
-            if row is not None:
-                return str(row[0])
-
-        return None
-
-    def _resolve_provider_hint(step_config: dict[str, Any]) -> str | None:
-        hinted_provider_type = _normalize_provider_type(
-            step_config.get("provider_type")
-        )
-        if hinted_provider_type:
-            return hinted_provider_type
-
-        model_identifier = (
-            str(step_config.get("model")).strip() if step_config.get("model") else ""
-        )
-        (
-            inferred_provider_type,
-            _provider_name,
-            _auth_ref,
-            _base_url,
-        ) = _infer_profile_defaults(
-            model_identifier=model_identifier,
-            provider_type=None,
-            provider_name=None,
-            auth_ref=(
-                str(step_config.get("auth_ref")).strip()
-                if step_config.get("auth_ref")
-                else None
-            ),
-            base_url=(
-                str(step_config.get("base_url")).strip()
-                if step_config.get("base_url")
-                else None
-            ),
-        )
-        if inferred_provider_type != ProviderType.custom.value:
-            return inferred_provider_type
-        return None
-
-    for step in definition.steps:
-        logger.debug("Runner selection: step '%s' type='%s'", step.id, step.type)
-        if step.type not in agent_step_types:
-            continue
-        model_identifier = (
-            str(step.config.get("model")) if step.config.get("model") else None
-        )
-        model_profile_id = (
-            str(step.config.get("model_profile_id"))
-            if step.config.get("model_profile_id")
-            else None
-        )
-        logger.info(
-            "Runner selection: agent step '%s' model='%s' model_profile_id='%s' "
-            "config=%s",
-            step.id,
-            model_identifier,
-            model_profile_id,
-            step.config,
-        )
-        if model_identifier == "heuristic-agent":
-            continue
-        if model_identifier is None and model_profile_id is None:
-            continue
-        # Debug: list all model profiles in the DB
-        all_profiles = conn.execute(
-            text(
-                "SELECT id, model_profile_slug, model_identifier, provider_type, "
-                "workspace_id "
-                "FROM model_profiles ORDER BY created_at DESC"
-            )
-        ).fetchall()
-        logger.info(
-            "Runner selection: searching for model_identifier='%s', "
-            "model_profile_id='%s', workspace='%s'. All profiles in DB: %s",
-            model_identifier,
-            model_profile_id,
-            workspace_id,
-            [
-                (str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]))
-                for r in all_profiles
-            ],
-        )
-        provider_type = _lookup_provider_type(
-            model_identifier=model_identifier,
-            model_profile_id=model_profile_id,
-        )
-        if provider_type is not None:
-            logger.info(
-                "Runner selection: found profile for model='%s' profile_id='%s', "
-                "provider_type='%s' (custom=%s)",
-                model_identifier,
-                model_profile_id,
-                provider_type,
-                provider_type == ProviderType.custom,
-            )
-            if provider_type != ProviderType.custom:
-                logger.info(
-                    "Using LLM agent runner for model '%s' profile_id='%s' "
-                    "(provider=%s)",
-                    model_identifier,
-                    model_profile_id,
-                    provider_type,
-                )
-                return _LlmAgentRunner(conn, workspace_id=workspace_id)
-        provider_hint = _resolve_provider_hint(step.config)
-        if provider_hint is not None and provider_hint != ProviderType.custom:
-            logger.info(
-                "Using LLM agent runner from step config hint for model '%s' "
-                "(provider=%s)",
-                model_identifier,
-                provider_hint,
-            )
-            return _LlmAgentRunner(conn, workspace_id=workspace_id)
-        else:
-            logger.warning(
-                "Runner selection: no model profile found for model='%s' "
-                "profile_id='%s' in workspace '%s' or globally",
-                model_identifier,
-                model_profile_id,
-                workspace_id,
-            )
-
-    logger.info("Runner selection: falling back to HeuristicAgentRunner")
-    return _HeuristicAgentRunner(conn, workspace_id=workspace_id)
-
-
 def _run_engine_until_blocked(
     conn: Any,
     *,
@@ -2245,9 +2123,7 @@ def _run_engine_until_blocked(
     definition = _build_workflow_definition(workflow_row)
     workspace_id = str(workflow_row[10])
     workspace_root = _resolve_workspace_root(conn, workspace_id)
-    agent_runner = _select_agent_runner(
-        conn, definition=definition, workspace_id=workspace_id
-    )
+    _resolve_agent_models(conn, definition=definition, workspace_id=workspace_id)
     engine = WorkflowEngine(
         create_default_registry(),
         services={
@@ -2256,7 +2132,7 @@ def _run_engine_until_blocked(
                 workspace_id=workspace_id,
                 workspace_root=workspace_root,
             ),
-            "agent_runner": agent_runner,
+            "agent_runner": _LlmAgentRunner(conn, workspace_id=workspace_id),
             "exporter": _WorkflowExporter(
                 conn,
                 workspace_root=workspace_root,
