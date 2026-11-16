@@ -876,7 +876,7 @@ async def decide_artifact_proposal(
         expected_hash = payload.get("expected_hash") or payload.get("current_hash")
         with workspace_lock(workspace.path):
             current_hash = _hash_file(path)
-            if current_hash is not None and expected_hash != current_hash:
+            if expected_hash != current_hash:
                 payload["status"] = "conflicted"
                 payload["has_conflict"] = True
                 payload["decision_notes"] = body.notes
@@ -955,19 +955,19 @@ async def write_artifact(
     with workspace_lock(workspace.path):
         path.parent.mkdir(parents=True, exist_ok=True)
         current_hash = _hash_file(path)
-        if path.exists():
-            if body.expected_hash is None:
+        if body.expected_hash is None:
+            if current_hash is not None:
                 raise HTTPException(
                     status_code=409,
                     detail=(
                         "expected_hash is required when overwriting an existing file"
                     ),
                 )
-            if current_hash != body.expected_hash:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Artifact changed since it was read",
-                )
+        elif current_hash != body.expected_hash:
+            raise HTTPException(
+                status_code=409,
+                detail="Artifact changed since it was read",
+            )
 
         writer = AtomicWriter()
         result = writer.write_atomic(

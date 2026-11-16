@@ -581,6 +581,53 @@ def test_an_artifact_edit_during_a_rolled_back_config_write_conflicts(
     assert (resp.status_code, AGENT_EDIT in manifest) == (409, False)
 
 
+def _schema_edit(path: Path, workspace_id: str, *, expected_hash: str | None) -> dict:
+    return {
+        "kind": "task_schema",
+        "selector": path.stem,
+        "workspace_id": workspace_id,
+        "content": "task_slug: sentiment\n" + AGENT_EDIT,
+        "expected_hash": expected_hash,
+    }
+
+
+@pytest.mark.parametrize(
+    "apply", [_write, _propose_and_accept], ids=["write", "accepted proposal"]
+)
+def test_an_edit_to_a_file_a_rolled_back_create_removed_conflicts(
+    threaded, workspace, apply
+):
+    schema = workspace / "workbench" / "config" / "task-schemas" / "sentiment.yaml"
+
+    def edit_the_new_schema(client: TestClient):
+        seen = hashlib.sha256(schema.read_bytes()).hexdigest()
+        return apply(
+            client,
+            _schema_edit(schema, threaded.state.workspace_id, expected_hash=seen),
+        )
+
+    resp = _during_a_rolled_back_schema_create(threaded, edit_the_new_schema)
+
+    assert (resp.status_code, schema.exists()) == (409, False)
+
+
+@pytest.mark.parametrize(
+    "apply", [_write, _propose_and_accept], ids=["write", "accepted proposal"]
+)
+def test_an_edit_without_an_expected_hash_creates_a_new_file(
+    threaded, workspace, apply
+):
+    schema = workspace / "workbench" / "config" / "task-schemas" / "fresh.yaml"
+
+    resp = apply(
+        _client(threaded),
+        _schema_edit(schema, threaded.state.workspace_id, expected_hash=None),
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert AGENT_EDIT in schema.read_text(encoding="utf-8")
+
+
 def test_bootstrap_during_a_rolled_back_config_write_indexes_none_of_it(
     threaded, workspace
 ):
