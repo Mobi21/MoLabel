@@ -294,6 +294,32 @@ async def test_execute_workflow_requires_auth(client):
 
 
 @pytest.mark.asyncio
+async def test_execute_failed_step_reports_same_status_as_detail(client, app, tmp_path):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    workflow_id = _seed_workflow(app.state.engine, workspace_id)
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["current_step_id"] == "ingest"
+    assert "Data source not found" in body["error_summary"]
+
+    detail_resp = await client.get(
+        f"/api/v1/workflows/{workflow_id}/executions/{body['execution_id']}"
+    )
+    detail = detail_resp.json()
+    assert body["status"] == detail["status"] == "paused"
+    states = {item["step_id"]: item["status"] for item in detail["step_states"]}
+    assert states["ingest"] == "failed"
+
+
+@pytest.mark.asyncio
 async def test_execute_workflow_reaches_review_queue(client, app, tmp_path):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     token = _seed_reviewer(app.state.engine, workspace_id)

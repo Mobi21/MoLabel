@@ -2561,10 +2561,7 @@ async def execute_workflow(
 
     if exec_row is None:
         raise HTTPException(status_code=500, detail="Execution was not persisted")
-    execution = _execution_row_to_model(exec_row)
-    if execution.status == "paused" and execution.error_summary:
-        execution.status = "running"
-    return execution
+    return _execution_row_to_model(exec_row)
 
 
 @router.get(
