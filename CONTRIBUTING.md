@@ -68,7 +68,6 @@ Additional top-level apps:
 
 - **cli** (`cli/`) — public `molabel` CLI and bundled agent skills
 - **frontend** (`frontend/`) — work-in-progress control-room UI
-- **src-tauri** (`src-tauri/`) — work-in-progress desktop shell
 
 See [AGENTS.md](AGENTS.md) for module boundary rules and conventions.
 

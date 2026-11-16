@@ -892,7 +892,7 @@ def _queue_item_to_response(item: AdjQueueItem) -> AdjudicationQueueItemResponse
 # Store adjudication service instances keyed by workspace.
 # NOTE: This dict is per-process. In a multi-worker deployment (e.g.
 # gunicorn with N workers), each worker has its own adjudication state.
-# Acceptable for local-first / Tauri single-worker deployments. For
+# Acceptable for local-first single-worker deployments. For
 # multi-worker, move state to the database or use FastAPI DI with a
 # shared lifecycle scope.
 _adjudication_services: dict[str, AdjudicationService] = {}

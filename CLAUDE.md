@@ -17,23 +17,18 @@ npm run dev                # start frontend dev server
 npm run test               # run frontend tests
 npm run build              # production build
 
-# Desktop App
-cargo tauri dev            # run Tauri desktop app in dev mode
-cargo tauri build          # build distributable desktop app
-
 # Full Stack Dev
 uv run molabel-dev         # starts FastAPI + frontend dev server together
 ```
 
 ## Package Structure
 
-This is a uv workspace monorepo. Python packages live under `packages/`, with a work-in-progress frontend and desktop shell alongside.
+This is a uv workspace monorepo. Python packages live under `packages/`, with the CLI and a work-in-progress frontend alongside.
 
 - `packages/molabel-core/` — core library (Python)
 - `packages/molabel-app/` — FastAPI backend (Python)
 - `packages/molabel-plugins/` — built-in plugins (Python)
 - `frontend/` — work-in-progress React UI (TypeScript)
-- `src-tauri/` — work-in-progress Tauri desktop shell (Rust)
 
 ## Key References
 

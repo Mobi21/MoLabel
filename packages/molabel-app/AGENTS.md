@@ -6,7 +6,7 @@ FastAPI backend API for MoLabel. Owns REST endpoints under `/api/v1/`, Pydantic
 response models, middleware, and server lifecycle. The frontend is a separate
 React application that consumes this API via OpenAPI-generated clients.
 
-See ADR-001 for the decision to adopt React + Tauri over the original
+See ADR-001 for the decision to adopt React over the original
 HTMX/Jinja2 approach.
 
 ## Stack

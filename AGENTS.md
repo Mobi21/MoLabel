@@ -13,7 +13,7 @@ The intended operating model is:
 
 ## Repository Layout
 
-This is a uv workspace monorepo with three Python packages, a React frontend, and a Tauri desktop shell:
+This is a uv workspace monorepo with three Python packages, a TypeScript CLI, and a React frontend:
 
 | Package | Path | Namespace | Purpose |
 |---|---|---|---|
@@ -21,7 +21,6 @@ This is a uv workspace monorepo with three Python packages, a React frontend, an
 | molabel-app | `packages/molabel-app/` | `molabel.app` | FastAPI web application: REST API, backend logic |
 | molabel-plugins | `packages/molabel-plugins/` | `molabel.plugins` | Built-in task type plugins (text labeling, chat review, etc.) |
 | frontend | `frontend/` | N/A (standalone) | Work-in-progress React control-room UI; not yet ready for general use |
-| tauri-shell | `src-tauri/` | N/A (Rust) | Work-in-progress Tauri desktop shell: window management, sidecar, system tray |
 
 ## Module Boundary Rules
 
@@ -32,7 +31,6 @@ These boundaries are load-bearing. Do not violate them.
 - `molabel-plugins` depends on `molabel-core` only
 - Cross-package imports must go through public APIs, not internal modules
 - `frontend/` communicates with `molabel-app` ONLY via the REST API (no direct Python imports)
-- `src-tauri/` manages the Python sidecar process and webview, does not contain business logic
 - API contracts are defined by FastAPI endpoints with Pydantic models; the TypeScript client is auto-generated from the OpenAPI spec
 - Plugin custom UI components (React) must be self-contained and only use the documented plugin SDK props
 
@@ -45,7 +43,6 @@ The `molabel` namespace is shared across `molabel-core`, `molabel-app`, and `mol
 - Python 3.12+
 - FastAPI (backend API)
 - React 19 + TypeScript (frontend)
-- Tauri v2 (desktop app shell)
 - React Flow (workflow builder)
 - shadcn/ui + Tailwind CSS (UI components)
 - TanStack Table (data explorer)

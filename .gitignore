@@ -48,10 +48,6 @@ reports/
 /skills/
 /docs/superpowers/
 
-# Rust/Tauri
-target/
-src-tauri/target/
-
 # Frontend
 frontend/node_modules/
 frontend/dist/

@@ -8,9 +8,9 @@ Related: data-model.md, PRD Section 18
 
 MoLabel uses SQLite as its operational database and SQLModel as its ORM. Schema migrations are managed by Alembic, the standard migration tool for SQLAlchemy-based projects (SQLModel is built on SQLAlchemy).
 
-## Why Migrations Matter for a Desktop App
+## Why Migrations Matter for a Local App
 
-Unlike server-deployed applications where operators control upgrades, MoLabel is a desktop application where users update independently. This means:
+Unlike server-deployed applications where operators control upgrades, MoLabel is a local application that users update independently. This means:
 - Users may skip versions (update from v0.1 to v0.5)
 - Migrations must be forward-only (no interactive downgrade support needed)
 - Migrations must be safe to run on user data (no data loss)
@@ -45,7 +45,7 @@ Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 5. Commit the migration file alongside the model changes
 
 ### User Experience
-1. User updates MoLabel (Tauri auto-update or manual)
+1. User updates MoLabel
 2. On next app launch, startup detects schema version mismatch
 3. App shows "Updating database..." progress indicator
 4. Alembic runs all pending migrations in order

@@ -82,13 +82,7 @@ This repo contains the React application, but it is not ready as a public or
 primary operating surface yet. Treat it as a work-in-progress control-room UI,
 not as a completed production shell.
 
-### 2.4 Desktop Shell
-
-`src-tauri/` packages the system into a desktop application. It is responsible
-for windowing, local app behavior, and managing the backend sidecar. Business
-logic stays out of Tauri.
-
-### 2.5 Assistant Surface Status
+### 2.4 Assistant Surface Status
 
 The in-app assistant API routes and frontend panel have been removed. The
 current direction is:
@@ -111,8 +105,6 @@ The repo is a `uv` workspace monorepo with strict package boundaries.
   TypeScript CLI and bundled skill surface.
 - `frontend`
   React application.
-- `src-tauri`
-  Desktop shell.
 
 These boundaries matter. Core must not import app or plugins.
 Frontend only talks to backend through the API.
