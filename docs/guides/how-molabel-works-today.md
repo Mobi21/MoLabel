@@ -153,8 +153,8 @@ two disagree:
   left as it is and the request registers it. That is what
   `molabel task-schema create --file workbench/config/task-schemas/x.yaml` does.
 - Servers that share a workspace take turns. Each write holds an OS-level lock
-  on `.workbench.project.yaml.lock` beside the manifest, which is removed when
-  the write finishes.
+  on a file under `<server data dir>/locks/`, named by a hash of the workspace
+  root, so the workspace itself holds only canonical files.
 - An edit made to a file outside the API, by hand or with `molabel artifact
   write`, reaches the database at the next `molabel workspace bootstrap`. Bootstrap
   re-reads every file the manifest lists and rewrites its row. A listed file it
