@@ -44,6 +44,28 @@ async function runWorkflowAgainst(executeReply: MockReply) {
 }
 
 describe('workflow run exit codes', () => {
+  it('names the offline switch when the agent step has no API key', async () => {
+    const hint =
+      'ANTHROPIC_API_KEY is not set. To label without an API key, recreate the workflow with `molabel workflow create --template <template-id> --provider offline`'
+    const result = await runWorkflowAgainst({
+      status: 202,
+      body: execution({
+        current_step_id: 'agent_label',
+        error_summary: `Agent run failed: ${hint}; record r1: ProviderError: Anthropic API error: 401`,
+      }),
+    })
+
+    expect(result.exitCode).toBe(1)
+    expect(readErrorCode(result)).toBe('WORKFLOW_RUN_FAILED')
+    expect(parseStdoutJson(result)).toMatchObject({
+      error: {
+        message: expect.stringContaining(
+          `Workflow step 'agent_label' failed: Agent run failed: ${hint}`,
+        ) as unknown,
+      },
+    })
+  })
+
   it('exits 0 and prints the execution when the run reaches review', async () => {
     const result = await runWorkflowAgainst({
       status: 202,

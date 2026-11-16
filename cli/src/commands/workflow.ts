@@ -1,6 +1,6 @@
 import { extname, resolve } from 'node:path'
 
-import type { Command } from 'commander'
+import { Option, type Command } from 'commander'
 import { parse as parseYaml } from 'yaml'
 
 import { readInputText } from '../artifacts/input.js'
@@ -118,6 +118,15 @@ function registerWorkflowCreateCommand(
       '--task-schema <id>',
       'Task schema ID or slug the template labels with (default: the workspace has one)',
     )
+    .addOption(
+      new Option(
+        '--provider <name>',
+        "Label the template's agent steps with this provider; offline needs no API key",
+      )
+        .choices(['offline'])
+        .conflicts('model'),
+    )
+    .option('--model <id>', "Model ID that replaces the template's agent model")
     .option('--workspace-id <id>', 'Workspace ID override')
     .option('--name <name>')
     .option('--slug <slug>')
@@ -129,6 +138,8 @@ function registerWorkflowCreateCommand(
         template?: string
         dataset?: string
         taskSchema?: string
+        provider?: string
+        model?: string
         workspaceId?: string
         name?: string
         slug?: string
@@ -172,6 +183,8 @@ async function runWorkflowCreate(
     template?: string
     dataset?: string
     taskSchema?: string
+    provider?: string
+    model?: string
     workspaceId?: string
     name?: string
     slug?: string
@@ -186,12 +199,15 @@ async function runWorkflowCreate(
     )
   }
   if (
-    (commandOptions.dataset || commandOptions.taskSchema) &&
+    (commandOptions.dataset ||
+      commandOptions.taskSchema ||
+      commandOptions.provider ||
+      commandOptions.model) &&
     !commandOptions.template
   ) {
     throw new CliFailure(
       'USAGE_ERROR',
-      '--dataset and --task-schema bind a --template; they do nothing without one',
+      '--dataset, --task-schema, --provider and --model bind a --template; they do nothing without one',
     )
   }
 
@@ -209,6 +225,8 @@ async function runWorkflowCreate(
             workspaceId,
             datasetId: commandOptions.dataset,
             taskSchemaId: commandOptions.taskSchema,
+            provider: commandOptions.provider,
+            model: commandOptions.model,
           },
           compactWorkflowOverrides({
             name: commandOptions.name,
@@ -398,6 +416,8 @@ async function readWorkflowTemplateDefinition(
     workspaceId: string
     datasetId: string | undefined
     taskSchemaId: string | undefined
+    provider: string | undefined
+    model: string | undefined
   },
   overrides: {
     name?: string
@@ -412,6 +432,12 @@ async function readWorkflowTemplateDefinition(
   }
   if (bindings.taskSchemaId) {
     query.set('task_schema_id', bindings.taskSchemaId)
+  }
+  if (bindings.provider) {
+    query.set('provider', bindings.provider)
+  }
+  if (bindings.model) {
+    query.set('model', bindings.model)
   }
   const template = await client.getJson<{ yaml?: unknown }>(
     `/api/v1/cli/workflow-templates/${templateId}?${query.toString()}`,
