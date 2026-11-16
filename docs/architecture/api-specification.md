@@ -86,7 +86,10 @@ Additional domain-specific codes:
 The server reads and writes files only inside a registered workspace root.
 This covers every path that comes from a request or from stored config:
 `workspace_root`, artifact selectors, import `source_uri`, workflow data
-sources and export destinations. A path is first refused if it contains a
+sources and export destinations. It also covers every path the server builds
+under a root: the manifest, artifact proposal files, release proof manifests,
+and the benchmark runs that release gates and run facts read. Each file a
+glob finds there is checked too. A path is first refused if it contains a
 `..` segment. It is then resolved, symlinks included, and refused unless it is
 a registered root or inside one. Artifact routes need `workspace_root` or
 `workspace_id`; there is no fallback to the server's working directory.
