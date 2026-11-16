@@ -11,6 +11,7 @@ root and so only requires an absolute path without ``..``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path, PurePosixPath
 
 from fastapi import Request
@@ -99,12 +100,34 @@ class WorkspaceMatch:
 
 
 def glob_in_workspace(root: Path, base: Path, pattern: str) -> list[WorkspaceMatch]:
-    """Matches of *pattern* under *base*, refusing any that resolve outside *root*."""
+    """Entries under *base* whose name matches ``**/<name>`` *pattern*.
+
+    Linked folders are followed on every platform (``Path.glob`` follows
+    Windows junctions but not POSIX symlinks), each folder is visited once so
+    a link cycle ends, and any match resolving outside *root* is refused.
+    """
+    prefix = "**/"
+    if not pattern.startswith(prefix) or "/" in pattern[len(prefix) :]:
+        raise ValueError(f"Unsupported workspace glob pattern: {pattern!r}")
+    name_pattern = pattern[len(prefix) :]
     if not base.is_dir():
         return []
+    hits: list[Path] = []
+    visited: set[Path] = set()
+    for dirpath, dirnames, filenames in base.walk(follow_symlinks=True):
+        real = dirpath.resolve()
+        if real in visited:
+            dirnames.clear()
+            continue
+        visited.add(real)
+        hits.extend(
+            dirpath / name
+            for name in (*dirnames, *filenames)
+            if fnmatch(name, name_pattern)
+        )
     return [
         WorkspaceMatch(hit, resolve_in_workspace(root, str(hit)))
-        for hit in sorted(base.glob(pattern))
+        for hit in sorted(hits)
     ]
 
 
