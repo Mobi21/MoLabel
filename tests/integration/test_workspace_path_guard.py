@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.pool import StaticPool
 from sqlmodel import create_engine
 
+from molabel.app import workspace_paths
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
 from molabel.core.migration_runner import upgrade_database
@@ -442,6 +443,46 @@ async def test_release_gate_reads_no_benchmark_summary_through_a_link(
     resp = await _create_release(client, app, benchmark_run_ids=["run-1"])
 
     assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+
+
+@pytest.mark.asyncio
+async def test_release_gate_reads_the_summary_it_checked_when_a_link_is_swapped(
+    client, app, layout, monkeypatch
+):
+    def summary_in(folder: Path, benchmark_id: str) -> Path:
+        folder.mkdir(parents=True)
+        (folder / "summary.json").write_text(
+            json.dumps({"run_id": "run-1", "benchmark_id": benchmark_id}),
+            encoding="utf-8",
+        )
+        return folder
+
+    inside = summary_in(layout["workspace"] / "data" / "run-1", "inside")
+    outside = summary_in(layout["outside"] / "run-1", "outside")
+    link = layout["workspace"] / "workbench" / "benchmarks" / "runs" / "linked"
+    _link_folder(link, inside)
+
+    check = workspace_paths.resolve_in_workspace
+
+    def swap_the_link_after_its_check(root: Path, raw: str) -> Path:
+        resolved = check(root, raw)
+        if Path(raw) == link / "summary.json":
+            os.rmdir(link) if link.is_junction() else link.unlink()
+            _link_folder(link, outside)
+        return resolved
+
+    monkeypatch.setattr(
+        workspace_paths, "resolve_in_workspace", swap_the_link_after_its_check
+    )
+
+    resp = await _create_release(client, app, benchmark_run_ids=["run-1"])
+
+    assert resp.status_code == 201, resp.text
+    [gate] = resp.json()["validation_report"]["gates"]
+    assert (gate["details"]["benchmark_id"], gate["details"]["summary_path"]) == (
+        "inside",
+        str(link / "summary.json"),
+    )
 
 
 def _completed_execution(app) -> str:

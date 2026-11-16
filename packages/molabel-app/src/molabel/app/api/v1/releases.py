@@ -169,15 +169,15 @@ def _metric_value(summary: dict[str, Any], metric_id: str) -> float | None:
 def _benchmark_summary_candidates(root: Path) -> list[tuple[str, Path, dict[str, Any]]]:
     runs_root = resolve_in_workspace(root, "workbench/benchmarks/runs")
     candidates: list[tuple[str, Path, dict[str, Any]]] = []
-    for summary_path in glob_in_workspace(root, runs_root, "**/summary.json"):
+    for match in glob_in_workspace(root, runs_root, "**/summary.json"):
         try:
-            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary = json.loads(match.resolved.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
         if not isinstance(summary, dict):
             continue
-        run_id = str(summary.get("run_id") or summary_path.parent.name)
-        candidates.append((run_id, summary_path, summary))
+        run_id = str(summary.get("run_id") or match.path.parent.name)
+        candidates.append((run_id, match.path, summary))
     return candidates
 
 

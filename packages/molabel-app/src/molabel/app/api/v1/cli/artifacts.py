@@ -311,11 +311,9 @@ def _release_links_for_proposal(
 ) -> list[dict[str, Any]]:
     releases_root = resolve_in_workspace(root, "workbench/releases")
     links: list[dict[str, Any]] = []
-    for manifest_path in glob_in_workspace(
-        root, releases_root, "**/proof-manifest.json"
-    ):
+    for match in glob_in_workspace(root, releases_root, "**/proof-manifest.json"):
         try:
-            manifest_text = manifest_path.read_text(encoding="utf-8")
+            manifest_text = match.resolved.read_text(encoding="utf-8")
             manifest = json.loads(manifest_text)
         except (OSError, json.JSONDecodeError):
             continue
@@ -328,7 +326,7 @@ def _release_links_for_proposal(
                 "release_id": manifest.get("release_id"),
                 "version": manifest.get("version"),
                 "status": manifest.get("status"),
-                "manifest_path": str(manifest_path),
+                "manifest_path": str(match.path),
             }
         )
     return links

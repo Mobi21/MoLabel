@@ -588,9 +588,9 @@ async def get_benchmark_run_facts(
             root, "workbench/benchmarks/runs/live-operator"
         )
         artifact_files = [
-            str(path.relative_to(artifact_dir))
-            for path in glob_in_workspace(root, artifact_dir, "**/*")
-            if path.is_file()
+            str(match.path.relative_to(artifact_dir))
+            for match in glob_in_workspace(root, artifact_dir, "**/*")
+            if match.resolved.is_file()
         ]
         summary_candidate = artifact_dir / "summary.json"
         report_candidate = artifact_dir / "report.md"

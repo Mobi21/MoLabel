@@ -85,18 +85,27 @@ def resolve_in_workspace(root: Path, raw: str) -> Path:
     return resolved
 
 
-def glob_in_workspace(root: Path, base: Path, pattern: str) -> list[Path]:
-    """Matches of *pattern* under *base*, refusing any that resolve outside *root*.
+@dataclass(frozen=True)
+class WorkspaceMatch:
+    """A glob match at *path* under its base, and the *resolved* file it reached.
 
-    Each match keeps the path it was found at under *base*, so a caller can
-    take it relative to *base* even when a link inside *root* leads to it.
+    Show and relativize *path*, which may pass through a link inside the
+    workspace. Open *resolved*, the target the containment check approved,
+    so a link swapped after the check cannot redirect the read.
     """
+
+    path: Path
+    resolved: Path
+
+
+def glob_in_workspace(root: Path, base: Path, pattern: str) -> list[WorkspaceMatch]:
+    """Matches of *pattern* under *base*, refusing any that resolve outside *root*."""
     if not base.is_dir():
         return []
-    hits = sorted(base.glob(pattern))
-    for hit in hits:
-        resolve_in_workspace(root, str(hit))
-    return hits
+    return [
+        WorkspaceMatch(hit, resolve_in_workspace(root, str(hit)))
+        for hit in sorted(base.glob(pattern))
+    ]
 
 
 def registered_root(conn, workspace_id: str) -> Path | None:
