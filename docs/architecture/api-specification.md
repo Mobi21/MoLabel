@@ -485,7 +485,7 @@ class ReviewEventSummary(BaseModel):
     reviewer_name: str
     task_schema_id: str
     task_schema_version: int
-    decision: str                # "accept" | "accept_ai" | "edit_ai" | "reject_ai" | "correct" | "reject" | "skip"
+    decision: str                # "accept" | "edit" | "reject"
     labels: dict[str, Any]
     rationale: str | None
     ai_was_revealed: bool
@@ -1855,7 +1855,7 @@ class ReviewEventCreate(BaseModel):
     review_task_id: str
     record_id: str
     task_schema_id: str
-    decision: str                            # "accept" | "accept_ai" | "edit_ai" | "reject_ai" | "correct" | "reject" | "skip" (ReviewDecision enum)
+    decision: str                            # "accept" | "edit" | "reject" (ReviewDecision enum)
     labels: dict[str, Any]                   # field_name -> value
     rationale: str | None = None
     ai_was_revealed: bool = False            # whether the reviewer saw the AI suggestion before deciding
@@ -1873,7 +1873,7 @@ class ReviewEvent(BaseModel):
     dataset_id: str
     task_schema_id: str
     task_schema_version: int
-    decision: str                            # "accept" | "accept_ai" | "edit_ai" | "reject_ai" | "correct" | "reject" | "skip"
+    decision: str                            # "accept" | "edit" | "reject"
     labels: dict[str, Any]
     rationale: str | None
     ai_was_revealed: bool
@@ -2003,7 +2003,7 @@ class ReviewerLabelSet(BaseModel):
     reviewer_id: str
     reviewer_name: str
     review_event_id: str
-    decision: str                # "accept" | "accept_ai" | "edit_ai" | "reject_ai" | "correct" | "reject" | "skip"
+    decision: str                # "accept" | "edit" | "reject"
     labels: dict[str, Any]
     rationale: str | None
     ai_was_revealed: bool

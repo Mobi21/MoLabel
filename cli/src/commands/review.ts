@@ -20,7 +20,7 @@ export function registerReviewCommands(
     .description('Submit a review for a claimed task')
     .option('--labels-json <json>')
     .option('--labels-file <path>')
-    .option('--decision <decision>')
+    .option('--decision <decision>', 'accept, edit, or reject')
     .option('--rationale <text>')
     .option('--no-auto-claim-next')
     .action(async function (this: Command, taskId: string) {
@@ -86,7 +86,7 @@ export function registerReviewCommands(
     .description('Submit a correction for a previously reviewed task')
     .option('--labels-json <json>')
     .option('--labels-file <path>')
-    .option('--decision <decision>')
+    .option('--decision <decision>', 'accept, edit, or reject')
     .option('--rationale <text>')
     .action(async function (this: Command, taskId: string) {
       const options = this.opts<{

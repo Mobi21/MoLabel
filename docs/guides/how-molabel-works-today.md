@@ -214,14 +214,17 @@ Review happens through queues. A reviewer typically:
 3. optionally reveals the AI proposal,
 4. submits a final decision.
 
-Decision types in the current model include:
+The decision is one of:
 
-- `accept` or `accept_ai`
-- `edit_ai`
-- `reject_ai`
-- `correct`
-- `reject`
-- `skip`
+- `accept`: keep the proposed labels. With no labels in the request, the
+  agent's proposal is stored.
+- `edit`: submit changed labels.
+- `reject`: reject the proposal.
+
+Whether the AI suggestion was shown is stored separately as `ai_revealed`.
+The older names `accept_ai`, `edit_ai`, `reject_ai`, and `correct` are still
+accepted for one release. The API maps them to the names above and returns a
+`deprecations` note. Skipping is its own action, `molabel review skip`.
 
 The append-only review event stream is important. The benchmark framework uses
 final persisted review decisions rather than trusting free-form operator text.

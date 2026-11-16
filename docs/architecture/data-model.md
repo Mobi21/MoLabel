@@ -158,12 +158,8 @@ class AgentEventType(str, Enum):
 
 class ReviewDecision(str, Enum):
     accept = "accept"
-    accept_ai = "accept_ai"
-    edit_ai = "edit_ai"
-    reject_ai = "reject_ai"
-    correct = "correct"
+    edit = "edit"
     reject = "reject"
-    skip = "skip"
 
 class ValidationStatus(str, Enum):
     pending = "pending"
@@ -594,7 +590,7 @@ reviewer_profile (global, not workspace-scoped)
 | source_system | str | no | For imports: originating system (label-studio, argilla, etc.) |
 | source_file | str | no | For imports: source file path |
 | trust_level | TrustLevel | no | For imports: ground_truth, expert, external, untrusted |
-| decision | ReviewDecision | no | Human decision: accept, accept_ai, edit_ai, reject_ai, correct, reject, skip |
+| decision | ReviewDecision | no | Human decision: accept, edit, reject. Rows written before the rename may hold accept_ai, edit_ai, reject_ai, correct, or skip |
 | labels | JSON | yes | Structured label values keyed by field name |
 | previous_labels | JSON | no | For corrections: the labels being corrected |
 | rationale | str | no | Reviewer's explanation or notes |
