@@ -72,10 +72,11 @@ function toErrorBody(error: unknown): ErrorBody {
     }
   }
   if (error instanceof ApiError) {
+    const body = parseJsonOrNull(error.bodyText)
     return {
       code: `HTTP_${String(error.status)}`,
-      message: error.message,
-      details: error.bodyText,
+      message: readBackendMessage(body) ?? error.message,
+      details: body ?? error.bodyText,
     }
   }
   if (error instanceof CliFailure) {
@@ -87,4 +88,26 @@ function toErrorBody(error: unknown): ErrorBody {
     code: 'CLI_ERROR',
     message: error instanceof Error ? error.message : String(error),
   }
+}
+
+function parseJsonOrNull(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return null
+  }
+}
+
+function readBackendMessage(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') {
+    return undefined
+  }
+  const { error, detail } = body as { error?: unknown; detail?: unknown }
+  if (error && typeof error === 'object') {
+    const { message } = error as { message?: unknown }
+    if (typeof message === 'string') {
+      return message
+    }
+  }
+  return typeof detail === 'string' ? detail : undefined
 }

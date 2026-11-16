@@ -48,6 +48,47 @@ describe('JSON contract', () => {
     },
   )
 
+  it('carries the backend error message and body in an HTTP error', async () => {
+    const backendError = {
+      error: { code: 'BAD_REQUEST', message: 'The workspace has 2 datasets' },
+    }
+    const api = await startMockApi({
+      'GET /api/v1/queues': () => ({ status: 400, body: backendError }),
+    })
+    try {
+      const result = await runCliCapture([
+        '--base-url',
+        api.url,
+        'queue',
+        'list',
+      ])
+
+      expect(result.exitCode).toBe(1)
+      expect(parseStdoutJson(result)).toEqual({
+        error: {
+          code: 'HTTP_400',
+          message: 'The workspace has 2 datasets',
+          details: backendError,
+        },
+      })
+    } finally {
+      await api.close()
+    }
+  })
+
+  it('reports an unreachable backend as BACKEND_UNREACHABLE', async () => {
+    const api = await startMockApi({})
+    await api.close()
+
+    const result = await runCliCapture(['--base-url', api.url, 'queue', 'list'])
+
+    expect(result.exitCode).toBe(1)
+    expect(readErrorCode(result)).toBe('BACKEND_UNREACHABLE')
+    expect(parseStdoutJson(result)).toMatchObject({
+      error: { message: expect.stringContaining(api.url) as unknown },
+    })
+  })
+
   it('gives no command an option that a global option would swallow', () => {
     const globalFlags = new Set(PROGRAM.options.map((option) => option.long))
     const shadowed = LEAVES.flatMap(({ name, command }) =>
