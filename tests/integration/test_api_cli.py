@@ -283,6 +283,41 @@ async def test_template_binding_rejects_an_ambiguous_dataset(client, app, tmp_pa
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("table", "slug_column", "param"),
+    [
+        ("datasets", "dataset_slug", "dataset_id"),
+        ("task_schemas", "task_schema_slug", "task_schema_id"),
+    ],
+)
+async def test_template_binding_rejects_a_shared_slug(
+    client, app, tmp_path, table, slug_column, param
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    dataset_ids, schema_ids = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=2, task_schemas=2
+    )
+    with app.state.engine.connect() as conn:
+        conn.execute(text(f"UPDATE {table} SET {slug_column} = 'shared'"))
+        conn.commit()
+    params = {
+        "workspace_id": str(workspace_id),
+        "dataset_id": dataset_ids[0],
+        "task_schema_id": schema_ids[0],
+        param: "shared",
+    }
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop", params=params
+    )
+
+    assert resp.status_code == 400, resp.text
+    message = resp.json()["error"]["message"]
+    expected_ids = dataset_ids if table == "datasets" else schema_ids
+    assert all(candidate in message for candidate in expected_ids)
+
+
+@pytest.mark.asyncio
 async def test_template_binding_rejects_a_workspace_with_no_dataset(
     client, app, tmp_path
 ):

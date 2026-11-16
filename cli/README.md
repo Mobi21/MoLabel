@@ -32,8 +32,9 @@ The intended operating model is:
 ## Output Contract
 
 Every command prints exactly one JSON document to stdout and exits 0 or 1.
-Help text and commander's usage hints go to stderr. Branch on the exit code,
-then read `error.code`.
+The exceptions are `--help` and `--version`, which print plain text to stdout
+and exit 0. Commander's usage hints on a usage error go to stderr. Branch on
+the exit code, then read `error.code`.
 
 On exit 0, stdout is the command's result. Its shape belongs to the command,
 and is usually the backend's response.

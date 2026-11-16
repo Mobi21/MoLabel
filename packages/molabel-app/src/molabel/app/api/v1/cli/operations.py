@@ -219,11 +219,23 @@ def _pick_template_input(
 ) -> str | None:
     """Resolve a template input from (id, slug, name) candidates."""
     if selector is not None:
-        for candidate_id, slug, _name in candidates:
-            if selector in (candidate_id, slug):
+        for candidate_id, _slug, _name in candidates:
+            if selector == candidate_id:
                 return candidate_id
+        slug_matches = [c for c in candidates if c[1] == selector]
+        if len(slug_matches) == 1:
+            return slug_matches[0][0]
+        if not slug_matches:
+            raise HTTPException(
+                status_code=404, detail=f"No {label} '{selector}' in this workspace"
+            )
+        listed = ", ".join(f"{cid} ({name})" for cid, _slug, name in slug_matches)
         raise HTTPException(
-            status_code=404, detail=f"No {label} '{selector}' in this workspace"
+            status_code=400,
+            detail=(
+                f"{len(slug_matches)} {label}s share the slug '{selector}'. "
+                f"Pass {option} with one of these IDs: {listed}"
+            ),
         )
     if not required:
         return None
