@@ -2,6 +2,7 @@ import { Command, CommanderError } from 'commander'
 
 import { ApiError } from './client/http.js'
 import { registerCommands } from './commands/index.js'
+import { CliFailure } from './errors.js'
 import type { CliRuntimeOptions } from './types.js'
 
 export interface ProgramRunResult {
@@ -43,50 +44,47 @@ export async function runCli(
     const exitCode = typeof process.exitCode === 'number' ? process.exitCode : 0
     return { exitCode }
   } catch (error) {
+    if (error instanceof CommanderError && error.exitCode === 0) {
+      return { exitCode: 0 }
+    }
     const { emit } = await import('./output.js')
-    if (error instanceof CommanderError) {
-      if (error.exitCode === 0) {
-        return { exitCode: 0 }
-      }
-      await emit(
-        {
-          error: {
-            code: 'USAGE_ERROR',
-            message:
-              error.code === 'commander.help'
-                ? 'A subcommand is required. Run with --help to list them.'
-                : error.message,
-          },
-        },
-        'json',
-      )
-      return { exitCode: error.exitCode }
-    }
-    if (error instanceof ApiError) {
-      await emit(
-        {
-          error: {
-            code: `HTTP_${String(error.status)}`,
-            message: error.message,
-            details: error.bodyText,
-          },
-        },
-        'json',
-      )
-      return { exitCode: 1 }
-    }
-
-    await emit(
-      {
-        error: {
-          code: 'CLI_ERROR',
-          message: error instanceof Error ? error.message : String(error),
-        },
-      },
-      'json',
-    )
-    return { exitCode: 1 }
+    await emit({ error: toErrorBody(error) }, 'json')
+    return { exitCode: error instanceof CommanderError ? error.exitCode : 1 }
   } finally {
     process.exitCode = previousExitCode
+  }
+}
+
+interface ErrorBody {
+  code: string
+  message: string
+  details?: unknown
+}
+
+function toErrorBody(error: unknown): ErrorBody {
+  if (error instanceof CommanderError) {
+    return {
+      code: 'USAGE_ERROR',
+      message:
+        error.code === 'commander.help'
+          ? 'A subcommand is required. Run with --help to list them.'
+          : error.message,
+    }
+  }
+  if (error instanceof ApiError) {
+    return {
+      code: `HTTP_${String(error.status)}`,
+      message: error.message,
+      details: error.bodyText,
+    }
+  }
+  if (error instanceof CliFailure) {
+    return error.details === undefined
+      ? { code: error.code, message: error.message }
+      : { code: error.code, message: error.message, details: error.details }
+  }
+  return {
+    code: 'CLI_ERROR',
+    message: error instanceof Error ? error.message : String(error),
   }
 }

@@ -4,6 +4,7 @@ import type { Command } from 'commander'
 import { parse as parseYaml } from 'yaml'
 
 import { readInputText } from '../artifacts/input.js'
+import { CliFailure } from '../errors.js'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
@@ -215,11 +216,26 @@ async function runWorkflowRun(
 ): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const execution = await client.postJson(
+  const execution = await client.postJson<Record<string, unknown>>(
     `/api/v1/workflows/${workflow.workflow_id}/execute`,
     {},
   )
+  assertExecutionDidNotFail(execution)
   await emit(execution, outputMode(options))
+}
+
+function assertExecutionDidNotFail(execution: Record<string, unknown>): void {
+  const status = readString(execution.status)
+  const errorSummary = readString(execution.error_summary)
+  if (!errorSummary && status !== 'failed') {
+    return
+  }
+  const stepId = readString(execution.current_step_id) ?? 'unknown'
+  throw new CliFailure(
+    'WORKFLOW_RUN_FAILED',
+    `Workflow step '${stepId}' failed: ${errorSummary ?? `status ${String(status)}`}`,
+    execution,
+  )
 }
 
 async function runWorkflowExecutions(
@@ -255,10 +271,11 @@ async function runWorkflowAdvance(
 ): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const execution = await client.postJson(
+  const execution = await client.postJson<Record<string, unknown>>(
     `/api/v1/workflows/${workflow.workflow_id}/executions/${executionId}/steps/${stepId}/advance`,
     {},
   )
+  assertExecutionDidNotFail(execution)
   await emit(execution, outputMode(options))
 }
 
