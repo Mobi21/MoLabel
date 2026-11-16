@@ -576,14 +576,18 @@ class TestProviderDetection:
         assert openai_providers[0].auth_ref == "OPENAI_API_KEY"
         assert openai_providers[0].health.is_healthy is True
 
-    def test_detect_no_providers(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_detect_only_offline_without_keys(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
         detector = ProviderDetector()
         providers = detector._detect_env_only()
-        assert len(providers) == 0
+        assert [p.provider_type for p in providers] == ["offline"]
+        assert providers[0].health.is_healthy is True
+        assert providers[0].suggested_models == ["offline-heuristic"]
 
     def test_detect_multiple_providers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")

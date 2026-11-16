@@ -15,8 +15,14 @@ from tests.e2e.infrastructure.parallel import SHARED_WORKSPACE
 
 BASE = "/api/v1"
 
-# All 5 provider types from ProviderType enum
-PROVIDER_TYPES = ["openai_compatible", "openrouter", "ollama", "anthropic", "custom"]
+PROVIDER_TYPES = [
+    "openai_compatible",
+    "openrouter",
+    "ollama",
+    "anthropic",
+    "custom",
+    "offline",
+]
 
 
 @SHARED_WORKSPACE

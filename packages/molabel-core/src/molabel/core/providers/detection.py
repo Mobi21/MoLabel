@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pydantic import BaseModel
 
 from molabel.core.providers.base import resolve_api_key
+from molabel.core.providers.offline_adapter import OFFLINE_MODEL_ID, OfflineAdapter
 from molabel.core.types import HealthStatus, ProviderType
 
 logger = logging.getLogger(__name__)
@@ -30,10 +31,21 @@ class DiscoveredProvider(BaseModel):
     detected_at: datetime | None = None
 
 
+def _offline_provider() -> DiscoveredProvider:
+    return DiscoveredProvider(
+        provider_type=ProviderType.offline,
+        name="Offline heuristic (no LLM)",
+        health=OfflineAdapter().check_health(),
+        suggested_models=[OFFLINE_MODEL_ID],
+        detected_at=datetime.now(UTC),
+    )
+
+
 class ProviderDetector:
     """Scans the environment for available model providers.
 
     Checks:
+    - the offline provider, which is always available
     - Ollama at localhost:11434
     - OPENAI_API_KEY environment variable
     - ANTHROPIC_API_KEY environment variable
@@ -65,7 +77,7 @@ class ProviderDetector:
 
     async def detect_all(self) -> list[DiscoveredProvider]:
         """Scan for all available providers and return discovered list."""
-        discovered: list[DiscoveredProvider] = []
+        discovered = [_offline_provider()]
 
         # Check Ollama (local)
         ollama_result = await self._check_ollama()
@@ -94,7 +106,7 @@ class ProviderDetector:
 
     def _detect_env_only(self) -> list[DiscoveredProvider]:
         """Detect providers from environment variables only (no network)."""
-        discovered: list[DiscoveredProvider] = []
+        discovered = [_offline_provider()]
         for env_var, ptype, name, models in self._ENV_PROVIDERS:
             result = self._check_env_provider(env_var, ptype, name, models)
             if result:
@@ -172,6 +184,9 @@ class ProviderDetector:
         Returns:
             HealthStatus indicating online/offline/error status.
         """
+        if provider_type == ProviderType.offline:
+            return OfflineAdapter().check_health()
+
         if provider_type == ProviderType.ollama:
             from molabel.core.providers.base import check_endpoint_health
 

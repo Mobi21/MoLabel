@@ -1,7 +1,7 @@
 """Provider health test (T5-08).
 
-All 5 provider types return HealthStatus:
-openai_compatible, openrouter, ollama, anthropic, custom.
+All 6 provider types return HealthStatus:
+openai_compatible, openrouter, ollama, anthropic, custom, offline.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ ALL_PROVIDER_TYPES = [
     ProviderType.ollama,
     ProviderType.anthropic,
     ProviderType.custom,
+    ProviderType.offline,
 ]
 
 
@@ -31,7 +32,7 @@ async def test_all_provider_types_return_health_status(
     ctx: TestContext,
     client: InstrumentedClient,
 ) -> None:
-    """T5-08: All 5 provider types return HealthStatus via the health endpoint.
+    """T5-08: All 6 provider types return HealthStatus via the health endpoint.
 
     Tests that the API responds with a well-formed HealthStatus for each
     provider type. In test mode (no real credentials), providers will return
@@ -45,6 +46,7 @@ async def test_all_provider_types_return_health_status(
             "ollama",
             "anthropic",
             "custom",
+            "offline",
         }
         actual_types = {pt.value for pt in ProviderType}
         assert expected_types == actual_types, (
