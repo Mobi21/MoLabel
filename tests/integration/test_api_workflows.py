@@ -1041,6 +1041,74 @@ async def test_a_pinned_profile_id_that_cannot_run_is_never_sent_as_a_model(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("agent_step_type", "pin_key"), PINNING_STEPS)
+async def test_an_offline_step_that_pins_a_hosted_profile_fails(
+    client, app, tmp_path, hosted_calls, usable_providers, agent_step_type, pin_key
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    profile_id = _seed_model_profile(
+        app.state.engine,
+        workspace_id,
+        provider_type="anthropic",
+        model="claude-sonnet-4-20250514",
+    )
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        {**_pinning(pin_key, profile_id), "provider_type": "offline"},
+        agent_step_type,
+    )
+
+    assert resp.status_code == 400, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "MODEL_UNRESOLVED"
+    assert (
+        f"Model profile {profile_id} uses provider anthropic, but the step sets "
+        "provider_type offline"
+    ) in error["message"]
+    assert error["details"] == {
+        "step_id": "agent_label",
+        "model": profile_id,
+        "provider_type": "offline",
+        "usable_providers": usable_providers,
+    }
+    assert _execution_count(app.state.engine, workspace_id) == 0
+    assert _agent_run_profiles(app.state.engine, workspace_id) == []
+    assert hosted_calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("agent_step_type", "pin_key"), PINNING_STEPS)
+async def test_an_offline_step_runs_on_the_offline_profile_it_pins(
+    client, app, tmp_path, hosted_calls, agent_step_type, pin_key
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    profile_id = _seed_model_profile(
+        app.state.engine, workspace_id, provider_type="offline", model="team-offline"
+    )
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        {**_pinning(pin_key, profile_id), "provider_type": "offline"},
+        agent_step_type,
+    )
+
+    assert resp.json()["error_summary"] is None
+    run_count = 2 if agent_step_type == "agent_compare" else 1
+    assert (
+        _agent_run_profiles(app.state.engine, workspace_id)
+        == [(profile_id, "offline", str(workspace_id))] * run_count
+    )
+    assert hosted_calls == []
+
+
+@pytest.mark.asyncio
 async def test_execute_workflow_reaches_review_queue(client, app, tmp_path):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     token = _seed_reviewer(app.state.engine, workspace_id)

@@ -376,10 +376,17 @@ def _json_dumps(value: Any) -> str | None:
 
 
 def _with_offline_model(config: dict[str, Any]) -> dict[str, Any]:
-    """Select the offline provider's one model for ``provider_type: offline``."""
-    if _normalize_provider_type(config.get("provider_type")) == ProviderType.offline:
-        return {**config, "model": OFFLINE_MODEL_ID}
-    return config
+    """Select the offline provider's one model for ``provider_type: offline``.
+
+    A model profile the step pins by id stays, so that its provider is checked
+    against the step's.
+    """
+    if _normalize_provider_type(config.get("provider_type")) != ProviderType.offline:
+        return config
+    selected = str(config.get("model") or config.get("model_profile_id") or "").strip()
+    if _is_profile_id(selected):
+        return config
+    return {**config, "model": OFFLINE_MODEL_ID}
 
 
 def _build_workflow_definition(row: Any) -> WorkflowDefinitionParsed:

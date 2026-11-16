@@ -86,7 +86,9 @@ molabel workflow create --template quick_agentic_label --provider offline
 This writes `model: offline-heuristic` and `provider_type: offline` into every
 `agent_run` step. In a workflow file you write yourself, either key alone is
 enough. `provider_type: offline` labels with `offline-heuristic` whatever
-`model` says. A model profile with `provider_type: offline` also works.
+model name `model` gives. A model profile with `provider_type: offline` also
+works. A step that pins a profile id in `model` or `model_profile_id` runs on
+that profile, so next to `provider_type: offline` it must be an offline one.
 `--model <id>` replaces the template's model with a different one instead.
 
 For a field with options, the provider picks the first option, in schema
