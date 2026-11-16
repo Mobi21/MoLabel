@@ -980,6 +980,66 @@ async def test_an_unresolvable_model_fails_before_any_step_runs(
     assert hosted_calls == []
 
 
+PINNING_STEPS = [
+    pytest.param("agent_run", "model", id="agent_run-model"),
+    pytest.param("agent_run", "model_profile_id", id="agent_run-model_profile_id"),
+    pytest.param("agent_labeling", "model", id="agent_labeling-model"),
+    pytest.param(
+        "agent_labeling", "model_profile_id", id="agent_labeling-model_profile_id"
+    ),
+    pytest.param("agent_compare", "models", id="agent_compare-models"),
+]
+
+
+def _pinning(pin_key, profile_id):
+    return {pin_key: [profile_id, profile_id] if pin_key == "models" else profile_id}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("agent_step_type", "pin_key"), PINNING_STEPS)
+@pytest.mark.parametrize("pinned_profile", ["custom", "missing"])
+async def test_a_pinned_profile_id_that_cannot_run_is_never_sent_as_a_model(
+    client,
+    app,
+    tmp_path,
+    hosted_calls,
+    usable_providers,
+    agent_step_type,
+    pin_key,
+    pinned_profile,
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    profile_id = (
+        _seed_model_profile(
+            app.state.engine, workspace_id, provider_type="custom", model="llama3.1"
+        )
+        if pinned_profile == "custom"
+        else str(uuid.uuid4())
+    )
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        {**_pinning(pin_key, profile_id), "provider_type": "anthropic"},
+        agent_step_type,
+    )
+
+    assert resp.status_code == 400, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "MODEL_UNRESOLVED"
+    assert error["details"] == {
+        "step_id": "agent_label",
+        "model": profile_id,
+        "provider_type": "anthropic",
+        "usable_providers": usable_providers,
+    }
+    assert _execution_count(app.state.engine, workspace_id) == 0
+    assert _agent_run_profiles(app.state.engine, workspace_id) == []
+    assert hosted_calls == []
+
+
 @pytest.mark.asyncio
 async def test_execute_workflow_reaches_review_queue(client, app, tmp_path):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)

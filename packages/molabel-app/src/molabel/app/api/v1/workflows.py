@@ -786,6 +786,14 @@ def _normalize_provider_type(value: Any) -> str | None:
     return normalized or None
 
 
+def _is_profile_id(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _infer_profile_defaults(
     *,
     model_identifier: str,
@@ -967,12 +975,16 @@ def _ensure_model_profile(
 ) -> str:
     """Return the model profile an agent step runs on, creating one if none fits.
 
-    A profile fits when its id, slug, or model id is ``model_identifier``, it
-    belongs to the step's workspace or to the shared profile workspace, and,
-    when ``provider_type`` is given, it has that provider. The step's own
-    workspace wins over the shared one. Without a fitting profile, the
-    provider comes from ``provider_type`` or else from the model id, and a
-    model or provider MoLabel cannot run raises ``UnresolvedModelError``.
+    A ``model_identifier`` that is a profile id pins that profile. It must
+    exist, MoLabel must be able to run its provider, and it must have
+    ``provider_type`` when that is given, or ``UnresolvedModelError`` is
+    raised. Otherwise a profile fits when its slug or model id is
+    ``model_identifier``, MoLabel can run its provider, and, when
+    ``provider_type`` is given, it has that provider. Profiles come from the
+    step's workspace or the shared profile workspace, and the step's own
+    workspace wins. Without a fitting profile, the provider comes from
+    ``provider_type`` or else from the model id, and a model or provider
+    MoLabel cannot run raises ``UnresolvedModelError``.
     """
     requested_provider = _normalize_provider_type(provider_type)
     rows = conn.execute(
@@ -989,19 +1001,33 @@ def _ensure_model_profile(
             "model": model_identifier,
         },
     ).fetchall()
+    if _is_profile_id(model_identifier):
+        pinned_provider = next(
+            (provider for pid, provider in rows if pid == model_identifier), None
+        )
+        if pinned_provider is None:
+            message = f"Model profile {model_identifier} does not exist"
+        elif requested_provider not in (None, pinned_provider):
+            message = (
+                f"Model profile {model_identifier} uses provider "
+                f"{pinned_provider}, but the step sets provider_type "
+                f"{requested_provider}"
+            )
+        elif pinned_provider not in _RUNNABLE_PROVIDERS:
+            message = (
+                f"Model profile {model_identifier} uses provider "
+                f"{pinned_provider}, which MoLabel cannot run"
+            )
+        else:
+            return model_identifier
+        raise UnresolvedModelError(
+            message, model=model_identifier, provider_type=requested_provider
+        )
     for existing_id, existing_provider in rows:
         if existing_provider not in _RUNNABLE_PROVIDERS:
             continue
         if requested_provider is None or existing_provider == requested_provider:
             return str(existing_id)
-        if existing_id == model_identifier:
-            raise UnresolvedModelError(
-                f"Model profile {model_identifier} uses provider "
-                f"{existing_provider}, but the step sets provider_type "
-                f"{requested_provider}",
-                model=model_identifier,
-                provider_type=requested_provider,
-            )
 
     if requested_provider is not None and requested_provider not in (
         _RUNNABLE_PROVIDERS
