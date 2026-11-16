@@ -113,7 +113,14 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - run: uv sync
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
 
       - name: Generate OpenAPI spec
         run: |
@@ -121,7 +128,12 @@ jobs:
           from molabel.app.main import create_app
           import json
           print(json.dumps(create_app().openapi()))
-          " > /tmp/openapi.json
+          " > "$RUNNER_TEMP/openapi.json"
 
-      - name: Verify spec generated
-        run: echo "OpenAPI spec generated successfully"
+      - name: Regenerate the frontend API client
+        run: cd frontend && MOLABEL_OPENAPI_INPUT="$RUNNER_TEMP/openapi.json" npm run generate:api
+
+      - name: Fail if the committed client differs from the spec
+        run: |
+          git diff --exit-code -- frontend/src/api/generated
+          test -z "$(git status --porcelain -- frontend/src/api/generated)"
