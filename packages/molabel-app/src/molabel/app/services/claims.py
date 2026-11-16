@@ -1590,3 +1590,47 @@ def get_queue_status(
         "skipped": status_counts["skipped"],
         "active_reviewers": active_reviewers,
     }
+
+
+def list_queues(engine: Engine, workspace_id: str | None) -> list[dict[str, Any]]:
+    """List review queues with per-status task counts.
+
+    A queue exists as the set of review tasks that share a ``queue_id``.
+    """
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    queue_id,
+                    workspace_id,
+                    task_schema_id,
+                    COUNT(*),
+                    SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN status = 'claimed' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END),
+                    MIN(created_at)
+                FROM review_tasks
+                WHERE :workspace_id IS NULL OR workspace_id = :workspace_id
+                GROUP BY queue_id, workspace_id, task_schema_id
+                ORDER BY MIN(created_at), queue_id
+                """
+            ),
+            {"workspace_id": workspace_id},
+        ).all()
+
+    return [
+        {
+            "queue_id": str(row[0]),
+            "workspace_id": str(row[1]),
+            "task_schema_id": str(row[2]),
+            "total": int(row[3]),
+            "available": int(row[4]),
+            "claimed": int(row[5]),
+            "submitted": int(row[6]),
+            "skipped": int(row[7]),
+            "created_at": str(row[8]),
+        }
+        for row in rows
+    ]

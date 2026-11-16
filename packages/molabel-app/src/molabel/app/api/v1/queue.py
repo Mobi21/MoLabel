@@ -22,6 +22,7 @@ from molabel.app.services.claims import (
     claim_next,
     get_queue_status,
     get_reviewer_visibility,
+    list_queues,
     pop_expired_notifications,
     release_claim,
     reveal_ai,
@@ -250,6 +251,26 @@ class QueueActiveReviewer(BaseModel):
     avatar_color: str | None = None
     current_task_id: str
     current_record_id: str
+
+
+class QueueSummary(BaseModel):
+    """One review queue with its per-status task counts."""
+
+    queue_id: str
+    workspace_id: str
+    task_schema_id: str
+    total: int
+    available: int
+    claimed: int
+    submitted: int
+    skipped: int
+    created_at: str
+
+
+class QueueListResponse(BaseModel):
+    """Response for listing review queues."""
+
+    items: list[QueueSummary]
 
 
 class QueueStatusResponse(BaseModel):
@@ -615,6 +636,19 @@ async def submit_correction_endpoint(
 # ---------------------------------------------------------------------------
 # Queue status
 # ---------------------------------------------------------------------------
+
+
+@router.get("/queues", response_model=QueueListResponse)
+async def list_queues_endpoint(
+    request: Request,
+    response: Response,
+    reviewer: CurrentReviewer,
+    workspace_id: str | None = None,
+) -> QueueListResponse:
+    """List review queues, optionally limited to one workspace."""
+    _add_notification_headers(response, reviewer.id)
+    queues = list_queues(get_engine(request), workspace_id)
+    return QueueListResponse(items=[QueueSummary(**queue) for queue in queues])
 
 
 @router.get(

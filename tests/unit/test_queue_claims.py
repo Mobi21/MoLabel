@@ -1101,6 +1101,37 @@ class TestQueueStatus:
         assert len(status["active_reviewers"]) == 1
         assert status["active_reviewers"][0]["reviewer_id"] == str(reviewer.id)
 
+    def test_queue_list_api(self, client, engine, reviewer, workspace, tasks) -> None:
+        """GET /queues lists each queue in the workspace with its counts."""
+        second = _create_tasks(engine, workspace, count=2, queue_id="second-queue")
+        claim_next(engine, QUEUE_ID, reviewer.id)
+        _login(client, reviewer)
+
+        resp = client.get("/api/v1/queues", params={"workspace_id": str(workspace.id)})
+
+        assert resp.status_code == 200
+        items = {item["queue_id"]: item for item in resp.json()["items"]}
+        assert set(items) == {QUEUE_ID, "second-queue"}
+        assert items[QUEUE_ID]["total"] == 5
+        assert items[QUEUE_ID]["available"] == 4
+        assert items[QUEUE_ID]["claimed"] == 1
+        assert items["second-queue"]["workspace_id"] == str(workspace.id)
+        assert items["second-queue"]["task_schema_id"] == str(second[0].task_schema_id)
+
+    def test_queue_list_api_filters_by_workspace(self, client, reviewer, tasks) -> None:
+        """GET /queues omits queues that belong to other workspaces."""
+        _login(client, reviewer)
+
+        resp = client.get("/api/v1/queues", params={"workspace_id": str(uuid.uuid4())})
+
+        assert resp.status_code == 200
+        assert resp.json()["items"] == []
+
+    def test_queue_list_api_requires_session(self, client, tasks) -> None:
+        """GET /queues requires a reviewer session."""
+        resp = client.get("/api/v1/queues")
+        assert resp.status_code == 401
+
     def test_queue_status_api(self, client, reviewer, tasks) -> None:
         """GET /queues/{queue_id}/status returns queue statistics."""
         _login(client, reviewer)
