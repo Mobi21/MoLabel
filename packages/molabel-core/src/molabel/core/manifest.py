@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from pydantic import Field as PydanticField
 
 from molabel.core.utils.round_trip_yaml import dump_yaml
@@ -28,7 +28,17 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class DatasetManifestEntry(BaseModel):
+class ManifestModel(BaseModel):
+    """A manifest mapping that keeps the keys it does not declare.
+
+    People edit ``workbench.project.yaml`` by hand, and every config write
+    loads it through these models and dumps it back.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+
+class DatasetManifestEntry(ManifestModel):
     """A dataset declaration within the workspace manifest."""
 
     dataset_id: str
@@ -39,7 +49,7 @@ class DatasetManifestEntry(BaseModel):
     indexing_mode: str = "projection"
 
 
-class TaskSchemaManifestEntry(BaseModel):
+class TaskSchemaManifestEntry(ManifestModel):
     """A task schema reference within the workspace manifest."""
 
     task_schema_id: str
@@ -47,14 +57,14 @@ class TaskSchemaManifestEntry(BaseModel):
     definition_path: str | None = None
 
 
-class PromptManifestEntry(BaseModel):
+class PromptManifestEntry(ManifestModel):
     """A prompt template file within the workspace manifest."""
 
     prompt_id: str
     definition_path: str | None = None
 
 
-class WorkflowManifestEntry(BaseModel):
+class WorkflowManifestEntry(ManifestModel):
     """A workflow definition file within the workspace manifest."""
 
     workflow_id: str
@@ -66,7 +76,7 @@ class WorkflowManifestEntry(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class WorkspaceManifest(BaseModel):
+class WorkspaceManifest(ManifestModel):
     """Top-level Pydantic model for ``workbench.project.yaml``."""
 
     workspace_id: str
@@ -109,8 +119,10 @@ def dump_manifest(manifest: WorkspaceManifest, previous: str | None = None) -> s
     """Render a *WorkspaceManifest* as YAML over *previous*, the text it replaces.
 
     Comments, key order and layout in *previous* are kept (see ``dump_yaml``).
+    Values keep the type they were loaded with, so a hand-written date stays
+    a date rather than becoming a string.
     """
-    return dump_yaml(manifest.model_dump(mode="json"), previous)
+    return dump_yaml(manifest.model_dump(), previous)
 
 
 def save_manifest(manifest: WorkspaceManifest, path: Path) -> None:

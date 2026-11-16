@@ -1002,7 +1002,14 @@ def _resolve_agent_models(
             continue
         for config in configs:
             try:
-                _resolve_step_model(conn, workspace_id=workspace_id, config=config)
+                if _resolve_step_model(conn, workspace_id=workspace_id, config=config):
+                    continue
+                raise UnresolvedModelError(
+                    "The step names no model. Set model, model_profile_id or "
+                    "provider_type: offline",
+                    model="",
+                    provider_type=config.get("provider_type"),
+                )
             except UnresolvedModelError as exc:
                 raise UnresolvedModelError(
                     f"Step '{step.id}': {exc}",

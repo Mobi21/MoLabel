@@ -124,10 +124,18 @@ def _text_or_none(path: Path) -> str | None:
 
 
 def _replaced(entries: list[Any], entry: Any, id_field: str) -> list[Any]:
-    """*entries* with *entry* where its id first appears, so the file keeps order."""
+    """*entries* with *entry* where its id first appears, so the file keeps order.
+
+    *entry* keeps the undeclared keys of the entry it replaces, which a person
+    added by hand.
+    """
     key = getattr(entry, id_field)
     ids = [getattr(e, id_field) for e in entries]
-    index = ids.index(key) if key in ids else len(entries)
+    if key in ids:
+        index = ids.index(key)
+        entry = entry.model_copy(update=entries[index].model_extra)
+    else:
+        index = len(entries)
     kept = [e for e, id_ in zip(entries, ids, strict=True) if id_ != key]
     return [*kept[:index], entry, *kept[index:]]
 

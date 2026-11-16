@@ -19,7 +19,8 @@ steps:
       models:
         - "claude-sonnet-4-20250514"
         - "gpt-4o"
-        - "llama-3-70b"
+        # The model to compare, set by `molabel workflow create --model <id>`
+        - null
       prompt_ref: "prompts/default.yaml"
 
   - id: review

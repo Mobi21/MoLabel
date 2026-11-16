@@ -248,9 +248,46 @@ MODEL_CONFIG_KEYS = frozenset(
 )
 
 
-def template_has_agent_run(definition: dict[str, Any]) -> bool:
-    """Whether a template has an agent_run step whose model can be bound."""
-    return any(step.get("type") == "agent_run" for step in _steps(definition))
+AGENT_MODEL_STEP_TYPES = frozenset({"agent_run", "agent_compare"})
+
+
+def template_has_agent_step(definition: dict[str, Any]) -> bool:
+    """Whether a template has an agent step whose model can be bound."""
+    return any(
+        step.get("type") in AGENT_MODEL_STEP_TYPES for step in _steps(definition)
+    )
+
+
+def template_unset_model_steps(definition: dict[str, Any]) -> list[str]:
+    """IDs of the agent_compare steps that leave a model unset, as null."""
+    return [
+        str(step.get("id"))
+        for step in _steps(definition)
+        if step.get("type") == "agent_compare"
+        and None in (_config(step).get("models") or [])
+    ]
+
+
+def _without_model_config(config: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in config.items() if key not in MODEL_CONFIG_KEYS}
+
+
+def _bind_compared_models(
+    config: dict[str, Any], agent_model: dict[str, str]
+) -> dict[str, Any]:
+    models = config.get("models") or []
+    if "provider_type" in agent_model:
+        return {
+            **_without_model_config(config),
+            "models": [agent_model["model"]] * len(models),
+            "provider_type": agent_model["provider_type"],
+        }
+    return {
+        **config,
+        "models": [
+            agent_model["model"] if model is None else model for model in models
+        ],
+    }
 
 
 def bind_template_inputs(
@@ -265,18 +302,17 @@ def bind_template_inputs(
     A bound dataset replaces any ingest source file. A bound task schema
     applies to every labeling, review, and normalize step. A bound agent
     model replaces the model and provider settings of every agent_run step.
+    In an agent_compare step it fills the models the template leaves unset,
+    or, when it names a provider_type, runs every compared model on it.
     """
     bound_steps: list[dict[str, Any]] = []
     for step in _steps(definition):
         config = dict(_config(step))
         step_type = step.get("type")
         if agent_model and step_type == "agent_run":
-            config = {
-                key: value
-                for key, value in config.items()
-                if key not in MODEL_CONFIG_KEYS
-            }
-            config.update(agent_model)
+            config = {**_without_model_config(config), **agent_model}
+        if agent_model and step_type == "agent_compare":
+            config = _bind_compared_models(config, agent_model)
         if dataset_id and step_type == "data_ingest":
             config.pop("source", None)
             config["dataset_id"] = dataset_id
