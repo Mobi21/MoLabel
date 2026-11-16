@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 
 /**
  * One keyboard action. A screen's bindings both handle keys and render the
@@ -64,12 +64,20 @@ function activatesControl(event: KeyboardEvent): boolean {
   )
 }
 
-/** Run the first enabled binding that matches each key press on the window. */
+/**
+ * Run the first enabled binding that matches each key press on the window.
+ *
+ * Layout effects swap the listener and its bindings in the same commit as
+ * the DOM, so a key pressed as soon as a new item shows never reaches the
+ * bindings of the item it replaced.
+ */
 export function useKeymap(bindings: readonly Binding[]): void {
   const current = useRef(bindings)
-  current.current = bindings
+  useLayoutEffect(() => {
+    current.current = bindings
+  })
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.isComposing || event.repeat) return
       if (activatesControl(event)) return
