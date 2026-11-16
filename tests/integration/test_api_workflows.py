@@ -14,9 +14,11 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
+from molabel.app.api.v1.workflows import _LlmAgentRunner
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
 from molabel.core.database import create_all_tables, get_engine
+from molabel.core.providers.base import ProviderError
 
 TEST_SECRET = "workflow-test-secret"
 
@@ -137,6 +139,7 @@ def _seed_workflow(
     *,
     include_export: bool = False,
     ingest_config: dict | None = None,
+    agent_config: dict | None = None,
 ):
     workflow_id = uuid.uuid4()
     now = datetime.now(UTC).isoformat()
@@ -149,7 +152,8 @@ def _seed_workflow(
         {
             "step_id": "agent_label",
             "step_type": "agent_run",
-            "config": {
+            "config": agent_config
+            or {
                 "model": "heuristic-agent",
                 "prompt_ref": "prompts/sentiment-demo-v1",
             },
@@ -402,6 +406,40 @@ async def test_execute_reports_an_empty_dataset_as_a_failed_ingest(
     body = resp.json()
     assert body["current_step_id"] == "ingest"
     assert "has no records" in body["error_summary"]
+
+
+@pytest.mark.asyncio
+async def test_execute_reports_an_agent_step_that_labels_no_records(
+    client, app, tmp_path, monkeypatch
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    workflow_id = _seed_workflow(
+        app.state.engine,
+        workspace_id,
+        agent_config={
+            "model": "claude-sonnet-4-20250514",
+            "prompt_ref": "prompts/default.yaml",
+        },
+    )
+    _write_demo_reviews(tmp_path)
+
+    def reject_missing_key(self, **_kwargs):
+        raise ProviderError("Anthropic API error: 401 x-api-key header is required")
+
+    monkeypatch.setattr(_LlmAgentRunner, "_label_record", reject_missing_key)
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["current_step_id"] == "agent_label"
+    assert "x-api-key header is required" in body["error_summary"]
 
 
 @pytest.mark.asyncio

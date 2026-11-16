@@ -1491,6 +1491,9 @@ class _LlmAgentRunner:
             if failed == 0
             else ("partially_completed" if completed > 0 else "failed")
         )
+        error_summary = (
+            "; ".join(error_summary_parts[:5]) if error_summary_parts else None
+        )
         finished_at = datetime.now(UTC).isoformat()
         self._conn.execute(
             text(
@@ -1510,9 +1513,7 @@ class _LlmAgentRunner:
                 "status": final_status,
                 "completed": completed,
                 "failed": failed,
-                "error_summary": "; ".join(error_summary_parts[:5])
-                if error_summary_parts
-                else None,
+                "error_summary": error_summary,
                 "completed_at": finished_at,
                 "updated_at": finished_at,
             },
@@ -1536,6 +1537,7 @@ class _LlmAgentRunner:
             "batch_size": max(1, len(record_ids)),
             "batch_count": 1 if record_ids else 0,
             "event_count": completed,
+            "error_summary": error_summary,
         }
 
     def _label_record(
