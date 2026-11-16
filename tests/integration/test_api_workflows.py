@@ -26,7 +26,8 @@ from molabel.core.providers import (
     OpenRouterAdapter,
 )
 from molabel.core.providers.base import ProviderError
-from molabel.core.types import CompletionResult
+from molabel.core.providers.detection import DiscoveredProvider, ProviderDetector
+from molabel.core.types import CompletionResult, HealthStatus
 
 TEST_SECRET = "workflow-test-secret"
 
@@ -148,6 +149,7 @@ def _seed_workflow(
     include_export: bool = False,
     ingest_config: dict | None = None,
     agent_config: dict | None = None,
+    agent_step_type: str = "agent_run",
 ):
     workflow_id = uuid.uuid4()
     now = datetime.now(UTC).isoformat()
@@ -159,10 +161,10 @@ def _seed_workflow(
         },
         {
             "step_id": "agent_label",
-            "step_type": "agent_run",
+            "step_type": agent_step_type,
             "config": agent_config
             or {
-                "model": "heuristic-agent",
+                "model": "offline-heuristic",
                 "prompt_ref": "prompts/sentiment-demo-v1",
             },
         },
@@ -682,7 +684,7 @@ def _agent_run_profiles(engine, workspace_id):
 
 
 async def _execute_sentiment_workflow(
-    client, app, tmp_path, workspace_id, agent_config
+    client, app, tmp_path, workspace_id, agent_config, agent_step_type="agent_run"
 ):
     token = _seed_reviewer(app.state.engine, workspace_id)
     _seed_task_schema(app.state.engine, workspace_id)
@@ -690,6 +692,7 @@ async def _execute_sentiment_workflow(
         app.state.engine,
         workspace_id,
         agent_config={**agent_config, "prompt_ref": "prompts/default.yaml"},
+        agent_step_type=agent_step_type,
     )
     _write_demo_reviews(tmp_path)
     resp = await client.post(
@@ -736,7 +739,7 @@ async def test_an_explicit_provider_never_reuses_a_profile_of_another_provider(
 
 @pytest.mark.asyncio
 async def test_a_step_that_pins_a_profile_of_another_provider_fails(
-    client, app, tmp_path, hosted_calls
+    client, app, tmp_path, hosted_calls, usable_providers
 ):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     profile_id = _seed_model_profile(
@@ -754,11 +757,14 @@ async def test_a_step_that_pins_a_profile_of_another_provider_fails(
         {"model": profile_id, "provider_type": "anthropic"},
     )
 
+    assert resp.status_code == 400, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "MODEL_UNRESOLVED"
     assert (
         f"Model profile {profile_id} uses provider offline, but the step sets "
         "provider_type anthropic"
-    ) in resp.json()["error_summary"]
-    assert _agent_run_profiles(app.state.engine, workspace_id) == []
+    ) in error["message"]
+    assert _execution_count(app.state.engine, workspace_id) == 0
     assert hosted_calls == []
 
 
@@ -789,8 +795,9 @@ async def test_a_profile_from_another_workspace_is_never_reused(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("names_the_profile_by", ["slug", "id"])
 async def test_a_profile_in_the_shared_profile_workspace_is_reused(
-    client, app, tmp_path, hosted_calls
+    client, app, tmp_path, hosted_calls, names_the_profile_by
 ):
     _seed_other_workspace(
         app.state.engine, tmp_path / "shared", SHARED_PROFILE_WORKSPACE
@@ -804,8 +811,14 @@ async def test_a_profile_in_the_shared_profile_workspace_is_reused(
     )
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
 
+    step_config = (
+        {"model": "team-claude"}
+        if names_the_profile_by == "slug"
+        else {"model_profile_id": profile_id}
+    )
+
     resp = await _execute_sentiment_workflow(
-        client, app, tmp_path, workspace_id, {"model": "team-claude"}
+        client, app, tmp_path, workspace_id, step_config
     )
 
     assert resp.json()["error_summary"] is None
@@ -813,6 +826,107 @@ async def test_a_profile_in_the_shared_profile_workspace_is_reused(
         (profile_id, "anthropic", SHARED_PROFILE_WORKSPACE)
     ]
     assert hosted_calls == [("anthropic", "claude-sonnet-4-20250514")] * 3
+
+
+@pytest.fixture()
+def usable_providers(monkeypatch, hosted_calls):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+
+    async def ollama_with_one_model(self):
+        return DiscoveredProvider(
+            provider_type="ollama",
+            name="Ollama (local)",
+            health=HealthStatus(is_healthy=True),
+            base_url="http://localhost:11434",
+            suggested_models=["llama3.2"],
+        )
+
+    monkeypatch.setattr(ProviderDetector, "_check_ollama", ollama_with_one_model)
+    return [
+        {
+            "provider_type": "offline",
+            "name": "Offline heuristic (no LLM)",
+            "models": ["offline-heuristic"],
+        },
+        {"provider_type": "ollama", "name": "Ollama (local)", "models": ["llama3.2"]},
+        {
+            "provider_type": "anthropic",
+            "name": "Anthropic",
+            "models": ["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"],
+        },
+    ]
+
+
+def _execution_count(engine, workspace_id):
+    with engine.connect() as conn:
+        return conn.execute(
+            text("SELECT count(*) FROM workflow_executions WHERE workspace_id = :wid"),
+            {"wid": str(workspace_id)},
+        ).scalar()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("step_config", "agent_step_type", "leftover_custom_profile", "unresolved"),
+    [
+        ({"model": "llama3.1"}, "agent_run", False, {"model": "llama3.1"}),
+        ({"model": "gtp-4o"}, "agent_run", False, {"model": "gtp-4o"}),
+        ({"model": "llama3.1"}, "agent_run", True, {"model": "llama3.1"}),
+        (
+            {"model": "gpt-4o", "provider_type": "openai"},
+            "agent_run",
+            False,
+            {"model": "gpt-4o", "provider_type": "openai"},
+        ),
+        (
+            {"models": ["offline-heuristic", "llama3.1"]},
+            "agent_compare",
+            False,
+            {"model": "llama3.1"},
+        ),
+    ],
+    ids=[
+        "unknown-model",
+        "typo",
+        "custom-profile",
+        "unknown-provider",
+        "compare-model",
+    ],
+)
+async def test_an_unresolvable_model_fails_before_any_step_runs(
+    client,
+    app,
+    tmp_path,
+    hosted_calls,
+    usable_providers,
+    step_config,
+    agent_step_type,
+    leftover_custom_profile,
+    unresolved,
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    if leftover_custom_profile:
+        _seed_model_profile(
+            app.state.engine, workspace_id, provider_type="custom", model="llama3.1"
+        )
+
+    resp = await _execute_sentiment_workflow(
+        client, app, tmp_path, workspace_id, step_config, agent_step_type
+    )
+
+    assert resp.status_code == 400, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "MODEL_UNRESOLVED"
+    assert "agent_label" in error["message"]
+    assert error["details"] == {
+        "step_id": "agent_label",
+        "model": unresolved["model"],
+        "provider_type": unresolved.get("provider_type"),
+        "usable_providers": usable_providers,
+    }
+    assert _execution_count(app.state.engine, workspace_id) == 0
+    assert _agent_run_profiles(app.state.engine, workspace_id) == []
+    assert hosted_calls == []
 
 
 @pytest.mark.asyncio

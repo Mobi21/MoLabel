@@ -104,6 +104,13 @@ MoLabel does not switch to the offline provider on its own. Without a key, a
 workflow that names a hosted model fails with `WORKFLOW_RUN_FAILED`, and the
 message names the unset key variable and the `--provider offline` flag.
 
+MoLabel does not guess a provider either. When an agent step's model matches
+no model profile and no known model family, `workflow run` fails with
+`HTTP_400` before any step runs. `details.error.code` is `MODEL_UNRESOLVED`,
+and `details.error.details.usable_providers` lists the providers the backend
+can use, with their models. Set `provider_type` on the step, or create a
+profile for the model with `molabel model-profile create`.
+
 `molabel doctor` lists the providers the backend can use under `providers`.
 `scripts/smoke_no_key.py` runs the full flow with no key against a real
 backend, and CI runs it in the `smoke-no-key` job.

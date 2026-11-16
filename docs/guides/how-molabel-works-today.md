@@ -263,6 +263,9 @@ Its outputs record `builtin.offline` as the run's adapter,
 so review and routing never treat them as a model's. MoLabel never switches
 to the offline provider on its own. A workflow that names a hosted model fails
 without its key, and the error names the key variable and the offline flag.
+A step whose model matches no model profile and no known model family fails
+before any step runs, with `MODEL_UNRESOLVED` and the providers the backend
+can use.
 `cli/README.md` describes the heuristic, and `scripts/smoke_no_key.py` runs
 import, offline pre-label, review, and export with no key in CI.
 
