@@ -76,5 +76,10 @@
     "typescript": "^5.7.0",
     "vite": "^6.4.6",
     "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "@hey-api/json-schema-ref-parser": {
+      "js-yaml": "^4.3.2"
+    }
   }
 }
