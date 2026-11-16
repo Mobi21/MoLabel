@@ -6,6 +6,12 @@ Resolving with labels also appends a review event with no review task (AJ-007),
 so it never counts as a rater, and makes those labels the record's latest
 label, which export reads. Both rows take the queue's workspace.
 
+A record is adjudicated only once every review task the queue holds for it is
+submitted or skipped. While a copy is available or claimed, its disagreement is
+not listed and its detail answers 404. So no reviewer sees the other
+reviewers' labels, or on a blind queue the agent proposal, before their own
+review of the record is in.
+
 Every endpoint reads only a queue of the caller's workspace, and answers 404
 for a queue of any other.
 
@@ -240,9 +246,24 @@ def _outcomes_by_record(
 
 
 def _queue_disagreements(conn: Any, queue: _Queue) -> list[_Disagreement]:
-    items = disagreements_from_reviews(
-        queue_review_events(conn, [queue.queue_id]), uuid.UUID(queue.task_schema_id)
-    )
+    open_records = {
+        str(record_id)
+        for (record_id,) in conn.execute(
+            text(
+                "SELECT DISTINCT record_id FROM review_tasks WHERE queue_id = :q "
+                "AND status IN ('available', 'claimed')"
+            ),
+            {"q": queue.queue_id},
+        ).fetchall()
+    }
+    items = [
+        item
+        for item in disagreements_from_reviews(
+            queue_review_events(conn, [queue.queue_id]),
+            uuid.UUID(queue.task_schema_id),
+        )
+        if str(item.record_id) not in open_records
+    ]
     record_ids = [str(item.record_id) for item in items]
     records = {
         str(row[0]): (str(row[1]) if row[1] else None, str(row[2]))
@@ -372,7 +393,11 @@ async def list_queue_disagreements(
     queue_id: str,
     reviewer: CurrentReviewer,
 ) -> DisagreementQueue:
-    """List the records a queue's reviewers disagree on, most severe first."""
+    """List the records a queue's reviewers disagree on, most severe first.
+
+    A record is listed once every review task the queue holds for it is
+    submitted or skipped.
+    """
     with get_engine(request).connect() as conn:
         queue = _queue(conn, queue_id, reviewer.workspace_id)
         disagreements = _queue_disagreements(conn, queue)

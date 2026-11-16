@@ -3673,6 +3673,9 @@ export const listQueueDisagreementsQueryKey = (
  * List Queue Disagreements
  *
  * List the records a queue's reviewers disagree on, most severe first.
+ *
+ * A record is listed once every review task the queue holds for it is
+ * submitted or skipped.
  */
 export const listQueueDisagreementsOptions = (
   options: Options<ListQueueDisagreementsData>,

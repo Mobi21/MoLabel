@@ -48,10 +48,12 @@ def _as(token):
     return {"Cookie": f"molabel_session={token}"}
 
 
-async def _start_review(client, app, tmp_path, *, policy="show_agent_outputs"):
+async def _start_review(
+    client, app, tmp_path, *, policy="show_agent_outputs", reviewers=2, overlap=2
+):
     engine = app.state.engine
     workspace_id = _seed_workspace(engine, tmp_path)
-    tokens = [_seed_reviewer(engine, workspace_id) for _ in range(2)]
+    tokens = [_seed_reviewer(engine, workspace_id) for _ in range(reviewers)]
     task_schema_id = _seed_task_schema(engine, workspace_id)
     label_fields = [
         {
@@ -86,7 +88,7 @@ async def _start_review(client, app, tmp_path, *, policy="show_agent_outputs"):
         engine,
         workspace_id,
         agent_config={"provider_type": "offline", "prompt_ref": "prompts/default.yaml"},
-        review_config={"overlap_count": 2},
+        review_config={"overlap_count": overlap},
     )
     started = await client.post(
         f"/api/v1/workflows/{workflow_id}/execute", json={}, headers=_as(tokens[0])

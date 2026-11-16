@@ -9,8 +9,10 @@ import pytest_asyncio
 from sqlalchemy import text
 
 from tests.integration.review_flow import (
+    OFFLINE_SENTIMENT,
     SENTIMENT_RECORDS,
     _as,
+    _claim,
     _external_ids,
     _review_both,
     _start_review,
@@ -137,3 +139,62 @@ async def test_resolve_needs_labels_that_fit_the_schema(client, app, tmp_path):
         headers=_as(tokens[0]),
     )
     assert unknown.status_code == 404
+
+
+async def _label_all(client, queue_id, token, sentiments):
+    while (task := await _claim(client, queue_id, token)) is not None:
+        submitted = await client.post(
+            f"/api/v1/review-tasks/{task['id']}/submit",
+            json={
+                "labels": {"sentiment": sentiments[task["record_external_id"]]},
+                "auto_claim_next": False,
+            },
+            headers=_as(token),
+        )
+        assert submitted.status_code == 200, submitted.text
+
+
+@pytest.mark.asyncio
+async def test_a_record_is_not_adjudicated_while_a_blind_copy_is_open(
+    client, app, tmp_path
+):
+    _, tokens, queue = await _start_review(
+        client,
+        app,
+        tmp_path,
+        policy="hide_agent_outputs_by_default",
+        reviewers=3,
+        overlap=3,
+    )
+    queue_id = queue["queue_id"]
+    held = await _claim(client, queue_id, tokens[2])
+    assert held["agent_output"] is None
+    split = held["record_external_id"]
+    other = "negative" if OFFLINE_SENTIMENT[split] != "negative" else "positive"
+    await _label_all(client, queue_id, tokens[0], {**OFFLINE_SENTIMENT, split: other})
+    await _label_all(client, queue_id, tokens[1], OFFLINE_SENTIMENT)
+    base = f"/api/v1/adjudication/queues/{queue_id}/disagreements"
+    record_id = _external_ids(app)[split]
+
+    for token in tokens:
+        listed = (await client.get(base, headers=_as(token))).json()
+        assert listed["items"] == []
+        detail = await client.get(f"{base}/{record_id}", headers=_as(token))
+        assert detail.status_code == 404, detail.text
+    own = await client.get(f"/api/v1/review-tasks/{held['id']}", headers=_as(tokens[2]))
+    assert own.json()["agent_output"] is None
+
+    await client.post(
+        f"/api/v1/review-tasks/{held['id']}/submit",
+        json={
+            "labels": {"sentiment": OFFLINE_SENTIMENT[split]},
+            "auto_claim_next": False,
+        },
+        headers=_as(tokens[2]),
+    )
+    listed = (await client.get(base, headers=_as(tokens[2]))).json()
+    assert [item["record_external_id"] for item in listed["items"]] == [split]
+    shown = (await client.get(f"{base}/{record_id}", headers=_as(tokens[2]))).json()
+    assert [a["labels"]["sentiment"] for a in shown["agent_labels"]] == [
+        OFFLINE_SENTIMENT[split]
+    ]

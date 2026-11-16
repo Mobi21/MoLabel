@@ -84,7 +84,7 @@ export function AdjudicationPage() {
       {list.isSuccess && items.length === 0 && (
         <EmptyState
           title="No disagreements in this queue."
-          body="Disagreements appear once two reviewers label the same record differently."
+          body="A record shows here once every review of it is in and two reviewers labelled it differently."
         />
       )}
       {current && (

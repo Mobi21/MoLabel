@@ -2001,6 +2001,12 @@ labels also appends a review event with no review task (AJ-007), so it never
 counts as a rater, and sets the record's `latest_label`, which export reads.
 Both rows take the queue's workspace.
 
+A record is adjudicated only once every review task the queue holds for it is
+submitted or skipped. While a copy is `available` or `claimed`, the record's
+disagreement is not listed and its detail answers 404. So no reviewer sees the
+other reviewers' labels, or on a blind queue the agent proposal, before their
+own review of the record is in.
+
 Each endpoint below reads only a queue of the caller's workspace. A queue of
 another workspace answers 404.
 
@@ -2038,7 +2044,8 @@ class DisagreementSummary(BaseModel):
 
 #### `GET /adjudication/queues/{queue_id}/disagreements/{record_id}`
 
-One disagreement side by side. 404 when the reviewers agree on the record.
+One disagreement side by side. 404 when the reviewers agree on the record, or
+a review copy of it is still open.
 
 ```python
 class DisagreementDetail(DisagreementSummary):

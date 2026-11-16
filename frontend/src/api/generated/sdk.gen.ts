@@ -2034,6 +2034,9 @@ export const listReviewEvents = <ThrowOnError extends boolean = false>(
  * List Queue Disagreements
  *
  * List the records a queue's reviewers disagree on, most severe first.
+ *
+ * A record is listed once every review task the queue holds for it is
+ * submitted or skipped.
  */
 export const listQueueDisagreements = <ThrowOnError extends boolean = false>(
   options: Options<ListQueueDisagreementsData, ThrowOnError>,
