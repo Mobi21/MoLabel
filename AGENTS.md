@@ -13,14 +13,13 @@ The intended operating model is:
 
 ## Repository Layout
 
-This is a uv workspace monorepo with four Python packages, a React frontend, and a Tauri desktop shell:
+This is a uv workspace monorepo with three Python packages, a React frontend, and a Tauri desktop shell:
 
 | Package | Path | Namespace | Purpose |
 |---|---|---|---|
 | molabel-core | `packages/molabel-core/` | `molabel.core`, `molabel.storage`, etc. | Core library: data model, workflow engine, plugin system, provider adapters |
 | molabel-app | `packages/molabel-app/` | `molabel.app` | FastAPI web application: REST API, backend logic |
 | molabel-plugins | `packages/molabel-plugins/` | `molabel.plugins` | Built-in task type plugins (text labeling, chat review, etc.) |
-| molabel-depolarize | `packages/molabel-depolarize/` | `molabel_depolarize` | DePolarize reference implementation (separate namespace) |
 | frontend | `frontend/` | N/A (standalone) | Work-in-progress React control-room UI; not yet ready for general use |
 | tauri-shell | `src-tauri/` | N/A (Rust) | Work-in-progress Tauri desktop shell: window management, sidecar, system tray |
 
@@ -28,10 +27,9 @@ This is a uv workspace monorepo with four Python packages, a React frontend, and
 
 These boundaries are load-bearing. Do not violate them.
 
-- `molabel-core` must NEVER import from `molabel-app`, `molabel-plugins`, or `molabel-depolarize`
+- `molabel-core` must NEVER import from `molabel-app` or `molabel-plugins`
 - `molabel-app` depends on `molabel-core` only
 - `molabel-plugins` depends on `molabel-core` only
-- `molabel-depolarize` depends on `molabel-core` and `molabel-plugins`
 - Cross-package imports must go through public APIs, not internal modules
 - `frontend/` communicates with `molabel-app` ONLY via the REST API (no direct Python imports)
 - `src-tauri/` manages the Python sidecar process and webview, does not contain business logic
@@ -41,8 +39,6 @@ These boundaries are load-bearing. Do not violate them.
 ## Namespace Package Convention
 
 The `molabel` namespace is shared across `molabel-core`, `molabel-app`, and `molabel-plugins` using Python implicit namespace packages. There must be NO `__init__.py` at the `src/molabel/` level in any of these packages.
-
-`molabel-depolarize` uses a separate `molabel_depolarize` namespace and does have its own `__init__.py`.
 
 ## Tech Stack
 
@@ -105,7 +101,6 @@ Fixture workspaces in `fixtures/` provide sample project data for tests.
 
 ## What Not To Do
 
-- Do not add DePolarize-specific logic to `molabel-core` or `molabel-app`
 - Do not create `__init__.py` at the `src/molabel/` level in core, app, or plugins packages
 - Do not store secrets or API keys in project files (use environment variable references)
 - Do not bypass the plugin interface to add task-specific behavior to the core

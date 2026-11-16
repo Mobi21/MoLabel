@@ -26,7 +26,7 @@ Code lives under `src/molabel/app/`:
 
 ## Rules
 
-- Depends on molabel-core only (never on molabel-plugins or molabel-depolarize directly)
+- Depends on molabel-core only (never on molabel-plugins directly)
 - Plugin-contributed API surfaces are loaded through the core plugin interface
 - All REST endpoints must have Pydantic response models (for OpenAPI codegen)
 - No templates or static file serving — the React frontend is served separately

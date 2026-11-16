@@ -767,7 +767,7 @@ class ScreenDefinition(BaseModel):
     screen_id: str
     title: str
     route: str
-    """React Router path, e.g. ``/depolarize/dashboard``."""
+    """React Router path, e.g. ``/red_team_review/dashboard``."""
 
     component_bundle: str
     """Relative path to the ES module bundle, e.g. ``ui/dashboard.mjs``."""

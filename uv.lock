@@ -14,7 +14,6 @@ resolution-markers = [
 members = [
     "molabel-app",
     "molabel-core",
-    "molabel-depolarize",
     "molabel-plugins",
 ]
 constraints = [
@@ -756,21 +755,6 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlmodel", specifier = ">=0.0.22" },
-]
-
-[[package]]
-name = "molabel-depolarize"
-version = "0.1.0"
-source = { editable = "packages/molabel-depolarize" }
-dependencies = [
-    { name = "molabel-core" },
-    { name = "molabel-plugins" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "molabel-core", editable = "packages/molabel-core" },
-    { name = "molabel-plugins", editable = "packages/molabel-plugins" },
 ]
 
 [[package]]

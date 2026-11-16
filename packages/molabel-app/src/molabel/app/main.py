@@ -2,7 +2,7 @@
 
 Module boundary rule (SC-006):
     This package (molabel.app) may only import from ``molabel.core``.
-    It must NEVER import from ``molabel.plugins`` or ``molabel.depolarize``.
+    It must NEVER import from ``molabel.plugins``.
 """
 
 from __future__ import annotations

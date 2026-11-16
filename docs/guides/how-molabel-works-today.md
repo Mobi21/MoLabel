@@ -107,8 +107,6 @@ The repo is a `uv` workspace monorepo with strict package boundaries.
   FastAPI backend. It depends on `molabel-core` only.
 - `packages/molabel-plugins`
   Built-in plugin implementations layered on top of core contracts.
-- `packages/molabel-depolarize`
-  Separate reference implementation under a separate namespace.
 - `cli`
   TypeScript CLI and bundled skill surface.
 - `frontend`
@@ -116,7 +114,7 @@ The repo is a `uv` workspace monorepo with strict package boundaries.
 - `src-tauri`
   Desktop shell.
 
-These boundaries matter. Core must not import app, plugins, or depolarize.
+These boundaries matter. Core must not import app or plugins.
 Frontend only talks to backend through the API.
 
 ## 4. Storage Ownership

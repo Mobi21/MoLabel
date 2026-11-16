@@ -58,12 +58,11 @@ uv run ruff format .   # format
 
 ## Repository Structure
 
-MoLabel is a uv workspace monorepo with four packages:
+MoLabel is a uv workspace monorepo with three packages: <!-- DRAFT: needs Mobi approval -->
 
 - **molabel-core** (`packages/molabel-core/`) — Core library: data model, workflow, plugins, providers
 - **molabel-app** (`packages/molabel-app/`) — FastAPI web application
 - **molabel-plugins** (`packages/molabel-plugins/`) — Built-in task type plugins
-- **molabel-depolarize** (`packages/molabel-depolarize/`) — DePolarize reference implementation
 
 Additional top-level apps:
 

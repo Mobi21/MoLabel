@@ -25,7 +25,7 @@ These modules will be created under `src/molabel/` as development progresses (se
 
 ## Rules
 
-- This package must NEVER import from molabel-app, molabel-plugins, or molabel-depolarize
+- This package must NEVER import from molabel-app or molabel-plugins
 - All plugin interfaces must be defined here as protocols or abstract base classes
 - Use Pydantic for all data contracts
 - Review events must be append-only (PRD section 19.1)

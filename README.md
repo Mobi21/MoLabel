@@ -345,7 +345,6 @@ packages/
   molabel-core/         Core runtime, storage, workflow, providers, quality
   molabel-app/          FastAPI backend API
   molabel-plugins/      Built-in plugin implementations
-  molabel-depolarize/   DePolarize reference implementation
 cli/                    Public CLI and bundled MoLabel skills
 frontend/               React control-room UI
 src-tauri/              Tauri desktop shell
@@ -353,6 +352,7 @@ docs/                   Guides, architecture docs, PRDs, and research notes
 fixtures/               Sample workspaces and benchmark fixtures
 tests/                  Unit, integration, and e2e coverage
 ```
+<!-- DRAFT: needs Mobi approval -->
 
 ## Documentation
 

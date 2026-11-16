@@ -32,7 +32,6 @@ This is a uv workspace monorepo. Python packages live under `packages/`, with a 
 - `packages/molabel-core/` — core library (Python)
 - `packages/molabel-app/` — FastAPI backend (Python)
 - `packages/molabel-plugins/` — built-in plugins (Python)
-- `packages/molabel-depolarize/` — DePolarize reference app (Python)
 - `frontend/` — work-in-progress React UI (TypeScript)
 - `src-tauri/` — work-in-progress Tauri desktop shell (Rust)
 
