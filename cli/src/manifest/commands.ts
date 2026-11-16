@@ -257,6 +257,14 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       flags: [
         { name: '--file', description: 'Workflow definition file' },
         { name: '--template', description: 'Built-in workflow template ID' },
+        {
+          name: '--dataset',
+          description: 'Dataset ID or slug the template ingests',
+        },
+        {
+          name: '--task-schema',
+          description: 'Task schema ID or slug the template labels with',
+        },
         { name: '--workspace-id', description: 'Workspace ID override' },
         { name: '--name', description: 'Workflow name' },
         { name: '--slug', description: 'Workflow slug' },
@@ -271,6 +279,14 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       flags: [
         { name: '--file', description: 'Workflow definition file' },
         { name: '--template', description: 'Built-in workflow template ID' },
+        {
+          name: '--dataset',
+          description: 'Dataset ID or slug the template ingests',
+        },
+        {
+          name: '--task-schema',
+          description: 'Task schema ID or slug the template labels with',
+        },
         { name: '--workspace-id', description: 'Workspace ID override' },
         { name: '--name', description: 'Workflow name' },
         { name: '--slug', description: 'Workflow slug' },

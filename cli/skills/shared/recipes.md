@@ -8,6 +8,7 @@
 - Create a task schema from JSON: `molabel task-schema create --file schema.json --json`
 - Create a prompt from JSON: `molabel prompt create --file prompt.json --json`
 - Show templates: `molabel workflow templates --json`
+- Create a workflow from a template: `molabel workflow create --template human_in_the_loop --dataset <dataset-id> --task-schema <task-schema-id> --json` (both default to the workspace's only dataset and task schema)
 - Run a workflow: `molabel workflow run <selector> --json`
 - Inspect executions: `molabel workflow execution <selector> <execution-id> --json`
 - Claim review work: `molabel queue claim <queue-id> --json`
