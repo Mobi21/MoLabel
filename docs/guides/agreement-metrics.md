@@ -214,13 +214,7 @@ The step also writes the number of records it analyzed to its summary's
 
 `quality_check` compares `config.min_agreement` with Krippendorff's alpha of
 each field in `context.variables["agreement.fields"]`. The check fails when any
-field's alpha is below the threshold or null, whatever the pooled alpha is.
-
-When no agreement records were analyzed, because no `agreement_analysis` step
-ran or it found no records, nothing was measured. The check then fails with
-`code` `NO_AGREEMENT_RECORDS`, a `reason`, and a null `actual`, and the step
-result's `warnings` repeat the code and reason. It never reads a missing
-agreement as 0.0.
+measured field's alpha is below the threshold, whatever the pooled alpha is.
 
 Alpha is defined for any number of raters and handles missing values, so the
 gate works for three or more reviewers. Earlier versions compared
@@ -228,15 +222,49 @@ gate works for three or more reviewers. Earlier versions compared
 with three or more raters, so those workflows always failed the gate. Configs
 keep the `min_agreement` key, and its threshold now applies to alpha.
 
-A field whose alpha is null fails the gate. Null means the data cannot show
-agreement on that field. Either no record has two values for it, or every value
-is the same label. Passing such a field would certify a reliability nobody
-measured. The field's `null_reasons` in the `agreement_analysis` summary says
-which case applies. To keep a field out of the gate, list the fields to check
-in the `agreement_analysis` step's `fields` config.
+### Null fields
 
-The check's entry in the step's `details` lists every field's alpha and the
-fields that failed:
+A field's alpha is null when the data cannot show agreement on it, for one of
+two reasons:
+
+- No unit has two values for the field, as when only one rater set it.
+- Every value is the same label, so chance alone predicts full agreement.
+
+The gate skips such a field. The field goes into the check's `skipped_fields`
+with its null reason and does not fail the gate. Its summary stays in the
+`agreement_analysis` output, so a field where every rater chose one label still
+shows its comparisons and a `percent_agreement` of 1.0.
+
+List a field in the `quality_check` step's `fields` config to require it. A
+listed field fails the gate when its alpha is null, when `agreement_analysis`
+did not report it, or when its alpha is below the threshold.
+
+```yaml
+- id: quality
+  type: quality_check
+  config:
+    min_agreement: 0.6
+    fields: [sentiment, topic]
+```
+
+To leave a field out of both the analysis and the gate, list the fields to
+analyze in the `agreement_analysis` step's `fields` config.
+
+### Nothing measured
+
+When nothing was measured, the check fails with a `code` and a `reason`, and
+the step result's `warnings` repeat both. It never reads a missing agreement as
+0.0.
+
+| `code` | When |
+| --- | --- |
+| `NO_AGREEMENT_RECORDS` | No `agreement_analysis` step ran, or it found no records. |
+| `NO_MEASURED_FIELDS` | Every field was skipped. |
+
+### The check entry
+
+The check's entry in the step's `details` lists every field's alpha, the fields
+that failed, and the fields it skipped:
 
 ```json
 {
@@ -245,20 +273,25 @@ fields that failed:
   "threshold": 0.6,
   "actual": 0.125,
   "passed": false,
-  "fields": {"sentiment": 1.0, "topic": 0.125},
+  "fields": {"sentiment": 1.0, "topic": 0.125, "flag": null},
   "failing_fields": {"topic": 0.125},
+  "skipped_fields": {
+    "flag": "Every compared value is the same label, so chance alone predicts full agreement and the coefficient is 0/0."
+  },
   "code": null,
   "reason": null
 }
 ```
 
-`actual` and `metrics["quality.agreement"]` hold the lowest field alpha, with a
-null field read as 0.0. So `quality.agreement` reaches a positive threshold
-exactly when every field does, and a loop that terminates on it stops when the
-gate would pass. In this example the pooled alpha is 0.6875, above the
-threshold, and the gate still fails on `topic`. With no agreement records,
-`actual` is null and `quality_check` removes `quality.agreement`, so a loop
-that terminates on it keeps running.
+Only the fields decide. The gate fails on `topic` here whatever the pooled alpha
+is.
+
+`actual` and `metrics["quality.agreement"]` hold the lowest alpha of the fields
+the gate did not skip. When a required field is null, or nothing was measured,
+`actual` is null and `quality_check` removes `quality.agreement`. So
+`quality.agreement` reaches the threshold exactly when the gate passes. A loop
+that terminates on `quality.agreement` at the gate's threshold stops when the
+gate would pass, and keeps running while the gate cannot measure.
 
 ## Level of measurement
 

@@ -616,6 +616,15 @@ class TestQualityCheck:
         assert result.success
         assert ctx.variables["quality.passed"] is True
 
+    @pytest.mark.parametrize(
+        ("fields", "valid"), [(["sentiment"], True), ("sentiment", False)]
+    )
+    def test_fields_is_a_list_of_field_names(self, fields: object, valid: bool) -> None:
+        errors = QualityCheckExecutor().validate(
+            "quality", {"fields": fields}, _ctx_with_records()
+        )
+        assert (errors == []) is valid
+
 
 class TestAgreementAnalysis:
     def test_analysis_without_annotations_writes_no_metrics(self) -> None:

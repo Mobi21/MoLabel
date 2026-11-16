@@ -143,8 +143,8 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 
 **`quality_check`**
 
-- Inputs: reads `record_sets[active_record_set_id]`; reads `metrics` for current quality state; reads `config.min_agreement`, `config.min_coverage`, `config.min_confidence` (optional thresholds). `min_agreement` is compared with Krippendorff's alpha of each field in `variables["agreement.fields"]`, and fails when any field is below it or null. When no agreement records were analyzed, the check fails with code `NO_AGREEMENT_RECORDS`. It never reads Cohen's kappa
-- Outputs: writes `step_outputs[step_id]` with pass/fail result and details; writes `metrics["quality.agreement"]`, `metrics["quality.coverage"]`, `metrics["quality.confidence"]`; writes `variables["quality.passed"]` as boolean
+- Inputs: reads `record_sets[active_record_set_id]`; reads `metrics` for current quality state; reads `config.min_agreement`, `config.min_coverage`, `config.min_confidence` (optional thresholds). `min_agreement` is compared with Krippendorff's alpha of each field in `variables["agreement.fields"]`, and fails when any measured field is below it. A field whose alpha is null is skipped, unless `config.fields` lists it. When nothing was measured, the check fails with code `NO_AGREEMENT_RECORDS` or `NO_MEASURED_FIELDS`. It never reads Cohen's kappa
+- Outputs: writes `step_outputs[step_id]` with pass/fail result and details; writes `metrics["quality.agreement"]`, the lowest alpha the gate measured, and removes it when nothing was measured; writes `metrics["quality.coverage"]`, `metrics["quality.confidence"]`; writes `variables["quality.passed"]` as boolean
 - Side effects: creates a `validation_runs` row in SQLite with the quality report; writes audit entry
 - Note: this step does NOT block the workflow — it writes metrics and a pass/fail signal. Use a `conditional` step after it to branch on the result, or a `gate` step to require human approval.
 

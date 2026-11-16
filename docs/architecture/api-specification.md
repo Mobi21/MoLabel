@@ -2201,21 +2201,23 @@ class AgreementMetricSummary(BaseModel):
 ```
 
 A `quality_check` step with `min_agreement` adds this entry to its summary's
-`details`. It fails when any field's Krippendorff's alpha is below the
-threshold or null, even when the pooled alpha passes. When no agreement records
-were analyzed, it fails with `code` `NO_AGREEMENT_RECORDS`, and the step
-result's `warnings` repeat the code and reason.
+`details`. It fails when any measured field's Krippendorff's alpha is below the
+threshold, even when the pooled alpha passes. It skips a field whose alpha is
+null, unless the step's `fields` config lists it. When nothing was measured, it
+fails with a `code`, and the step result's `warnings` repeat the code and
+reason.
 
 ```python
 class MinAgreementCheck:
     check: str                                       # "min_agreement"
     metric: str                                      # "krippendorff_alpha"
     threshold: float
-    actual: float | None                             # lowest field alpha, null read as 0.0; null with no records
+    actual: float | None                             # lowest alpha of the fields not skipped
     passed: bool
     fields: dict[str, float | None]                  # field -> alpha
-    failing_fields: dict[str, float | None]          # fields below threshold or null
-    code: str | None                                 # "NO_AGREEMENT_RECORDS" when nothing was analyzed
+    failing_fields: dict[str, float | None]          # below threshold, or listed in fields and null
+    skipped_fields: dict[str, str]                   # null and not listed -> null reason
+    code: str | None                                 # "NO_AGREEMENT_RECORDS" | "NO_MEASURED_FIELDS"
     reason: str | None                               # what to do about code
 ```
 
