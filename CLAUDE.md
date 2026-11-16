@@ -16,6 +16,7 @@ cd cli && npm ci           # install CLI deps
 npm run build              # compile to dist/; the bin is dist/bin/molabel.js
 npx vitest run             # run CLI tests
 npm run lint               # eslint
+npx prettier --check .     # formatting
 
 # Frontend (work in progress)
 cd frontend && npm ci      # install frontend deps
