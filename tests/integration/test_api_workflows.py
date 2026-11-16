@@ -1697,3 +1697,24 @@ async def test_workflow_list_response_shape(client):
     body = resp.json()
     assert isinstance(body["items"], list)
     assert isinstance(body["has_more"], bool)
+
+
+@pytest.mark.asyncio
+async def test_a_compared_model_left_unset_fails_before_any_call(
+    client, app, tmp_path, hosted_calls, usable_providers
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+
+    resp = await _execute_sentiment_workflow(
+        client,
+        app,
+        tmp_path,
+        workspace_id,
+        {"models": ["claude-sonnet-4-20250514", None]},
+        agent_step_type="agent_compare",
+    )
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"]["code"] == "MODEL_UNRESOLVED"
+    assert _execution_count(app.state.engine, workspace_id) == 0
+    assert hosted_calls == []
