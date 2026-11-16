@@ -149,6 +149,7 @@ def engine():
                 is_overlap INTEGER NOT NULL DEFAULT 0,
                 is_calibration INTEGER NOT NULL DEFAULT 0,
                 draft_labels TEXT,
+                shown_agent_output_id TEXT,
                 ai_revealed INTEGER NOT NULL DEFAULT 0,
                 ai_revealed_at TEXT,
                 submitted_at TEXT,
