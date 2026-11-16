@@ -51,11 +51,14 @@ def test_fresh_database_at_head_matches_the_models(
     assert drift == []
 
 
-@pytest.mark.parametrize("routes_created_audit_events", [False, True])
+@pytest.mark.parametrize(
+    "routes_created_audit_events",
+    [None, "audit_or_release_route", "artifact_route"],
+)
 def test_database_created_before_alembic_is_stamped_and_upgraded(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    routes_created_audit_events: bool,
+    routes_created_audit_events: str | None,
 ) -> None:
     db_path = tmp_path / "legacy.db"
     conn = sqlite3.connect(db_path)
@@ -68,6 +71,8 @@ def test_database_created_before_alembic_is_stamped_and_upgraded(
                 encoding="utf-8"
             )
         )
+        if routes_created_audit_events == "artifact_route":
+            conn.execute("DROP INDEX idx_audit_events_workspace_id")
         conn.execute(
             "INSERT INTO audit_events (id, workspace_id, event_type, actor, "
             "object_type, object_id, summary, details, created_at) "

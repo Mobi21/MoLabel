@@ -20,28 +20,33 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     # A pre-Alembic database already has this table if any route wrote an
-    # audit event. Its columns match, but its id was a nullable TEXT key, so
-    # rebuild it with the rows kept.
+    # audit event. Its columns match, but its id was a nullable TEXT key, and
+    # the artifact route created it without the workspace index. Rebuild it
+    # with the rows kept.
     if sa.inspect(op.get_bind()).has_table("audit_events"):
         with op.batch_alter_table("audit_events", recreate="always") as batch:
             batch.alter_column("id", existing_type=sa.Text(), nullable=False)
-        return
-    op.create_table(
-        "audit_events",
-        sa.Column("id", sa.Text(), nullable=False),
-        sa.Column("workspace_id", sa.Text(), nullable=True),
-        sa.Column("event_type", sa.Text(), nullable=True),
-        sa.Column("actor", sa.Text(), nullable=True),
-        sa.Column("actor_name", sa.Text(), nullable=True),
-        sa.Column("object_type", sa.Text(), nullable=True),
-        sa.Column("object_id", sa.Text(), nullable=True),
-        sa.Column("summary", sa.Text(), nullable=True),
-        sa.Column("details", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.Text(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-    )
+    else:
+        op.create_table(
+            "audit_events",
+            sa.Column("id", sa.Text(), nullable=False),
+            sa.Column("workspace_id", sa.Text(), nullable=True),
+            sa.Column("event_type", sa.Text(), nullable=True),
+            sa.Column("actor", sa.Text(), nullable=True),
+            sa.Column("actor_name", sa.Text(), nullable=True),
+            sa.Column("object_type", sa.Text(), nullable=True),
+            sa.Column("object_id", sa.Text(), nullable=True),
+            sa.Column("summary", sa.Text(), nullable=True),
+            sa.Column("details", sa.Text(), nullable=True),
+            sa.Column("created_at", sa.Text(), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+        )
     op.create_index(
-        "idx_audit_events_workspace_id", "audit_events", ["workspace_id"], unique=False
+        "idx_audit_events_workspace_id",
+        "audit_events",
+        ["workspace_id"],
+        unique=False,
+        if_not_exists=True,
     )
 
 
