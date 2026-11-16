@@ -35,6 +35,9 @@ import type {
   ClaimNextItemData,
   ClaimNextItemErrors,
   ClaimNextItemResponses,
+  CloseQueueCopiesData,
+  CloseQueueCopiesErrors,
+  CloseQueueCopiesResponses,
   CreateArtifactProposalData,
   CreateArtifactProposalErrors,
   CreateArtifactProposalResponses,
@@ -1877,6 +1880,31 @@ export const getQueueStatusEndpoint = <ThrowOnError extends boolean = false>(
   >({ url: '/api/v1/queues/{queue_id}/status', ...options })
 
 /**
+ * Close Queue Copies
+ *
+ * Close every unclaimed copy of a queue, so its review ends with the copies in.
+ *
+ * A queue with more copies of a record than reviewers keeps the extra copies
+ * available, and no reviewer gets two copies of one record. Closing them
+ * lets adjudication list the record and the workflow's ``human_review``
+ * step advance. A closed copy is never reviewed and never counts as a
+ * rater. A claimed copy stays open, because a reviewer holds it. A queue of
+ * another workspace answers 404.
+ */
+export const closeQueueCopies = <ThrowOnError extends boolean = false>(
+  options: Options<CloseQueueCopiesData, ThrowOnError>,
+): RequestResult<
+  CloseQueueCopiesResponses,
+  CloseQueueCopiesErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CloseQueueCopiesResponses,
+    CloseQueueCopiesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/queues/{queue_id}/close-copies', ...options })
+
+/**
  * Get Mission Control Reviewers
  *
  * Get reviewer visibility for mission control (SE-010).
@@ -2036,7 +2064,7 @@ export const listReviewEvents = <ThrowOnError extends boolean = false>(
  * List the records a queue's reviewers disagree on, most severe first.
  *
  * A record is listed once every review task the queue holds for it is
- * submitted or skipped.
+ * submitted, skipped, or closed.
  */
 export const listQueueDisagreements = <ThrowOnError extends boolean = false>(
   options: Options<ListQueueDisagreementsData, ThrowOnError>,

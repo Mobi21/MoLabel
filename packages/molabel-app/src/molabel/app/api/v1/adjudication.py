@@ -7,10 +7,12 @@ so it never counts as a rater, and makes those labels the record's latest
 label, which export reads. Both rows take the queue's workspace.
 
 A record is adjudicated only once every review task the queue holds for it is
-submitted or skipped. While a copy is available or claimed, its disagreement is
-not listed and its detail answers 404. So no reviewer sees the other
-reviewers' labels, or on a blind queue the agent proposal, before their own
-review of the record is in.
+submitted, skipped, or closed. While a copy is available or claimed, its
+disagreement is not listed and its detail answers 404. So no reviewer sees the
+other reviewers' labels, or on a blind queue the agent proposal, before their
+own review of the record is in. Closing a queue's copies, through
+``POST /api/v1/queues/{queue_id}/close-copies``, closes the available ones and
+leaves the claimed ones open.
 
 Every endpoint reads only a queue of the caller's workspace, and answers 404
 for a queue of any other.
@@ -409,7 +411,7 @@ async def list_queue_disagreements(
     """List the records a queue's reviewers disagree on, most severe first.
 
     A record is listed once every review task the queue holds for it is
-    submitted or skipped.
+    submitted, skipped, or closed.
     """
     with get_engine(request).connect() as conn:
         queue = _queue(conn, queue_id, reviewer.workspace_id)

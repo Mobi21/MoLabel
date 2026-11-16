@@ -204,11 +204,16 @@ A `human_review` step with `overlap_count: 2` creates two tasks per record, and
 the queue never hands one reviewer both. The step resumes once every task is
 submitted, so each record then has two reviewers.
 
-A step with `overlap_count: N` needs N distinct reviewers. With fewer, each
-reviewer submits one copy of every record, the queue then looks empty to all of
-them, and the remaining copies stay `available`. The step cannot resume, and
-advancing it returns 409 with a message such as "3 copies need 3 distinct
-reviewers; 2 have submitted". A new reviewer can claim the remaining copies.
+With fewer reviewers than copies, each reviewer submits one copy of every
+record, the queue then looks empty to all of them, and the remaining copies stay
+`available`. Advancing the step returns 409 and names the unclaimed copies.
+Close them with `molabel queue close-copies <queue-id>`, or the adjudication
+screen's Close button, and the step resumes with the reviews in. A closed copy
+is never reviewed, so it never counts as a rater and adds no value to
+agreement. A claimed copy stays open until its reviewer submits, skips, or
+releases it. Adjudication lists a record once none of its copies is
+`available` or `claimed`, so closing the copies also lets it list the records
+the reviewers disagree on.
 
 ## Measuring a queue
 

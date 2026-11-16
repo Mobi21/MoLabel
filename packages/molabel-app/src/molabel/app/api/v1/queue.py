@@ -20,6 +20,7 @@ from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.services.claims import (
     apply_blind_review_policy,
     claim_next,
+    close_open_copies,
     get_queue_status,
     get_reviewer_task,
     get_reviewer_visibility,
@@ -274,9 +275,9 @@ class QueueSummary(BaseModel):
     """One review queue with its per-status task counts.
 
     ``kind`` names the workflow step that created the queue, or is None for
-    a queue no workflow step created. ``my_remaining`` and ``my_submitted``
-    count the caller's own work: records they can still claim or hold, and
-    tasks they submitted.
+    a queue no workflow step created. ``closed`` counts the copies closed
+    unreviewed. ``my_remaining`` and ``my_submitted`` count the caller's own
+    work: records they can still claim or hold, and tasks they submitted.
     """
 
     queue_id: str
@@ -290,6 +291,7 @@ class QueueSummary(BaseModel):
     claimed: int
     submitted: int
     skipped: int
+    closed: int = 0
     my_remaining: int = 0
     my_submitted: int = 0
     created_at: str
@@ -346,7 +348,16 @@ class QueueStatusResponse(BaseModel):
     claimed: int = 0
     submitted: int = 0
     skipped: int = 0
+    closed: int = 0
     active_reviewers: list[QueueActiveReviewer] = []
+
+
+class CloseCopiesResponse(BaseModel):
+    """How many copies a close closed, and how many claimed ones stay open."""
+
+    queue_id: str
+    closed: int
+    claimed: int
 
 
 class ReviewerVisibility(BaseModel):
@@ -803,8 +814,30 @@ async def get_queue_status_endpoint(
         claimed=status["claimed"],
         submitted=status["submitted"],
         skipped=status["skipped"],
+        closed=status["closed"],
         active_reviewers=[QueueActiveReviewer(**r) for r in status["active_reviewers"]],
     )
+
+
+@router.post("/queues/{queue_id}/close-copies", response_model=CloseCopiesResponse)
+async def close_queue_copies(
+    request: Request,
+    queue_id: str,
+    reviewer: CurrentReviewer,
+) -> CloseCopiesResponse:
+    """Close every unclaimed copy of a queue, so its review ends with the copies in.
+
+    A queue with more copies of a record than reviewers keeps the extra copies
+    available, and no reviewer gets two copies of one record. Closing them
+    lets adjudication list the record and the workflow's ``human_review``
+    step advance. A closed copy is never reviewed and never counts as a
+    rater. A claimed copy stays open, because a reviewer holds it. A queue of
+    another workspace answers 404.
+    """
+    engine = get_engine(request)
+    if not queue_in_workspace(engine, queue_id, reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Review queue not found")
+    return CloseCopiesResponse(queue_id=queue_id, **close_open_copies(engine, queue_id))
 
 
 # ---------------------------------------------------------------------------

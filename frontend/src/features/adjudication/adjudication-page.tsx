@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { resolveQueueDisagreementMutation } from '@/api/generated/@tanstack/react-query.gen'
+import {
+  closeQueueCopiesMutation,
+  resolveQueueDisagreementMutation,
+} from '@/api/generated/@tanstack/react-query.gen'
 import type {
   DisagreementDetail,
   DisagreementSummary,
+  QueueSummary,
 } from '@/api/generated/types.gen'
 import { errorCode, errorMessage } from '@/api/client'
 import {
@@ -18,7 +22,7 @@ import { ReadFailed } from '@/components/read-failed'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { QueueHeader } from '@/features/queues/queue-header'
-import { useQueue } from '@/features/queues/queues'
+import { queuesKey, useQueue } from '@/features/queues/queues'
 import { RecordView } from '@/features/review/record-view'
 import { useReviewer } from '@/features/session/session'
 import {
@@ -85,10 +89,7 @@ export function AdjudicationPage() {
         </p>
       )}
       {list.isSuccess && items.length === 0 && (
-        <EmptyState
-          title="No disagreements in this queue."
-          body="A record shows here once every review of it is in and two reviewers labelled it differently."
-        />
+        <NoDisagreements queueId={queueId} queue={queue} />
       )}
       {current && (
         <main className="mx-auto grid w-full max-w-[1400px] flex-1 gap-6 px-6 py-6 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -158,7 +159,76 @@ export function AdjudicationPage() {
   )
 }
 
-function EmptyState({ title, body }: { title: string; body: string }) {
+function NoDisagreements({
+  queueId,
+  queue,
+}: {
+  queueId: string
+  queue: QueueSummary | undefined
+}) {
+  const queryClient = useQueryClient()
+  const close = useMutation({
+    ...closeQueueCopiesMutation(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queuesKey })
+      void queryClient.invalidateQueries({
+        queryKey: disagreementsQuery(queueId).queryKey,
+      })
+    },
+  })
+  const unclaimed = queue?.available ?? 0
+  const claimed = queue?.claimed ?? 0
+  const open = unclaimed + claimed
+  if (open === 0) {
+    return (
+      <EmptyState
+        title="No disagreements in this queue."
+        body="A record shows here once every review of it is in and two reviewers labelled it differently."
+      />
+    )
+  }
+  const copies = (n: number) => (n === 1 ? 'copy' : 'copies')
+  return (
+    <EmptyState
+      title="No disagreements to adjudicate yet."
+      body={`${String(open)} review ${open === 1 ? 'copy is' : 'copies are'} still open: ${String(unclaimed)} unclaimed, ${String(claimed)} claimed. A record shows here once every copy of it is in, and a claimed copy stays open until its reviewer submits, skips or releases it.`}
+    >
+      {unclaimed > 0 && (
+        <div className="mt-6 max-w-lg space-y-3">
+          <p className="text-sm text-ink-soft">
+            A reviewer never gets two copies of one record, so with fewer
+            reviewers than copies the unclaimed ones stay open. Close them to
+            adjudicate with the reviews already in. A closed copy is never
+            reviewed.
+          </p>
+          <Button
+            onClick={() => {
+              close.mutate({ path: { queue_id: queueId } })
+            }}
+            disabled={close.isPending}
+          >
+            Close {unclaimed} unclaimed {copies(unclaimed)}
+          </Button>
+          {close.isError && (
+            <p role="alert" className="text-sm text-signal">
+              {errorMessage(close.error)}
+            </p>
+          )}
+        </div>
+      )}
+    </EmptyState>
+  )
+}
+
+function EmptyState({
+  title,
+  body,
+  children,
+}: {
+  title: string
+  body: string
+  children?: React.ReactNode
+}) {
   const navigate = useNavigate()
   const bindings: Binding[] = [
     {
@@ -177,6 +247,7 @@ function EmptyState({ title, body }: { title: string; body: string }) {
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-16">
         <h2 className="text-xl font-semibold">{title}</h2>
         <p className="mt-2 max-w-lg text-sm text-ink-soft">{body}</p>
+        {children}
       </main>
       <KeyLegend bindings={bindings} />
     </>

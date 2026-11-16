@@ -9,7 +9,9 @@ import pytest_asyncio
 from sqlalchemy import text
 
 from tests.integration.review_flow import (
+    FIRST_REVIEWER,
     OFFLINE_SENTIMENT,
+    SECOND_REVIEWER,
     SENTIMENT_RECORDS,
     _as,
     _claim,
@@ -268,3 +270,104 @@ async def test_resolve_refuses_a_disagreement_that_is_gone(client, app, tmp_path
         headers=_as(tokens[0]),
     )
     assert gone.status_code == 409, gone.text
+
+
+async def _queue_summary(client, workspace_id, queue_id, token):
+    queues = await client.get(
+        "/api/v1/queues", params={"workspace_id": workspace_id}, headers=_as(token)
+    )
+    (queue,) = [q for q in queues.json()["items"] if q["queue_id"] == queue_id]
+    return queue
+
+
+@pytest.mark.asyncio
+async def test_closing_unclaimed_copies_lets_two_reviewers_adjudicate_three_copies(
+    client, app, tmp_path
+):
+    workspace_id, tokens, queue = await _start_review(
+        client, app, tmp_path, reviewers=2, overlap=3
+    )
+    queue_id = queue["queue_id"]
+    await _label_all(client, queue_id, tokens[0], FIRST_REVIEWER)
+    await _label_all(client, queue_id, tokens[1], SECOND_REVIEWER)
+    base = f"/api/v1/adjudication/queues/{queue_id}/disagreements"
+    record_id = _external_ids(app)["r3"]
+    assert (await client.get(base, headers=_as(tokens[0]))).json()["items"] == []
+
+    closed = await client.post(
+        f"/api/v1/queues/{queue_id}/close-copies", headers=_as(tokens[0])
+    )
+
+    assert closed.status_code == 200, closed.text
+    assert closed.json() == {"queue_id": queue_id, "closed": 6, "claimed": 0}
+    listed = (await client.get(base, headers=_as(tokens[0]))).json()
+    assert [item["record_external_id"] for item in listed["items"]] == ["r3"]
+    assert listed["items"][0]["reviewer_count"] == 2
+    detail = await client.get(f"{base}/{record_id}", headers=_as(tokens[1]))
+    assert detail.status_code == 200, detail.text
+    summary = await _queue_summary(client, workspace_id, queue_id, tokens[0])
+    assert (summary["available"], summary["submitted"], summary["closed"]) == (
+        0,
+        12,
+        6,
+    )
+    agreement = await client.get(
+        "/api/v1/quality/agreement",
+        params={"workspace_id": workspace_id, "queue_id": queue_id},
+        headers=_as(tokens[0]),
+    )
+    assert agreement.json()["reviewer_count"] == 2
+
+    again = await client.post(
+        f"/api/v1/queues/{queue_id}/close-copies", headers=_as(tokens[1])
+    )
+    assert again.json() == {"queue_id": queue_id, "closed": 0, "claimed": 0}
+
+
+@pytest.mark.asyncio
+async def test_closing_copies_leaves_a_claimed_blind_copy_open(client, app, tmp_path):
+    _, tokens, queue = await _start_review(
+        client,
+        app,
+        tmp_path,
+        policy="hide_agent_outputs_by_default",
+        reviewers=3,
+        overlap=3,
+    )
+    queue_id = queue["queue_id"]
+    held = await _claim(client, queue_id, tokens[2])
+    contrary = {
+        record: "negative" if sentiment != "negative" else "positive"
+        for record, sentiment in OFFLINE_SENTIMENT.items()
+    }
+    await _label_all(client, queue_id, tokens[0], contrary)
+    await _label_all(client, queue_id, tokens[1], OFFLINE_SENTIMENT)
+    base = f"/api/v1/adjudication/queues/{queue_id}/disagreements"
+    held_record = held["record_external_id"]
+
+    closed = await client.post(
+        f"/api/v1/queues/{queue_id}/close-copies", headers=_as(tokens[0])
+    )
+
+    assert closed.json() == {"queue_id": queue_id, "closed": 5, "claimed": 1}
+    listed = (await client.get(base, headers=_as(tokens[2]))).json()
+    assert sorted(item["record_external_id"] for item in listed["items"]) == sorted(
+        set(SENTIMENT_RECORDS) - {held_record}
+    )
+    hidden = await client.get(
+        f"{base}/{_external_ids(app)[held_record]}", headers=_as(tokens[2])
+    )
+    assert hidden.status_code == 404, hidden.text
+    own = await client.get(f"/api/v1/review-tasks/{held['id']}", headers=_as(tokens[2]))
+    assert own.json()["agent_output"] is None
+
+    await client.post(
+        f"/api/v1/review-tasks/{held['id']}/submit",
+        json={
+            "labels": {"sentiment": OFFLINE_SENTIMENT[held_record]},
+            "auto_claim_next": False,
+        },
+        headers=_as(tokens[2]),
+    )
+    listed = (await client.get(base, headers=_as(tokens[2]))).json()
+    assert held_record in [item["record_external_id"] for item in listed["items"]]

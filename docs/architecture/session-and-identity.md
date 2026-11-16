@@ -164,12 +164,14 @@ When a reviewer's claim expires:
 available → claimed → submitted
                    → available (claim expired; claim_expired_count incremented)
                    → skipped (→ available)
+          → closed (queue close-copies)
 ```
 
 - **available**: item is in the queue, unclaimed, ready to be assigned. Items also return to this status when a claim expires.
 - **claimed**: item is assigned to a reviewer. The reviewer has `claim_timeout` minutes to submit.
 - **submitted**: the reviewer submitted a review event. The item leaves the queue.
 - **skipped**: the reviewer explicitly skipped the item (e.g., clicked "Skip" without submitting). The item returns to `available`.
+- **closed**: an `available` copy that `molabel queue close-copies <queue-id>` closed. It is never reviewed and never counts as a rater. Adjudication and the `human_review` advance count it as done.
 
 ### Review Task Table Schema
 
@@ -180,7 +182,7 @@ CREATE TABLE review_tasks (
     record_id TEXT NOT NULL REFERENCES records(id),
     task_schema_id TEXT NOT NULL REFERENCES task_schemas(id),
     dataset_id TEXT NOT NULL REFERENCES datasets(id),
-    status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available','claimed','submitted','skipped')),
+    status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available','claimed','submitted','skipped','closed')),
     priority INTEGER NOT NULL DEFAULT 0,
     priority_reason TEXT,
     claimed_by TEXT REFERENCES reviewer_profiles(id),
@@ -313,3 +315,4 @@ For overlap review (multiple reviewers review the same item):
 4. Each reviewer independently reviews the item and submits their own review event.
 5. When all N review tasks for a record are submitted, the record's overlap review is complete.
 6. Disagreements between reviewers on the same record are detected by the `agreement_analysis` or `quality_check` steps and routed to adjudication if configured.
+7. With fewer than N reviewers, the extra copies stay `available`, because no reviewer can claim a second copy of a record. `molabel queue close-copies <queue-id>` closes them, and a closed copy counts as done.

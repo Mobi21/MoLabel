@@ -71,6 +71,27 @@ const CHANGED = detail([
   review('e3', 'Bo', 'shipping'),
 ])
 
+function queueSummary(counts: {
+  available: number
+  claimed?: number
+  closed?: number
+}) {
+  return {
+    queue_id: 'q1',
+    workspace_id: 'w1',
+    task_schema_id: 's1',
+    task_schema_title: 'Ticket triage',
+    kind: 'review',
+    total: 18,
+    claimed: 1,
+    submitted: 12,
+    skipped: 0,
+    closed: 0,
+    created_at: '2026-11-16T00:00:00Z',
+    ...counts,
+  }
+}
+
 /** Serve the disagreement as READ, then as CHANGED once a reviewer corrects. */
 function serve({ conflictOnce }: { conflictOnce: boolean }) {
   let current = READ
@@ -224,6 +245,77 @@ describe('AdjudicationPage', () => {
 
     expect(await screen.findByRole('cell', { name: 'shipping' })).toBeVisible()
     expect(screen.getByText(/changed since you opened it/)).toBeVisible()
+  })
+
+  it('names the open copies hiding every record, and closes the unclaimed ones', async () => {
+    let closed = false
+    const calls = fakeApi([
+      [
+        'GET',
+        /^\/api\/v1\/queues$/,
+        () => ({
+          items: [
+            queueSummary(
+              closed ? { available: 0, closed: 5 } : { available: 5 },
+            ),
+          ],
+        }),
+      ],
+      ['GET', /\/task-schemas\/s1$/, () => SCHEMA],
+      [
+        'GET',
+        /\/disagreements$/,
+        () => ({
+          queue_id: 'q1',
+          items: closed ? [SUMMARY] : [],
+          total: closed ? 1 : 0,
+          unresolved: closed ? 1 : 0,
+        }),
+      ],
+      ['GET', /\/disagreements\/rec1$/, () => READ],
+      [
+        'POST',
+        /\/queues\/q1\/close-copies$/,
+        () => {
+          closed = true
+          return { queue_id: 'q1', closed: 5, claimed: 1 }
+        },
+      ],
+    ])
+    renderAdjudication()
+
+    expect(
+      await screen.findByText(/6 review copies are still open/),
+    ).toHaveTextContent('5 unclaimed, 1 claimed')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close 5 unclaimed copies' }),
+    )
+
+    expect(
+      await screen.findByRole('heading', { name: 'ticket-1' }),
+    ).toBeVisible()
+    expect(calls.filter((c) => c.path.endsWith('/close-copies'))).toHaveLength(
+      1,
+    )
+  })
+
+  it('offers no close while only claimed copies are open', async () => {
+    fakeApi([
+      [
+        'GET',
+        /^\/api\/v1\/queues$/,
+        () => ({ items: [queueSummary({ available: 0, claimed: 1 })] }),
+      ],
+      [
+        'GET',
+        /\/disagreements$/,
+        () => ({ queue_id: 'q1', items: [], total: 0, unresolved: 0 }),
+      ],
+    ])
+    renderAdjudication()
+
+    expect(await screen.findByText(/1 review copy is still open/)).toBeVisible()
+    expect(screen.queryByRole('button', { name: /^Close/ })).toBeNull()
   })
 
   it('marks the queue agreement stale after a resolve', async () => {

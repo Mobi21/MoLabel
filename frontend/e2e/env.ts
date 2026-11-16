@@ -22,7 +22,7 @@ export function e2eRoot(): string {
 export interface Seed {
   workspaceId: string
   reviewers: { first: string; second: string }
-  queues: { overlap: string; blind: string }
+  queues: { overlap: string; blind: string; thin: string }
   /** The offline provider's proposal for each ticket, by external id. */
   proposals: Record<string, { intent: string; urgent: boolean }>
 }

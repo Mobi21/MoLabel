@@ -1810,6 +1810,7 @@ are not all built.
 |---|---|---|
 | GET | `/queues?workspace_id=` | Each queue with its `kind` (`review`, `triage`, `calibrate`, `adjudicate`, or null), `task_schema_title`, `blind_review_policy`, status counts, and the caller's `my_remaining` and `my_submitted` |
 | POST | `/queues/{queue_id}/claim` | Claim the next task, with the agent output the blind policy allows |
+| POST | `/queues/{queue_id}/close-copies` | Close every `available` copy, and return how many it `closed` and how many stay `claimed` |
 | GET | `/queues/{queue_id}/my-tasks?limit=` | The caller's latest tasks in the queue, oldest first, a held claim last |
 | GET | `/review-tasks/{task_id}` | A task the caller claimed, submitted, or skipped, with the agent output its claim or reveal showed and the caller's counted `review` |
 | POST | `/review-tasks/{task_id}/submit` | Submit `accept`, `edit`, or `reject` with labels |
@@ -1820,8 +1821,14 @@ are not all built.
 A read never reveals a blind proposal. `GET /review-tasks/{task_id}` shows only
 the output whose id the claim or reveal stored as `shown_agent_output_id`.
 
-`my-tasks` and `GET /review-tasks/{task_id}` read only the caller's workspace.
-A queue or task of another workspace answers 404.
+A closed copy is never reviewed. No reviewer can claim it, and it has no
+review event, so it never counts as a rater. Adjudication and the workflow's
+`human_review` advance count it as done. A claimed copy stays open, because a
+reviewer holds it. The queue list and `GET /queues/{queue_id}/status` count
+closed copies as `closed`.
+
+`my-tasks`, `close-copies` and `GET /review-tasks/{task_id}` read only the
+caller's workspace. A queue or task of another workspace answers 404.
 
 ---
 
@@ -1838,7 +1845,7 @@ Get the next available item for the current reviewer (identified by `molabel_ses
 
 **Response:** `200 OK`
 
-The claim-based model ensures exactly one item is returned and atomically assigned. Review task status values are: `available`, `claimed`, `submitted`, `skipped`. When a claim expires, the task status is set back to `available` (not to a separate `expired` state), and `claim_expired_count` is incremented to track how many times this happened.
+The claim-based model ensures exactly one item is returned and atomically assigned. Review task status values are: `available`, `claimed`, `submitted`, `skipped`, `closed`. When a claim expires, the task status is set back to `available` (not to a separate `expired` state), and `claim_expired_count` is incremented to track how many times this happened.
 
 ```python
 class ReviewQueueItem(BaseModel):
@@ -2002,10 +2009,12 @@ counts as a rater, and sets the record's `latest_label`, which export reads.
 Both rows take the queue's workspace.
 
 A record is adjudicated only once every review task the queue holds for it is
-submitted or skipped. While a copy is `available` or `claimed`, the record's
-disagreement is not listed and its detail answers 404. So no reviewer sees the
-other reviewers' labels, or on a blind queue the agent proposal, before their
-own review of the record is in.
+submitted, skipped, or closed. While a copy is `available` or `claimed`, the
+record's disagreement is not listed and its detail answers 404. So no reviewer
+sees the other reviewers' labels, or on a blind queue the agent proposal,
+before their own review of the record is in. `POST
+/queues/{queue_id}/close-copies` closes the `available` copies of a queue with
+more copies than reviewers.
 
 Each endpoint below reads only a queue of the caller's workspace. A queue of
 another workspace answers 404.

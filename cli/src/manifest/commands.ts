@@ -370,6 +370,12 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       description: 'Claim the next available review task',
     },
     {
+      name: 'queue close-copies',
+      group: 'queue',
+      description:
+        'Close the unclaimed copies of a queue; claimed copies stay open',
+    },
+    {
       name: 'review submit',
       group: 'review',
       description: 'Submit a review task',

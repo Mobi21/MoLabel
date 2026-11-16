@@ -36,6 +36,15 @@ export function registerQueueCommands(
     })
 
   queue
+    .command('close-copies <queue-id>')
+    .description(
+      'Close the unclaimed copies of a queue, so review ends with the copies in',
+    )
+    .action(async (queueId: string) => {
+      await runQueueCloseCopies(getRuntimeOptions(program, runtime), queueId)
+    })
+
+  queue
     .command('reviewers')
     .description('Show mission-control reviewer visibility')
     .action(async () => {
@@ -80,6 +89,18 @@ async function runQueueClaim(
   const client = await requireClient(options, 'queue claim')
   const response = await client.postJson(
     `/api/v1/queues/${encodeURIComponent(queueId)}/claim`,
+    {},
+  )
+  await emit(response, outputMode(options))
+}
+
+async function runQueueCloseCopies(
+  options: CliRuntimeOptions,
+  queueId: string,
+): Promise<void> {
+  const client = await requireClient(options, 'queue close-copies')
+  const response = await client.postJson(
+    `/api/v1/queues/${encodeURIComponent(queueId)}/close-copies`,
     {},
   )
   await emit(response, outputMode(options))

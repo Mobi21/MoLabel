@@ -19,6 +19,7 @@ import {
   checkHfAuth,
   checkProviderHealth,
   claimNextItem,
+  closeQueueCopies,
   createArtifactProposal,
   createDataset,
   createExport,
@@ -170,6 +171,9 @@ import type {
   ClaimNextItemData,
   ClaimNextItemError,
   ClaimNextItemResponse,
+  CloseQueueCopiesData,
+  CloseQueueCopiesError,
+  CloseQueueCopiesResponse,
   CreateArtifactProposalData,
   CreateArtifactProposalError,
   CreateArtifactProposalResponse,
@@ -3418,6 +3422,42 @@ export const getQueueStatusEndpointOptions = (
     queryKey: getQueueStatusEndpointQueryKey(options),
   })
 
+/**
+ * Close Queue Copies
+ *
+ * Close every unclaimed copy of a queue, so its review ends with the copies in.
+ *
+ * A queue with more copies of a record than reviewers keeps the extra copies
+ * available, and no reviewer gets two copies of one record. Closing them
+ * lets adjudication list the record and the workflow's ``human_review``
+ * step advance. A closed copy is never reviewed and never counts as a
+ * rater. A claimed copy stays open, because a reviewer holds it. A queue of
+ * another workspace answers 404.
+ */
+export const closeQueueCopiesMutation = (
+  options?: Partial<Options<CloseQueueCopiesData>>,
+): UseMutationOptions<
+  CloseQueueCopiesResponse,
+  CloseQueueCopiesError,
+  Options<CloseQueueCopiesData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CloseQueueCopiesResponse,
+    CloseQueueCopiesError,
+    Options<CloseQueueCopiesData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await closeQueueCopies({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
 export const getMissionControlReviewersQueryKey = (
   options?: Options<GetMissionControlReviewersData>,
 ) => createQueryKey('getMissionControlReviewers', options)
@@ -3675,7 +3715,7 @@ export const listQueueDisagreementsQueryKey = (
  * List the records a queue's reviewers disagree on, most severe first.
  *
  * A record is listed once every review task the queue holds for it is
- * submitted or skipped.
+ * submitted, skipped, or closed.
  */
 export const listQueueDisagreementsOptions = (
   options: Options<ListQueueDisagreementsData>,

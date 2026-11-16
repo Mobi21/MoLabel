@@ -222,6 +222,12 @@ async function seedWorkspace(workspace: string, config: string): Promise<Seed> {
     'hide_agent_outputs_by_default',
     1,
   )
+  const thin = reviewQueue(
+    'ticket-triage-thin',
+    'Ticket triage, three copies',
+    'show_agent_outputs',
+    3,
+  )
 
   const reviewers = molabel('session', 'list-reviewers') as {
     items: { id: string; display_name: string }[]
@@ -242,7 +248,7 @@ async function seedWorkspace(workspace: string, config: string): Promise<Seed> {
   return {
     workspaceId,
     reviewers: { first: first.id, second },
-    queues: { overlap, blind },
+    queues: { overlap, blind, thin },
     proposals: {
       'ticket-1': { intent: 'refund', urgent: false },
       'ticket-2': { intent: 'bug', urgent: true },
@@ -256,8 +262,9 @@ async function seedWorkspace(workspace: string, config: string): Promise<Seed> {
 
 /**
  * Start the real backend on a temp data folder with no API keys, and seed a
- * workspace through the CLI: a dataset, two task schemas, and two offline
- * workflows run to review, one with overlap_count 2 and one blind.
+ * workspace through the CLI: a dataset, three task schemas, and three offline
+ * workflows run to review: one with overlap_count 2, one blind, and one with
+ * overlap_count 3 for the two reviewers.
  */
 export default async function globalSetup() {
   if (!existsSync(CLI)) {

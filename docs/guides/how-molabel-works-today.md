@@ -75,7 +75,8 @@ REST API. It has four screens behind a reviewer picker:
 - a queue list with each queue's kind and progress,
 - item review, one record at a time, with blind proposals hidden until revealed,
 - adjudication of a queue's disagreements, side by side, once every review
-  copy of the record is in,
+  copy of the record is in or closed, with a button that closes the unclaimed
+  copies of a queue with more copies than reviewers,
 - calibration: per-field Krippendorff's alpha, skipped fields, and reviewers
   against the AI proposal.
 

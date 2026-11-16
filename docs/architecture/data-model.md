@@ -546,7 +546,7 @@ reviewer_profile (global, not workspace-scoped)
 | record_id | UUID | yes | FK to record |
 | task_schema_id | UUID | yes | FK to task_schema |
 | dataset_id | UUID | yes | FK to dataset |
-| status | ReviewTaskStatus | yes | available, claimed, submitted, skipped |
+| status | ReviewTaskStatus | yes | available, claimed, submitted, skipped, closed |
 | priority | int | yes | Higher = more urgent (default 0) |
 | priority_reason | str | no | Why this priority was assigned (e.g., "active_learning_low_confidence", "calibration", "overlap") |
 | claimed_by | UUID | no | FK to reviewer_profile |

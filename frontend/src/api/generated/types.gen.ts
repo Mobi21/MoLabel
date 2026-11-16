@@ -1492,6 +1492,26 @@ export type ClaimResponse = {
 }
 
 /**
+ * CloseCopiesResponse
+ *
+ * How many copies a close closed, and how many claimed ones stay open.
+ */
+export type CloseCopiesResponse = {
+  /**
+   * Queue Id
+   */
+  queue_id: string
+  /**
+   * Closed
+   */
+  closed: number
+  /**
+   * Claimed
+   */
+  claimed: number
+}
+
+/**
  * ComparisonModelResult
  *
  * Per-model result within a comparison.
@@ -4991,6 +5011,10 @@ export type QueueStatusResponse = {
    */
   skipped?: number
   /**
+   * Closed
+   */
+  closed?: number
+  /**
    * Active Reviewers
    */
   active_reviewers?: Array<QueueActiveReviewer>
@@ -5002,9 +5026,9 @@ export type QueueStatusResponse = {
  * One review queue with its per-status task counts.
  *
  * ``kind`` names the workflow step that created the queue, or is None for
- * a queue no workflow step created. ``my_remaining`` and ``my_submitted``
- * count the caller's own work: records they can still claim or hold, and
- * tasks they submitted.
+ * a queue no workflow step created. ``closed`` counts the copies closed
+ * unreviewed. ``my_remaining`` and ``my_submitted`` count the caller's own
+ * work: records they can still claim or hold, and tasks they submitted.
  */
 export type QueueSummary = {
   /**
@@ -5051,6 +5075,10 @@ export type QueueSummary = {
    * Skipped
    */
   skipped: number
+  /**
+   * Closed
+   */
+  closed?: number
   /**
    * My Remaining
    */
@@ -10693,6 +10721,38 @@ export type GetQueueStatusEndpointResponses = {
 
 export type GetQueueStatusEndpointResponse =
   GetQueueStatusEndpointResponses[keyof GetQueueStatusEndpointResponses]
+
+export type CloseQueueCopiesData = {
+  body?: never
+  path: {
+    /**
+     * Queue Id
+     */
+    queue_id: string
+  }
+  query?: never
+  url: '/api/v1/queues/{queue_id}/close-copies'
+}
+
+export type CloseQueueCopiesErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type CloseQueueCopiesError =
+  CloseQueueCopiesErrors[keyof CloseQueueCopiesErrors]
+
+export type CloseQueueCopiesResponses = {
+  /**
+   * Successful Response
+   */
+  200: CloseCopiesResponse
+}
+
+export type CloseQueueCopiesResponse =
+  CloseQueueCopiesResponses[keyof CloseQueueCopiesResponses]
 
 export type GetMissionControlReviewersData = {
   body?: never

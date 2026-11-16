@@ -251,3 +251,57 @@ test('at phone width the key legend never covers the note or the rationale', asy
   )
   await snap(page, 'phone-adjudication')
 })
+
+/** Label every copy the queue hands the signed-in reviewer, through the API. */
+async function labelAll(
+  page: Page,
+  queueId: string,
+  intents: Record<string, string>,
+) {
+  for (;;) {
+    const claim = await page.request.post(`/api/v1/queues/${queueId}/claim`)
+    expect(claim.ok()).toBe(true)
+    const { task } = (await claim.json()) as {
+      task: { id: string; record_external_id: string } | null
+    }
+    if (task === null) return
+    const proposal = seed.proposals[task.record_external_id]
+    const submitted = await page.request.post(
+      `/api/v1/review-tasks/${task.id}/submit`,
+      {
+        data: {
+          labels: {
+            ...proposal,
+            intent: intents[task.record_external_id] ?? proposal?.intent,
+          },
+          auto_claim_next: false,
+        },
+      },
+    )
+    expect(submitted.ok()).toBe(true)
+  }
+}
+
+test('reviewer 1 labels every copy it can claim on a three-copy queue', async ({
+  page,
+}) => {
+  await signIn(page, 'Reviewer 1')
+  await labelAll(page, seed.queues.thin, { 'ticket-4': 'other' })
+})
+
+test('closing the open copies of a three-copy queue lets two reviewers adjudicate', async ({
+  page,
+}) => {
+  await signIn(page, 'Reviewer 2')
+  await labelAll(page, seed.queues.thin, {})
+
+  await page.goto(`/queues/${seed.queues.thin}/adjudication`)
+  await expect(
+    page.getByText(/6 review copies are still open: 6 unclaimed, 0 claimed/),
+  ).toBeVisible()
+  await snap(page, 'adjudication-open-copies')
+  await page.getByRole('button', { name: 'Close 6 unclaimed copies' }).click()
+
+  await expect(page.locator('#disagreement-heading')).toHaveText('ticket-4')
+  await expect(page.getByText('2 reviewers disagree on intent')).toBeVisible()
+})

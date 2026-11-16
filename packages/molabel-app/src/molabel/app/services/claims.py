@@ -32,6 +32,7 @@ from molabel.core.types import (
     BlindReviewPolicy,
     ReviewDecision,
     ReviewEventSource,
+    ReviewTaskStatus,
     canonical_review_decision,
 )
 
@@ -602,6 +603,36 @@ def release_claim(
         return None
 
     return _row_to_task_dict(row)
+
+
+def close_open_copies(engine: Engine, queue_id: str) -> dict[str, int]:
+    """Close every unclaimed copy of a queue, so its review ends with the copies in.
+
+    A closed copy is never reviewed: no reviewer can claim it, and it has no
+    review event, so it never counts as a rater. A claimed copy stays open,
+    because a reviewer holds it. ``closed`` counts the copies this call
+    closed, and ``claimed`` the copies it left open.
+    """
+    now = datetime.now(UTC).isoformat()
+    with engine.begin() as conn:
+        closed = conn.execute(
+            text(
+                """
+                UPDATE review_tasks
+                SET status = 'closed', updated_at = :now
+                WHERE queue_id = :queue_id AND status = 'available'
+                """
+            ),
+            {"queue_id": queue_id, "now": now},
+        ).rowcount
+        claimed = conn.execute(
+            text(
+                "SELECT count(*) FROM review_tasks "
+                "WHERE queue_id = :queue_id AND status = 'claimed'"
+            ),
+            {"queue_id": queue_id},
+        ).scalar_one()
+    return {"closed": int(closed), "claimed": int(claimed)}
 
 
 # ---------------------------------------------------------------------------
@@ -1586,12 +1617,7 @@ def get_queue_status(
             {"queue_id": queue_id},
         ).all()
 
-    status_counts: dict[str, int] = {
-        "available": 0,
-        "claimed": 0,
-        "submitted": 0,
-        "skipped": 0,
-    }
+    status_counts = {status.value: 0 for status in ReviewTaskStatus}
     for row in counts:
         status_counts[str(row[0])] = int(row[1])
 
@@ -1616,6 +1642,7 @@ def get_queue_status(
         "claimed": status_counts["claimed"],
         "submitted": status_counts["submitted"],
         "skipped": status_counts["skipped"],
+        "closed": status_counts["closed"],
         "active_reviewers": active_reviewers,
     }
 
@@ -1652,6 +1679,7 @@ def list_queues(
                     SUM(CASE WHEN t.status = 'claimed' THEN 1 ELSE 0 END),
                     SUM(CASE WHEN t.status = 'submitted' THEN 1 ELSE 0 END),
                     SUM(CASE WHEN t.status = 'skipped' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN t.status = 'closed' THEN 1 ELSE 0 END),
                     MIN(t.created_at),
                     SUM(
                         CASE WHEN t.claimed_by = :reviewer_id
@@ -1697,12 +1725,13 @@ def list_queues(
             "claimed": int(row[5]),
             "submitted": int(row[6]),
             "skipped": int(row[7]),
-            "created_at": str(row[8]),
-            "my_submitted": int(row[9]),
-            "my_remaining": int(row[10]),
-            "task_schema_title": str(row[11]) if row[11] else None,
-            "blind_review_policy": str(row[12]) if row[12] else None,
-            "kind": QUEUE_KINDS.get(str(row[13])) if row[13] else None,
+            "closed": int(row[8]),
+            "created_at": str(row[9]),
+            "my_submitted": int(row[10]),
+            "my_remaining": int(row[11]),
+            "task_schema_title": str(row[12]) if row[12] else None,
+            "blind_review_policy": str(row[13]) if row[13] else None,
+            "kind": QUEUE_KINDS.get(str(row[14])) if row[14] else None,
         }
         for row in rows
     ]

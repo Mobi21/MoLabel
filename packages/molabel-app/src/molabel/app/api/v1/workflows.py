@@ -2116,15 +2116,11 @@ def _assert_human_queue_complete(
     if not queue_id:
         return
 
-    remaining, copies, reviewers = conn.execute(
+    remaining, unclaimed = conn.execute(
         text(
-            "SELECT "
-            "(SELECT count(*) FROM review_tasks "
-            " WHERE queue_id = :queue_id AND status != 'submitted'), "
-            "(SELECT coalesce(max(n), 0) FROM (SELECT count(*) AS n FROM review_tasks "
-            " WHERE queue_id = :queue_id GROUP BY record_id)), "
-            "(SELECT count(DISTINCT claimed_by) FROM review_tasks "
-            " WHERE queue_id = :queue_id AND status = 'submitted')"
+            "SELECT count(*), coalesce(sum(status = 'available'), 0) "
+            "FROM review_tasks "
+            "WHERE queue_id = :queue_id AND status NOT IN ('submitted', 'closed')"
         ),
         {"queue_id": queue_id},
     ).one()
@@ -2133,10 +2129,11 @@ def _assert_human_queue_complete(
             f"Review queue '{queue_id}' is not complete; "
             f"{int(remaining)} task(s) still need submission"
         )
-        if int(copies) > max(int(reviewers), 1):
+        if int(unclaimed) > 0:
             detail += (
-                f". {copies} copies need {copies} distinct reviewers; "
-                f"{reviewers} have submitted"
+                f". {int(unclaimed)} of them are unclaimed; close them with "
+                f"molabel queue close-copies {queue_id} to finish with the "
+                "reviews in"
             )
         raise HTTPException(status_code=409, detail=detail)
 

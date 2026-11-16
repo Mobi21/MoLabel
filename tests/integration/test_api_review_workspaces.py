@@ -172,3 +172,16 @@ async def test_another_workspace_cannot_read_a_queues_tasks_or_agreement(
         headers=_as(tokens[0]),
     )
     assert own.status_code == 200, own.text
+
+
+@pytest.mark.asyncio
+async def test_another_workspace_cannot_close_a_queues_copies(client, app, tmp_path):
+    _, tokens, queue = await _start_review(client, app, tmp_path)
+    close = f"/api/v1/queues/{queue['queue_id']}/close-copies"
+    outsider = _outsider(app, tmp_path)
+
+    refused = await client.post(close, headers=_as(outsider))
+
+    assert refused.status_code == 404, refused.text
+    own = await client.post(close, headers=_as(tokens[0]))
+    assert own.json()["closed"] == queue["total"]
