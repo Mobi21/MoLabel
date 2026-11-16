@@ -21,6 +21,7 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_paths import resolve_in_workspace
 from molabel.core.agents.queue_binding import serialize_agent_output_ids
 from molabel.core.providers.model_defaults import (
     MINIMAX_M27_HIGHSPEED,
@@ -993,7 +994,7 @@ class _WorkflowDataLoader:
         source: str,
         _config: dict[str, Any],
     ) -> list[_LoadedRecord]:
-        source_path = (self._workspace_root / source).resolve()
+        source_path = resolve_in_workspace(self._workspace_root, source)
         if not source_path.is_file():
             raise FileNotFoundError(f"Data source not found: {source}")
 
@@ -1860,7 +1861,7 @@ class _WorkflowExporter:
         if format != "jsonl":
             return {"record_count": len(record_ids)}
 
-        destination_dir = (self._workspace_root / destination).resolve()
+        destination_dir = resolve_in_workspace(self._workspace_root, destination)
         destination_dir.mkdir(parents=True, exist_ok=True)
         output_path = destination_dir / f"{bundle_id}.jsonl"
 

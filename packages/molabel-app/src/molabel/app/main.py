@@ -26,6 +26,10 @@ from molabel.app.api.v1 import router as v1_router
 from molabel.app.schemas import ErrorDetail, ErrorResponse, HealthResponse
 from molabel.app.server_state import server_db_url
 from molabel.app.services.session import get_or_create_app_secret
+from molabel.app.workspace_paths import (
+    WorkspacePathError,
+    workspace_path_error_handler,
+)
 from molabel.core.migration_runner import upgrade_database
 
 # ---------------------------------------------------------------------------
@@ -137,6 +141,8 @@ def create_app() -> FastAPI:
     app.include_router(v1_router)
 
     # ----- exception handlers -----
+
+    app.add_exception_handler(WorkspacePathError, workspace_path_error_handler)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(

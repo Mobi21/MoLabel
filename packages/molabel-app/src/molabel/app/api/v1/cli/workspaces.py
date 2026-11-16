@@ -20,6 +20,7 @@ from molabel.app.services.session import (
     create_session_token,
 )
 from molabel.app.utils import get_engine
+from molabel.app.workspace_paths import new_workspace_root
 from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 
 router = APIRouter(prefix="", tags=["cli"])
@@ -80,10 +81,6 @@ class WorkspaceBootstrapResponse(BaseModel):
     reviewer_id: str | None = None
 
 
-def _resolve_path(path: str) -> Path:
-    return Path(path).expanduser().resolve()
-
-
 def _detect_workspace(path: Path) -> object:
     return WorkspaceBootstrapper().detect_project(path)
 
@@ -104,7 +101,7 @@ async def status(
     if path is None:
         return CLIStatusResponse(workspace_count=workspace_count)
 
-    workspace_path = _resolve_path(path)
+    workspace_path = new_workspace_root(path)
     if not workspace_path.exists():
         return CLIStatusResponse(
             workspace_count=workspace_count,
@@ -128,7 +125,7 @@ async def detect_workspace(
     body: WorkspaceDetectRequest,
 ) -> WorkspaceDetectResponse:
     """Detect whether a path contains a MoLabel workspace."""
-    workspace_path = _resolve_path(body.path)
+    workspace_path = new_workspace_root(body.path)
     if not workspace_path.exists():
         raise HTTPException(status_code=404, detail="Workspace path not found")
 
@@ -153,7 +150,7 @@ async def bootstrap_workspace(
     body: WorkspaceBootstrapRequest,
 ) -> WorkspaceBootstrapResponse:
     """Bootstrap a workspace from a local path."""
-    workspace_path = _resolve_path(body.path)
+    workspace_path = new_workspace_root(body.path)
     workspace_path.mkdir(parents=True, exist_ok=True)
 
     result = WorkspaceBootstrapper().bootstrap(

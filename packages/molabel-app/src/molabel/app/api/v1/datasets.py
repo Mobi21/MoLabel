@@ -10,7 +10,6 @@ import hashlib
 import json
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -20,6 +19,7 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_paths import registered_root, resolve_in_workspace
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -556,22 +556,13 @@ async def import_dataset(
             import_rows = []
             deferred_import = True
         else:
-            # Resolve source URI to a file path
-            workspace_row = conn.execute(
-                text("SELECT root_path FROM workspaces WHERE id = :wid"),
-                {"wid": workspace_id},
-            ).first()
-            workspace_root = (
-                Path(str(workspace_row[0])).expanduser().resolve()
-                if workspace_row and workspace_row[0]
-                else Path.cwd()
-            )
-            source_path = (workspace_root / source_uri).resolve()
-            if not source_path.is_relative_to(workspace_root):
+            workspace_root = registered_root(engine, workspace_id)
+            if workspace_root is None:
                 raise HTTPException(
                     status_code=400,
-                    detail="Source path escapes workspace root",
+                    detail="Dataset workspace has no root folder to import from",
                 )
+            source_path = resolve_in_workspace(workspace_root, source_uri)
             if not source_path.is_file():
                 raise HTTPException(
                     status_code=400,

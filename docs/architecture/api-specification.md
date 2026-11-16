@@ -81,6 +81,28 @@ Additional domain-specific codes:
 | `SNAPSHOT_NOT_FOUND`      | Referenced snapshot does not exist                       |
 | `PLUGIN_INCOMPATIBLE`     | Plugin version incompatible with current workspace       |
 
+### Workspace Paths
+
+The server reads and writes files only inside a registered workspace root.
+This covers every path that comes from a request or from stored config:
+`workspace_root`, artifact selectors, import `source_uri`, workflow data
+sources and export destinations. A path is first refused if it contains a
+`..` segment. It is then resolved, symlinks included, and refused unless it is
+a registered root or inside one. Artifact routes need `workspace_root` or
+`workspace_id`; there is no fallback to the server's working directory.
+Bootstrap is the one route that takes a new root. It needs an absolute path
+without `..`.
+
+| HTTP Status | Code                     | When                                              |
+|-------------|--------------------------|---------------------------------------------------|
+| 400         | `PATH_TRAVERSAL`         | The path contains a `..` segment                  |
+| 400         | `PATH_NOT_ABSOLUTE`      | A workspace root or bootstrap path is relative    |
+| 400         | `WORKSPACE_REQUIRED`     | Neither `workspace_root` nor `workspace_id` given |
+| 403         | `PATH_OUTSIDE_WORKSPACE` | The resolved path is outside every registered root |
+
+`details.path` echoes the rejected path. A workflow step whose path is
+refused fails with "Path is outside the workspace" in its `error_summary`.
+
 ### Filtering
 
 List endpoints support filtering via query params. Filters use exact match unless noted otherwise:
