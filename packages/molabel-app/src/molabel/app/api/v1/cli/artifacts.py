@@ -18,6 +18,7 @@ from molabel.app.api.v1.cli.deps import CurrentCliReviewer
 from molabel.app.utils import get_engine
 from molabel.app.workspace_paths import (
     WorkspaceRoot,
+    glob_in_workspace,
     request_workspace,
     resolve_in_workspace,
 )
@@ -215,18 +216,16 @@ def _proposal_id() -> str:
     return str(uuid.uuid4())
 
 
-def _proposal_root(root: Path) -> Path:
-    proposal_root = root / "workbench" / "proposals" / "artifacts"
-    proposal_root.mkdir(parents=True, exist_ok=True)
-    return proposal_root
-
-
 def _proposal_path(root: Path, proposal_id: str) -> Path:
     try:
         uuid.UUID(proposal_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid proposal id") from exc
-    return _proposal_root(root) / f"{proposal_id}.json"
+    path = resolve_in_workspace(
+        root, f"workbench/proposals/artifacts/{proposal_id}.json"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _load_proposal(root: Path, proposal_id: str) -> dict[str, Any]:
@@ -309,12 +308,11 @@ def _release_links_for_proposal(
     proposal_id: str,
     resolved_path: str | None,
 ) -> list[dict[str, Any]]:
-    releases_root = root / "workbench" / "releases"
-    if not releases_root.exists():
-        return []
-
+    releases_root = resolve_in_workspace(root, "workbench/releases")
     links: list[dict[str, Any]] = []
-    for manifest_path in releases_root.glob("**/proof-manifest.json"):
+    for manifest_path in glob_in_workspace(
+        root, releases_root, "**/proof-manifest.json"
+    ):
         try:
             manifest_text = manifest_path.read_text(encoding="utf-8")
             manifest = json.loads(manifest_text)
@@ -565,7 +563,7 @@ def _resolve_artifact_path(
     workspace: WorkspaceRoot,
 ) -> tuple[Path, dict[str, Any]]:
     if kind == "workspace_manifest":
-        return workspace.path / "workbench.project.yaml", {}
+        return resolve_in_workspace(workspace.path, "workbench.project.yaml"), {}
 
     try:
         _artifact_id, path, metadata = _resolve_db_artifact(

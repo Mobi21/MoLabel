@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 
 from molabel.app.api.v1.cli.deps import CurrentCliReviewer
 from molabel.app.utils import get_engine
+from molabel.app.workspace_paths import glob_in_workspace, resolve_in_workspace
 from molabel.core.agents.queue_binding import deserialize_agent_output_ids
 from molabel.core.data.snapshot_service import SnapshotService
 from molabel.core.models import Dataset, DatasetSnapshot, Record
@@ -582,21 +583,21 @@ async def get_benchmark_run_facts(
     summary_path: str | None = None
     report_path: str | None = None
     if workspace_root:
-        artifact_dir = (
-            Path(workspace_root) / "workbench" / "benchmarks" / "runs" / "live-operator"
+        root = Path(workspace_root).expanduser().resolve()
+        artifact_dir = resolve_in_workspace(
+            root, "workbench/benchmarks/runs/live-operator"
         )
-        if artifact_dir.exists():
-            artifact_files = sorted(
-                str(path.relative_to(artifact_dir))
-                for path in artifact_dir.rglob("*")
-                if path.is_file()
-            )
-            summary_candidate = artifact_dir / "summary.json"
-            report_candidate = artifact_dir / "report.md"
-            if summary_candidate.exists():
-                summary_path = str(summary_candidate)
-            if report_candidate.exists():
-                report_path = str(report_candidate)
+        artifact_files = [
+            str(path.relative_to(artifact_dir))
+            for path in glob_in_workspace(root, artifact_dir, "**/*")
+            if path.is_file()
+        ]
+        summary_candidate = artifact_dir / "summary.json"
+        report_candidate = artifact_dir / "report.md"
+        if summary_candidate.exists():
+            summary_path = str(summary_candidate)
+        if report_candidate.exists():
+            report_path = str(report_candidate)
 
     return BenchmarkRunFactsResponse(
         workflow_execution_id=str(row[0]),

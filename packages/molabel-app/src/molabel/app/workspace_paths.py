@@ -1,7 +1,8 @@
 """Confine request-supplied paths to registered workspace roots.
 
-Every path a request names, directly or through stored config, reaches the
-filesystem only through this module. A path must not contain ``..``, and
+Every path a request names, directly or through stored config, and every
+path the server derives under a workspace root, reaches the filesystem only
+through this module. A path must not contain ``..``, and
 after ``resolve()`` (symlinks included) it must be a registered workspace
 root or inside one. The one exception is bootstrap, which registers a new
 root and so only requires an absolute path without ``..``.
@@ -82,6 +83,13 @@ def resolve_in_workspace(root: Path, raw: str) -> Path:
             raw,
         )
     return resolved
+
+
+def glob_in_workspace(root: Path, base: Path, pattern: str) -> list[Path]:
+    """Resolved matches of *pattern* under *base*, refusing any outside *root*."""
+    if not base.is_dir():
+        return []
+    return [resolve_in_workspace(root, str(hit)) for hit in sorted(base.glob(pattern))]
 
 
 def registered_root(conn, workspace_id: str) -> Path | None:

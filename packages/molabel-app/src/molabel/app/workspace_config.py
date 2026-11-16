@@ -109,7 +109,7 @@ def _write_atomically(path: Path, content: str) -> None:
 def _update_manifest(
     folder: WorkspaceFolder, change: Callable[[WorkspaceManifest], None]
 ) -> None:
-    path = folder.path / MANIFEST_FILENAME
+    path = resolve_in_workspace(folder.path, MANIFEST_FILENAME)
     with _manifest_lock:
         manifest = (
             load_manifest(path)

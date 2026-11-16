@@ -32,7 +32,11 @@ from molabel.app.workspace_config import (
     WorkspaceFolder,
     read_config,
 )
-from molabel.app.workspace_paths import WorkspacePathError, new_workspace_root
+from molabel.app.workspace_paths import (
+    WorkspacePathError,
+    new_workspace_root,
+    resolve_in_workspace,
+)
 from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 from molabel.core.manifest import load_manifest
 
@@ -104,7 +108,7 @@ def _reindex_config_files(engine, folder: WorkspaceFolder) -> list[ManifestConfl
     Missing files are already reported by manifest conflict detection; a file
     that cannot be read as its kind is reported here and its row left alone.
     """
-    manifest = load_manifest(folder.path / MANIFEST_FILENAME)
+    manifest = load_manifest(resolve_in_workspace(folder.path, MANIFEST_FILENAME))
     listed = [
         (kind, entry, index)
         for kind, entries, index in (
@@ -119,9 +123,11 @@ def _reindex_config_files(engine, folder: WorkspaceFolder) -> list[ManifestConfl
         for kind, entry, index in listed:
             slug = getattr(entry, kind.id_field)
             path = entry.definition_path
-            if not path or not (folder.path / path).is_file():
+            if not path:
                 continue
             try:
+                if not resolve_in_workspace(folder.path, path).is_file():
+                    continue
                 index(
                     conn,
                     workspace_id=folder.workspace_id,
@@ -208,6 +214,8 @@ async def bootstrap_workspace(
     """Bootstrap a workspace from a local path."""
     workspace_path = new_workspace_root(body.path)
     workspace_path.mkdir(parents=True, exist_ok=True)
+    # Refuse a manifest that links out of the folder before bootstrap reads it.
+    resolve_in_workspace(workspace_path, MANIFEST_FILENAME)
 
     engine = get_engine(request)
     result = WorkspaceBootstrapper().bootstrap(

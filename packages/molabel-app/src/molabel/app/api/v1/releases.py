@@ -20,6 +20,11 @@ from molabel.app.api.v1.exports import ExportSummary
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_paths import (
+    glob_in_workspace,
+    registered_root,
+    resolve_in_workspace,
+)
 
 router = APIRouter(prefix="/releases", tags=["releases"])
 
@@ -161,12 +166,9 @@ def _metric_value(summary: dict[str, Any], metric_id: str) -> float | None:
 
 
 def _benchmark_summary_candidates(root: Path) -> list[tuple[str, Path, dict[str, Any]]]:
-    runs_root = root / "workbench" / "benchmarks" / "runs"
-    if not runs_root.exists():
-        return []
-
+    runs_root = resolve_in_workspace(root, "workbench/benchmarks/runs")
     candidates: list[tuple[str, Path, dict[str, Any]]] = []
-    for summary_path in sorted(runs_root.glob("**/summary.json")):
+    for summary_path in glob_in_workspace(root, runs_root, "**/summary.json"):
         try:
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -369,13 +371,7 @@ def _release_detail_to_summary(detail: ReleaseDetail) -> ReleaseSummary:
 
 def _workspace_root(engine, workspace_id: str) -> Path | None:
     with engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT root_path FROM workspaces WHERE id = :id"),
-            {"id": workspace_id},
-        ).first()
-    if row is None or not row[0]:
-        return None
-    return Path(str(row[0]))
+        return registered_root(conn, workspace_id)
 
 
 def _write_proof_manifest(
@@ -413,9 +409,10 @@ def _write_proof_manifest(
     if root is None:
         return proof_manifest, None
 
-    release_dir = root / "workbench" / "releases" / _slugify(data.version)
-    release_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = release_dir / "proof-manifest.json"
+    manifest_path = resolve_in_workspace(
+        root, f"workbench/releases/{_slugify(data.version)}/proof-manifest.json"
+    )
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
         json.dumps(proof_manifest, indent=2, sort_keys=True),
         encoding="utf-8",

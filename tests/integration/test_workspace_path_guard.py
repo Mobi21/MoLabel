@@ -152,17 +152,34 @@ async def test_artifact_read_rejects_selectors_that_leave_the_workspace(
     assert "secret: true" not in resp.text
 
 
-@pytest.mark.asyncio
-async def test_artifact_read_rejects_a_symlink_out_of_the_workspace(client, layout):
-    link = layout["workspace"] / "linked"
+def _link_folder(link: Path, target: Path) -> None:
+    """Make *link* a directory symlink to *target*, or a junction on Windows."""
+    link.parent.mkdir(parents=True, exist_ok=True)
     try:
-        os.symlink(layout["outside"], link, target_is_directory=True)
+        os.symlink(target, link, target_is_directory=True)
     except OSError:
         if sys.platform != "win32":
             raise
         import _winapi
 
-        _winapi.CreateJunction(str(layout["outside"]), str(link))
+        _winapi.CreateJunction(str(target), str(link))
+
+
+def _link_file(link: Path, target: Path) -> None:
+    try:
+        os.symlink(target, link)
+    except OSError as exc:
+        pytest.skip(f"cannot create a file symlink here: {exc}")
+
+
+def _outside_files(layout: dict[str, Path]) -> list[str]:
+    outside = layout["outside"]
+    return sorted(p.relative_to(outside).as_posix() for p in outside.rglob("*"))
+
+
+@pytest.mark.asyncio
+async def test_artifact_read_rejects_a_symlink_out_of_the_workspace(client, layout):
+    _link_folder(layout["workspace"] / "linked", layout["outside"])
     resp = await client.post(
         "/api/v1/cli/artifacts/read",
         json={
@@ -342,3 +359,167 @@ async def test_bootstrap_requires_an_absolute_path_without_traversal(
     resp = await client.post("/api/v1/cli/workspaces/bootstrap", json={"path": path})
     assert _error(resp) == expected
     assert not (layout["workspace"].parent / "elsewhere").exists()
+
+
+@pytest.mark.asyncio
+async def test_proposal_through_a_linked_proposals_folder_writes_nothing(
+    client, layout
+):
+    _link_folder(layout["workspace"] / "workbench" / "proposals", layout["outside"])
+
+    resp = await client.post(
+        "/api/v1/cli/artifacts/proposals",
+        json={
+            "kind": "workflow",
+            "selector": "demo",
+            "content": "name: Demo\n",
+            "workspace_root": str(layout["workspace"]),
+        },
+    )
+
+    assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+    assert _outside_files(layout) == ["secret.jsonl", "secret.yaml"]
+
+
+@pytest.mark.asyncio
+async def test_workspace_manifest_read_refuses_a_link_out_of_the_workspace(
+    client, layout
+):
+    manifest = layout["workspace"] / "workbench.project.yaml"
+    _link_file(manifest, layout["outside"] / "secret.yaml")
+
+    resp = await client.post(
+        "/api/v1/cli/artifacts/read",
+        json={
+            "kind": "workspace_manifest",
+            "selector": "workspace",
+            "workspace_root": str(layout["workspace"]),
+        },
+    )
+
+    assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+    assert "secret: true" not in resp.text
+
+
+async def _create_release(client, app, **fields) -> object:
+    return await client.post(
+        "/api/v1/releases",
+        json={
+            "workspace_id": app.state.test_workspace_id,
+            "name": "Guarded",
+            "version": "1.0.0",
+            "export_ids": [],
+            **fields,
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_release_through_a_linked_releases_folder_writes_nothing(
+    client, app, layout
+):
+    _link_folder(layout["workspace"] / "workbench" / "releases", layout["outside"])
+
+    resp = await _create_release(client, app)
+
+    assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+    assert _outside_files(layout) == ["secret.jsonl", "secret.yaml"]
+
+
+@pytest.mark.asyncio
+async def test_release_gate_reads_no_benchmark_summary_through_a_link(
+    client, app, layout
+):
+    run = layout["outside"] / "run-1"
+    run.mkdir()
+    (run / "summary.json").write_text(
+        json.dumps({"run_id": "run-1", "overall_score": 1.0}), encoding="utf-8"
+    )
+    _link_folder(
+        layout["workspace"] / "workbench" / "benchmarks" / "runs", layout["outside"]
+    )
+
+    resp = await _create_release(client, app, benchmark_run_ids=["run-1"])
+
+    assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+
+
+@pytest.mark.asyncio
+async def test_benchmark_run_facts_list_no_files_through_a_link(client, app, layout):
+    _link_folder(
+        layout["workspace"] / "workbench" / "benchmarks" / "runs" / "live-operator",
+        layout["outside"],
+    )
+    execution_id = str(uuid.uuid4())
+    now = datetime.now(UTC).isoformat()
+    with app.state.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO workflow_executions (id, workflow_definition_id, "
+                "workflow_version, status, context, workspace_id, created_at, "
+                "updated_at) VALUES (:id, :wf, 1, 'completed', '{}', :wid, "
+                ":now, :now)"
+            ),
+            {
+                "id": execution_id,
+                "wf": str(uuid.uuid4()),
+                "wid": app.state.test_workspace_id,
+                "now": now,
+            },
+        )
+
+    resp = await client.get(f"/api/v1/cli/benchmark-run-facts/{execution_id}")
+
+    assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+    assert "secret.jsonl" not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_config_write_refuses_a_manifest_linked_out_of_the_workspace(
+    client, app, layout
+):
+    outside_manifest = layout["outside"] / "workbench.project.yaml"
+    elsewhere = (
+        "workspace_id: 00000000-0000-0000-0000-000000000002\n"
+        "workspace_name: Elsewhere\n"
+        "core_version: 0.1.0\n"
+    )
+    outside_manifest.write_text(elsewhere, encoding="utf-8")
+    _link_file(layout["workspace"] / "workbench.project.yaml", outside_manifest)
+
+    resp = await client.post(
+        "/api/v1/task-schemas",
+        json={
+            "workspace_id": app.state.test_workspace_id,
+            "task_type": "text_classification",
+            "title": "Guarded",
+        },
+    )
+
+    assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+    assert outside_manifest.read_text(encoding="utf-8") == elsewhere
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_refuses_a_manifest_linked_out_of_the_folder(
+    client, layout, tmp_path
+):
+    folder = tmp_path / "linked-manifest"
+    folder.mkdir()
+    outside_manifest = layout["outside"] / "workbench.project.yaml"
+    outside_manifest.write_text(
+        "workspace_id: 00000000-0000-0000-0000-000000000001\n"
+        "workspace_name: Elsewhere\n"
+        "core_version: 0.1.0\n",
+        encoding="utf-8",
+    )
+    _link_file(folder / "workbench.project.yaml", outside_manifest)
+
+    resp = await client.post(
+        "/api/v1/cli/workspaces/bootstrap", json={"path": str(folder)}
+    )
+
+    assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+    workspaces = await client.get("/api/v1/workspaces")
+    names = [w["workspace_name"] for w in workspaces.json()["items"]]
+    assert "Elsewhere" not in names
