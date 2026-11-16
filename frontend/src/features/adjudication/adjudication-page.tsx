@@ -10,6 +10,7 @@ import { errorCode, errorMessage } from '@/api/client'
 import {
   disagreementQuery,
   disagreementsQuery,
+  invalidateQueueOutcomes,
   taskSchemaQuery,
 } from '@/api/queries'
 import { Kbd, KeyLegend } from '@/components/key-legend'
@@ -18,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { QueueHeader } from '@/features/queues/queue-header'
 import { useQueue } from '@/features/queues/queues'
 import { RecordView } from '@/features/review/record-view'
+import { useReviewer } from '@/features/session/session'
 import {
   formatValue,
   invalidFields,
@@ -247,6 +249,7 @@ function Resolver({
 }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const reviewer = useReviewer()
   const sources = sourcesOf(detail)
   const conflicts = new Set(detail.fields_in_conflict)
   const resolved = detail.resolution ?? null
@@ -275,8 +278,10 @@ function Resolver({
         disagreementQuery(queueId, detail.record_id).queryKey,
         updated,
       )
-      void queryClient.invalidateQueries({
-        queryKey: disagreementsQuery(queueId).queryKey,
+      invalidateQueueOutcomes(queryClient, {
+        workspaceId: reviewer.workspace_id,
+        queueId,
+        recordId: detail.record_id,
       })
       onResolved()
     },

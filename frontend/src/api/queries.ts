@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import {
   getAgreementMetricsQueryKey,
   getMeQueryKey,
@@ -128,4 +128,21 @@ export const agreementQuery = (workspaceId: string, queueId: string) => {
       (await getAgreementMetrics({ ...options, signal, throwOnError: true }))
         .data,
   })
+}
+
+/**
+ * Mark stale what a submit, correction, skip or resolve changes: the queue's
+ * agreement, its disagreements, and the record's disagreement.
+ */
+export function invalidateQueueOutcomes(
+  queryClient: QueryClient,
+  scope: { workspaceId: string; queueId: string; recordId: string },
+): void {
+  for (const queryKey of [
+    agreementQuery(scope.workspaceId, scope.queueId).queryKey,
+    disagreementsQuery(scope.queueId).queryKey,
+    disagreementQuery(scope.queueId, scope.recordId).queryKey,
+  ]) {
+    void queryClient.invalidateQueries({ queryKey })
+  }
 }

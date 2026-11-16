@@ -1,4 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  QueryClient,
+  QueryClientProvider,
+  type QueryKey,
+} from '@tanstack/react-query'
 import {
   fireEvent,
   render,
@@ -8,7 +12,12 @@ import {
 } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import { meQuery } from '@/api/queries'
+import {
+  agreementQuery,
+  disagreementQuery,
+  disagreementsQuery,
+  meQuery,
+} from '@/api/queries'
 import { fakeApi, type Call } from '@/test/fake-api'
 import { ReviewPage } from './review-page'
 
@@ -138,6 +147,15 @@ function serve(policy: string, fixture = TRIAGE) {
       /\/submit$/,
       () => ({
         submitted_task: { ...task(policy, false), status: 'submitted' },
+        next_task: null,
+        queue_empty: true,
+      }),
+    ],
+    [
+      'POST',
+      /\/skip$/,
+      () => ({
+        skipped_task: { ...task(policy, false), status: 'skipped' },
         next_task: null,
         queue_empty: true,
       }),
@@ -297,6 +315,18 @@ function renderReview() {
     </QueryClientProvider>,
   )
   return queryClient
+}
+
+/** Cache what the calibration and adjudication screens show for a record. */
+function seedOutcomes(queryClient: QueryClient, recordId: string) {
+  const keys: QueryKey[] = [
+    agreementQuery('w1', 'q1').queryKey,
+    disagreementsQuery('q1').queryKey,
+    disagreementQuery('q1', recordId).queryKey,
+  ]
+  for (const key of keys) queryClient.setQueryData(key, {})
+  return () =>
+    keys.map((key) => queryClient.getQueryState(key)?.isInvalidated ?? false)
 }
 
 function press(key: string, init: KeyboardEventInit = {}) {
@@ -491,6 +521,50 @@ describe('ReviewPage', () => {
 
     await waitFor(() => {
       expect(intentButton('other')).toHaveAttribute('aria-pressed', 'true')
+    })
+  })
+
+  it.each([
+    ['submit', ['Enter', { ctrlKey: true }], '/submit'],
+    ['skip', ['s', {}], '/skip'],
+  ] as const)(
+    'marks agreement and disagreements stale after a %s',
+    async (_, [key, init], path) => {
+      const calls = serve('show_agent_outputs')
+      const queryClient = renderReview()
+      const invalidated = seedOutcomes(queryClient, 'rec1')
+      await screen.findByRole('heading', { name: 'ticket-1' })
+
+      press(key, init)
+
+      await waitFor(() => {
+        expect(calls.some((c) => c.path.endsWith(path))).toBe(true)
+      })
+      await waitFor(() => {
+        expect(invalidated()).toEqual([true, true, true])
+      })
+    },
+  )
+
+  it('marks agreement and disagreements stale after a correction', async () => {
+    serveTrail({
+      review_event_id: 'e0',
+      decision: 'edit',
+      labels: { intent: 'bug', urgent: false },
+      rationale: null,
+    })
+    const queryClient = renderReview()
+    const invalidated = seedOutcomes(queryClient, 'rec0')
+    await screen.findByRole('heading', { name: 'ticket-1' })
+    press('k')
+    await screen.findByRole('heading', { name: 'ticket-0' })
+
+    press('3')
+    press('Enter', { ctrlKey: true })
+
+    await screen.findByRole('heading', { name: 'ticket-1' })
+    await waitFor(() => {
+      expect(invalidated()).toEqual([true, true, true])
     })
   })
 })

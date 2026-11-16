@@ -12,12 +12,13 @@ import type {
   ReviewItemResponse,
 } from '@/api/generated/types.gen'
 import { errorMessage } from '@/api/client'
-import { taskSchemaQuery } from '@/api/queries'
+import { invalidateQueueOutcomes, taskSchemaQuery } from '@/api/queries'
 import { KeyLegend } from '@/components/key-legend'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { QueueHeader } from '@/features/queues/queue-header'
 import { useQueue } from '@/features/queues/queues'
+import { useReviewer } from '@/features/session/session'
 import {
   MOD,
   digitKey,
@@ -233,6 +234,7 @@ function ReviewItem({
 }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const reviewer = useReviewer()
   const proposal = item.agent_output?.labels ?? null
   const previous = item.review ? parseLabels(fields, item.review.labels) : null
   const [form, setForm] = useState<Labels>(
@@ -275,10 +277,18 @@ function ReviewItem({
       setProblem(errorMessage(error))
     },
   }
+  function invalidateItem() {
+    void queryClient.invalidateQueries({ queryKey: reviewTaskKey(item.id) })
+    invalidateQueueOutcomes(queryClient, {
+      workspaceId: reviewer.workspace_id,
+      queueId: item.queue_id,
+      recordId: item.record_id,
+    })
+  }
   const submit = useMutation({
     ...submitReviewEndpointMutation(),
     onSuccess: (response) => {
-      void queryClient.invalidateQueries({ queryKey: reviewTaskKey(item.id) })
+      invalidateItem()
       session.advanceHead(response.next_task)
     },
     ...onDone,
@@ -286,7 +296,7 @@ function ReviewItem({
   const skip = useMutation({
     ...skipTaskEndpointMutation(),
     onSuccess: (response) => {
-      void queryClient.invalidateQueries({ queryKey: reviewTaskKey(item.id) })
+      invalidateItem()
       session.advanceHead(response.next_task)
     },
     ...onDone,
@@ -315,7 +325,7 @@ function ReviewItem({
           created_at: event.created_at,
         },
       })
-      void queryClient.invalidateQueries({ queryKey: reviewTaskKey(item.id) })
+      invalidateItem()
       session.refreshTrail()
       session.goNext()
     },

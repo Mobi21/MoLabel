@@ -1,8 +1,12 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  QueryClient,
+  QueryClientProvider,
+  type QueryKey,
+} from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import { meQuery } from '@/api/queries'
+import { agreementQuery, meQuery } from '@/api/queries'
 import { Reply, fakeApi, type Call } from '@/test/fake-api'
 import { AdjudicationPage } from './adjudication-page'
 
@@ -127,6 +131,7 @@ function renderAdjudication() {
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return queryClient
 }
 
 function press(key: string, init: KeyboardEventInit = {}) {
@@ -177,6 +182,24 @@ describe('AdjudicationPage', () => {
     expect(resolves(calls)[1]?.body).toMatchObject({
       resolved_labels: { intent: 'shipping' },
       review_event_ids: ['e1', 'e3'],
+    })
+  })
+
+  it('marks the queue agreement stale after a resolve', async () => {
+    const calls = serve({ conflictOnce: false })
+    const queryClient = renderAdjudication()
+    const agreement: QueryKey = agreementQuery('w1', 'q1').queryKey
+    queryClient.setQueryData(agreement, {})
+    await screen.findByRole('heading', { name: 'ticket-1' })
+
+    press('b')
+    press('Enter', { ctrlKey: true })
+
+    await waitFor(() => {
+      expect(resolves(calls)).toHaveLength(1)
+    })
+    await waitFor(() => {
+      expect(queryClient.getQueryState(agreement)?.isInvalidated).toBe(true)
     })
   })
 })
