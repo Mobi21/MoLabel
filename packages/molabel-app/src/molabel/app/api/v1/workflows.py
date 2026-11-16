@@ -2429,10 +2429,19 @@ def _workflow_document(workflow: WorkflowCreate | WorkflowDetail) -> dict[str, A
 
 
 def _api_step(step: Any) -> dict[str, Any]:
+    """A file's step in the API form.
+
+    Reads the core ``id`` and ``type``, or the ``step_id`` and ``step_type``
+    that the API wrote to workflow files before they used the core format.
+    """
     if not isinstance(step, dict):
         raise ValueError("each workflow step must be a mapping")
     fields = {k: v for k, v in step.items() if k in {"label", "config", "position"}}
-    return {"step_id": step.get("id"), "step_type": step.get("type"), **fields}
+    return {
+        "step_id": step.get("id", step.get("step_id")),
+        "step_type": step.get("type", step.get("step_type")),
+        **fields,
+    }
 
 
 def index_workflow(

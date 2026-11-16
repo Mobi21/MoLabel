@@ -717,3 +717,48 @@ async def test_a_native_workflow_file_reindexes_into_its_row(client, workspace):
         ("review", "human_review", {"sample_strategy": "all"}),
     ]
     assert workflow_file.read_text(encoding="utf-8") == NATIVE_WORKFLOW
+
+
+API_FIELDS_WORKFLOW = """\
+workflow_slug: older-review
+name: Older review
+steps:
+- step_id: ingest
+  step_type: data_ingest
+  label: Intake
+  config:
+    source: data/reviews.jsonl
+"""
+
+
+@pytest.mark.asyncio
+async def test_a_workflow_file_with_api_step_fields_still_reindexes(client, workspace):
+    workflow_file = workspace / "workbench/workflows/older-review.yaml"
+    workflow_file.parent.mkdir(parents=True)
+    workflow_file.write_text(API_FIELDS_WORKFLOW, encoding="utf-8")
+    registered = await _create(
+        client,
+        "/api/v1/workflows",
+        {
+            "name": "Older review",
+            "workflow_slug": "older-review",
+            "file_path": "workbench/workflows/older-review.yaml",
+        },
+    )
+
+    conflicts = await _bootstrap_conflicts(client, workspace)
+    reindexed = await client.get(f"/api/v1/workflows/{registered['workflow_id']}")
+    updated = await client.put(
+        f"/api/v1/workflows/{registered['workflow_id']}",
+        json={"description": "Rewritten by the API."},
+    )
+
+    assert conflicts == []
+    assert [
+        (s["step_id"], s["step_type"], s["label"], s["config"])
+        for s in reindexed.json()["steps"]
+    ] == [("ingest", "data_ingest", "Intake", {"source": "data/reviews.jsonl"})]
+    assert updated.status_code == 200, updated.text
+    assert [(s.id, s.type) for s in parse_workflow_yaml(workflow_file).steps] == [
+        ("ingest", "data_ingest")
+    ]
