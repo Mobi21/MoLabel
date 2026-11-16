@@ -25,6 +25,7 @@ from molabel.app.services.claims import (
     get_reviewer_visibility,
     list_queues,
     pop_expired_notifications,
+    queue_in_workspace,
     release_claim,
     reveal_ai,
     reviewer_queue_tasks,
@@ -749,7 +750,10 @@ async def list_my_queue_tasks_endpoint(
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
 ) -> ReviewerTasksResponse:
     """List the caller's latest tasks in a queue, to step back through them."""
-    items = reviewer_queue_tasks(get_engine(request), queue_id, reviewer.id, limit)
+    engine = get_engine(request)
+    if not queue_in_workspace(engine, queue_id, reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Review queue not found")
+    items = reviewer_queue_tasks(engine, queue_id, reviewer.id, limit)
     return ReviewerTasksResponse(
         queue_id=queue_id,
         items=[ReviewerTaskSummary(**item) for item in items],
@@ -767,7 +771,9 @@ async def get_review_task_endpoint(
     It shows the agent output the claim or reveal showed, so a read never
     reveals a blind proposal, and the caller's counted review event.
     """
-    task = get_reviewer_task(get_engine(request), task_id, reviewer.id)
+    task = get_reviewer_task(
+        get_engine(request), task_id, reviewer.id, reviewer.workspace_id
+    )
     if task is None:
         raise HTTPException(status_code=404, detail="Review task not found")
     return ReviewItemResponse(**task)

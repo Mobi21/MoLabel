@@ -4,7 +4,10 @@ A disagreement is derived on every read from the queue's counted review
 events, the values agreement rates. A resolution is an ``adjudications`` row.
 Resolving with labels also appends a review event with no review task (AJ-007),
 so it never counts as a rater, and makes those labels the record's latest
-label, which export reads.
+label, which export reads. Both rows take the queue's workspace.
+
+Every endpoint reads only a queue of the caller's workspace, and answers 404
+for a queue of any other.
 
 The detect, build, queue, and resolve endpoints in ``queue.py`` take review
 events from the caller and keep nothing. The CLI's adjudication commands use
@@ -146,6 +149,26 @@ class ResolveDisagreement(BaseModel):
 
 
 @dataclass(frozen=True)
+class _Queue:
+    queue_id: str
+    workspace_id: str
+    task_schema_id: str
+
+
+def _queue(conn: Any, queue_id: str, workspace_id: uuid.UUID) -> _Queue:
+    row = conn.execute(
+        text(
+            "SELECT workspace_id, task_schema_id FROM review_tasks "
+            "WHERE queue_id = :q AND workspace_id = :w LIMIT 1"
+        ),
+        {"q": queue_id, "w": str(workspace_id)},
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Review queue not found")
+    return _Queue(queue_id, str(row[0]), str(row[1]))
+
+
+@dataclass(frozen=True)
 class _Disagreement:
     item: AdjudicationQueueItem
     record_external_id: str | None
@@ -216,16 +239,9 @@ def _outcomes_by_record(
     return outcomes
 
 
-def _queue_disagreements(conn: Any, queue_id: str) -> list[_Disagreement]:
-    task_schema_id = conn.execute(
-        text("SELECT task_schema_id FROM review_tasks WHERE queue_id = :q LIMIT 1"),
-        {"q": queue_id},
-    ).scalar()
-    if task_schema_id is None:
-        raise HTTPException(status_code=404, detail="Review queue not found")
-
+def _queue_disagreements(conn: Any, queue: _Queue) -> list[_Disagreement]:
     items = disagreements_from_reviews(
-        queue_review_events(conn, [queue_id]), uuid.UUID(str(task_schema_id))
+        queue_review_events(conn, [queue.queue_id]), uuid.UUID(queue.task_schema_id)
     )
     record_ids = [str(item.record_id) for item in items]
     records = {
@@ -238,7 +254,7 @@ def _queue_disagreements(conn: Any, queue_id: str) -> list[_Disagreement]:
             {"ids": record_ids},
         ).fetchall()
     }
-    outcomes = _outcomes_by_record(conn, str(task_schema_id), record_ids)
+    outcomes = _outcomes_by_record(conn, queue.task_schema_id, record_ids)
 
     disagreements = []
     for item in items:
@@ -260,15 +276,15 @@ def _queue_disagreements(conn: Any, queue_id: str) -> list[_Disagreement]:
     return disagreements
 
 
-def _find(conn: Any, queue_id: str, record_id: str) -> _Disagreement:
-    for disagreement in _queue_disagreements(conn, queue_id):
+def _find(conn: Any, queue: _Queue, record_id: str) -> _Disagreement:
+    for disagreement in _queue_disagreements(conn, queue):
         if str(disagreement.item.record_id) == record_id:
             return disagreement
     raise HTTPException(status_code=404, detail="No disagreement on this record")
 
 
 def _detail(
-    conn: Any, queue_id: str, disagreement: _Disagreement
+    conn: Any, queue: _Queue, disagreement: _Disagreement
 ) -> DisagreementDetail:
     record_id = str(disagreement.item.record_id)
     event_rows = conn.execute(
@@ -289,7 +305,7 @@ def _detail(
                 "SELECT agent_output_ids FROM review_tasks "
                 "WHERE queue_id = :q AND record_id = :r"
             ),
-            {"q": queue_id, "r": record_id},
+            {"q": queue.queue_id, "r": record_id},
         ).fetchall()
         for output_id in deserialize_agent_output_ids(raw)
     }
@@ -357,9 +373,9 @@ async def list_queue_disagreements(
     reviewer: CurrentReviewer,
 ) -> DisagreementQueue:
     """List the records a queue's reviewers disagree on, most severe first."""
-    del reviewer
     with get_engine(request).connect() as conn:
-        disagreements = _queue_disagreements(conn, queue_id)
+        queue = _queue(conn, queue_id, reviewer.workspace_id)
+        disagreements = _queue_disagreements(conn, queue)
     items = [DisagreementSummary(**d.summary()) for d in disagreements]
     return DisagreementQueue(
         queue_id=queue_id,
@@ -380,9 +396,9 @@ async def get_queue_disagreement(
     reviewer: CurrentReviewer,
 ) -> DisagreementDetail:
     """Show a disagreement side by side: the record and each reviewer's labels."""
-    del reviewer
     with get_engine(request).connect() as conn:
-        return _detail(conn, queue_id, _find(conn, queue_id, record_id))
+        queue = _queue(conn, queue_id, reviewer.workspace_id)
+        return _detail(conn, queue, _find(conn, queue, record_id))
 
 
 @router.post(
@@ -406,7 +422,8 @@ async def resolve_queue_disagreement(
         raise HTTPException(status_code=422, detail="resolve needs resolved_labels")
 
     with get_engine(request).begin() as conn:
-        disagreement = _find(conn, queue_id, record_id)
+        queue = _queue(conn, queue_id, reviewer.workspace_id)
+        disagreement = _find(conn, queue, record_id)
         if disagreement.outcome is not None:
             raise HTTPException(
                 status_code=409, detail="This disagreement is already resolved"
@@ -446,7 +463,7 @@ async def resolve_queue_disagreement(
                     "labels": json.dumps(labels),
                     "rationale": body.rationale,
                     "now": now,
-                    "workspace_id": str(reviewer.workspace_id),
+                    "workspace_id": queue.workspace_id,
                 },
             )
             conn.execute(
@@ -480,7 +497,7 @@ async def resolve_queue_disagreement(
                     {"queue_id": queue_id, "review_event_id": review_event_id}
                 ),
                 "now": now,
-                "workspace_id": str(reviewer.workspace_id),
+                "workspace_id": queue.workspace_id,
             },
         )
-        return _detail(conn, queue_id, _find(conn, queue_id, record_id))
+        return _detail(conn, queue, _find(conn, queue, record_id))

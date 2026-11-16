@@ -245,7 +245,7 @@ async def test_krippendorffs_alpha_ordinal_and_missing(
         assert ws_resp.status_code == 201
         agreement_resp = await client.get(
             "/api/v1/quality/agreement",
-            params={"workspace_id": "00000000-0000-0000-0000-000000000001"},
+            params={"workspace_id": ws_resp.json()["workspace_id"]},
         )
         assert agreement_resp.status_code == 200
         ag_body = agreement_resp.json()

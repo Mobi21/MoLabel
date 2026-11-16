@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -194,8 +194,10 @@ async def get_agreement_metrics(
     the labels their counted review event stores. With one task schema in
     scope, every label field of the schema is reported, measured or skipped.
     ``docs/guides/agreement-metrics.md`` gives the formulas and the rules.
+    It measures only the caller's workspace, and answers 404 for any other.
     """
-    del reviewer
+    if workspace_id != str(reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Workspace not found")
     with get_engine(request).connect() as conn:
         tasks = conn.execute(
             text(

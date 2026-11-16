@@ -1708,6 +1708,19 @@ def list_queues(
     ]
 
 
+def queue_in_workspace(engine: Engine, queue_id: str, workspace_id: uuid.UUID) -> bool:
+    """Whether the queue holds tasks of this workspace."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT 1 FROM review_tasks "
+                "WHERE queue_id = :queue_id AND workspace_id = :workspace_id LIMIT 1"
+            ),
+            {"queue_id": queue_id, "workspace_id": str(workspace_id)},
+        ).first()
+    return row is not None
+
+
 def reviewer_queue_tasks(
     engine: Engine, queue_id: str, reviewer_id: uuid.UUID, limit: int
 ) -> list[dict[str, Any]]:
@@ -1757,9 +1770,12 @@ def reviewer_queue_tasks(
 
 
 def get_reviewer_task(
-    engine: Engine, task_id: uuid.UUID, reviewer_id: uuid.UUID
+    engine: Engine,
+    task_id: uuid.UUID,
+    reviewer_id: uuid.UUID,
+    workspace_id: uuid.UUID,
 ) -> dict[str, Any] | None:
-    """Read a task the reviewer claimed, submitted, or skipped.
+    """Read a task of the workspace the reviewer claimed, submitted, or skipped.
 
     The agent output is the one the claim or reveal showed, so a blind task
     the reviewer never revealed shows none. ``review`` is the reviewer's
@@ -1773,10 +1789,15 @@ def get_reviewer_task(
                 FROM review_tasks
                 WHERE id = :task_id
                   AND claimed_by = :reviewer_id
+                  AND workspace_id = :workspace_id
                   AND status IN ('claimed', 'submitted', 'skipped')
                 """
             ),
-            {"task_id": str(task_id), "reviewer_id": str(reviewer_id)},
+            {
+                "task_id": str(task_id),
+                "reviewer_id": str(reviewer_id),
+                "workspace_id": str(workspace_id),
+            },
         ).first()
         if row is None:
             return None

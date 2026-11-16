@@ -1820,6 +1820,9 @@ are not all built.
 A read never reveals a blind proposal. `GET /review-tasks/{task_id}` shows only
 the output whose id the claim or reveal stored as `shown_agent_output_id`.
 
+`my-tasks` and `GET /review-tasks/{task_id}` read only the caller's workspace.
+A queue or task of another workspace answers 404.
+
 ---
 
 #### `GET /review/queue`
@@ -1996,6 +1999,10 @@ A resolution is a row in `adjudications`, keyed to the review events it covers.
 A new review on the record makes a new disagreement to resolve. Resolving with
 labels also appends a review event with no review task (AJ-007), so it never
 counts as a rater, and sets the record's `latest_label`, which export reads.
+Both rows take the queue's workspace.
+
+Each endpoint below reads only a queue of the caller's workspace. A queue of
+another workspace answers 404.
 
 The detect, build, queue, and resolve endpoints in `queue.py` take review events
 from the caller and keep nothing in the database. The CLI's `adjudication`
@@ -2144,6 +2151,8 @@ skipped. [Agreement metrics](../guides/agreement-metrics.md) gives each formula
 and the cases that make a metric null.
 
 **Query params:** `workspace_id` (required), `queue_id`, `dataset_id`, `task_schema_id` (optional)
+
+`workspace_id` must be the caller's workspace. Any other answers 404.
 
 **Response:** `200 OK`
 

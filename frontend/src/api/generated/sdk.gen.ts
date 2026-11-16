@@ -2128,6 +2128,7 @@ export const getQualityDashboard = <ThrowOnError extends boolean = false>(
  * the labels their counted review event stores. With one task schema in
  * scope, every label field of the schema is reported, measured or skipped.
  * ``docs/guides/agreement-metrics.md`` gives the formulas and the rules.
+ * It measures only the caller's workspace, and answers 404 for any other.
  */
 export const getAgreementMetrics = <ThrowOnError extends boolean = false>(
   options: Options<GetAgreementMetricsData, ThrowOnError>,
