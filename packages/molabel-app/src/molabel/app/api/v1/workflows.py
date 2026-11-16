@@ -32,10 +32,7 @@ from molabel.app.schemas import (
 from molabel.app.utils import get_engine
 from molabel.app.workspace_config import WORKFLOW, workspace_files, workspace_folder
 from molabel.app.workspace_paths import resolve_in_workspace
-from molabel.core.agents.queue_binding import (
-    deserialize_agent_output_ids,
-    serialize_agent_output_ids,
-)
+from molabel.core.agents.queue_binding import serialize_agent_output_ids
 from molabel.core.providers.base import ProviderError, resolve_api_key
 from molabel.core.providers.detection import ProviderDetector
 from molabel.core.providers.model_defaults import (
@@ -2029,16 +2026,15 @@ class _ReviewAgreementSource:
         del analysis_type, config
         output_rows = self._conn.execute(
             text(
-                "SELECT id, record_id, agent_run_id, labels FROM agent_outputs "
+                "SELECT record_id, agent_run_id, labels FROM agent_outputs "
                 "WHERE agent_run_id IN :run_ids"
             ).bindparams(bindparam("run_ids", expanding=True)),
             {"run_ids": list(agent_run_ids)},
         ).fetchall()
-        labels_by_output = {str(row[0]): _json_loads(row[3]) for row in output_rows}
         event_rows = self._conn.execute(
             text(
                 "SELECT e.id, e.record_id, e.reviewer_id, e.decision, e.labels, "
-                "e.supersedes_event_id, e.created_at, t.agent_output_ids "
+                "e.supersedes_event_id, e.created_at "
                 "FROM review_events e "
                 "JOIN review_tasks t ON t.id = e.review_task_id "
                 "WHERE e.source = 'human' AND e.reviewer_id IS NOT NULL "
@@ -2053,13 +2049,6 @@ class _ReviewAgreementSource:
                 reviewer_id=str(row[2]),
                 decision=row[3],
                 labels=_json_loads(row[4]) or {},
-                proposal_labels=next(
-                    (
-                        labels_by_output.get(str(output_id))
-                        for output_id in deserialize_agent_output_ids(row[7])
-                    ),
-                    None,
-                ),
                 supersedes_event_id=str(row[5]) if row[5] else None,
                 created_at=_utc(row[6]),
             )
@@ -2067,9 +2056,9 @@ class _ReviewAgreementSource:
         ]
         proposals = [
             AgentProposal(
-                record_id=str(row[1]),
-                agent_run_id=str(row[2]),
-                labels=_json_loads(row[3]) or {},
+                record_id=str(row[0]),
+                agent_run_id=str(row[1]),
+                labels=_json_loads(row[2]) or {},
             )
             for row in output_rows
         ]

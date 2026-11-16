@@ -5,12 +5,13 @@ another, keyed by its run id. A reviewer's value for a record comes from one
 review event, the head of its correction chain: the event no correction
 supersedes. A reviewer with heads in two tasks for one record, such as an
 overlap copy or a later loop pass, counts the latest. The event's decision,
-after ``canonical_review_decision``, picks the labels:
+after ``canonical_review_decision``, says whether it gives a value:
 
-- ``accept`` takes the labels of the proposal the task showed, or the labels
-  the reviewer sent when the task had no proposal.
-- ``edit``, and a submission with no decision, take the submitted labels.
-- ``reject`` and ``skip`` give no value.
+- ``accept``, ``edit``, and a submission with no decision give the labels the
+  event stores. Submission stores the labels the reviewer sent, and an accept
+  with none stores the labels of the proposal the reviewer was shown.
+- ``reject`` and ``skip`` give no value, and neither does an event that
+  stores no labels.
 
 ``docs/guides/agreement-metrics.md`` documents these rules.
 """
@@ -32,14 +33,13 @@ from molabel.core.types import ReviewDecision, canonical_review_decision
 
 @dataclass(frozen=True)
 class ReviewEventLabels:
-    """A human review event and the proposal its task showed."""
+    """A human review event and the labels it stores."""
 
     event_id: str
     record_id: str
     reviewer_id: str
     decision: str | None
     labels: dict[str, Any]
-    proposal_labels: dict[str, Any] | None
     supersedes_event_id: str | None
     created_at: datetime
 
@@ -57,12 +57,8 @@ def _rated_labels(event: ReviewEventLabels) -> dict[str, Any] | None:
     decision = (
         None if event.decision is None else canonical_review_decision(event.decision)
     )
-    if decision == ReviewDecision.accept:
-        if event.proposal_labels is None:
-            return event.labels
-        return event.proposal_labels
-    if decision in (ReviewDecision.edit, None):
-        return event.labels
+    if decision in (ReviewDecision.accept, ReviewDecision.edit, None):
+        return event.labels or None
     return None
 
 

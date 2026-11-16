@@ -2178,8 +2178,8 @@ async def test_an_accept_with_no_labels_and_no_proposal_shown_gives_no_value(
 
     assert advanced.status_code == 200, advanced.text
     summary = _step_results(advanced.json())["agreement"]["summary"]
-    assert summary["human_agent"] is None
-    assert summary["human_agent_fields"] == {}
+    sentiment = summary["human_agent_fields"]["sentiment"]
+    assert (sentiment["comparisons"], sentiment["agreements"]) == (0, 0)
 
 
 @pytest.mark.asyncio
@@ -2204,8 +2204,9 @@ async def test_advance_says_an_overlap_queue_needs_more_reviewers(
     )
 
     assert advanced.status_code == 409
-    assert "3 copies need 3 distinct reviewers; 2 have submitted" in (
-        advanced.json()["error"]["message"]
+    assert (
+        "3 copies need 3 distinct reviewers; 2 have submitted"
+        in (advanced.json()["error"]["message"])
     )
 
 
