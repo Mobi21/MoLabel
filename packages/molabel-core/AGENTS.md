@@ -16,7 +16,6 @@ These modules will be created under `src/molabel/` as development progresses (se
 - `providers` — model provider adapters, runtime profiles, routing rules
 - `agents` — agent adapter interface, run orchestration, output normalization
 - `monitoring` — live run status, event timelines, log aggregation
-- `assistant` — supportive AI summaries, explanations, recommendations
 - `review` — review state machine, blind review, overlap, adjudication inputs
 - `quality` — agreement metrics, delta analysis, readiness summaries
 - `curation` — filtering, mining, clustering, derived subsets

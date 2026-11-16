@@ -160,7 +160,7 @@ For every major action, the system should make it easy to answer:
 
 ## Legacy Assistant Migration
 
-Existing assistant endpoints and UI components may remain in the codebase temporarily, but they are legacy from the old product direction.
+The legacy assistant endpoints (`/api/v1/assistant/*`) and the frontend assistant panel have been removed.
 
 Migration intent:
 

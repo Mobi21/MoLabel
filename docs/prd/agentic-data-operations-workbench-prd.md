@@ -223,7 +223,7 @@ Instead, the core AI story is:
 - bundled skills teach them how,
 - and the GUI lets humans inspect and control the results.
 
-Legacy assistant endpoints or UI can remain temporarily during migration, but they are not part of the intended product direction.
+The legacy assistant endpoints and UI have been removed.
 
 ## 10. Agent Skills
 

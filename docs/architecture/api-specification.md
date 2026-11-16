@@ -2553,68 +2553,6 @@ Disable a plugin. Warns if the plugin is required by active task schemas or data
 
 ---
 
-### Assistant
-
-Supportive AI assistant powered by the user's own configured model providers.
-
----
-
-#### `POST /assistant/query`
-
-Send a question or request to the AI assistant. The server assembles focused context (workflow state, queue stats, agent runs, validation results) and passes it to the user's chosen model.
-
-**Request:**
-
-```python
-class AssistantQuery(BaseModel):
-    query: str                                    # the user's question
-    screen: str                                   # current screen name (e.g., "review", "mission_control", "data_explorer")
-    record_id: str | None = None                  # if asking about a specific record
-    model_profile_id: str | None = None           # null = workspace default
-```
-
-**Response:** `200 OK` (streamed via SSE within the POST response body using `text/event-stream` content type)
-
-```python
-class AssistantResponse(BaseModel):
-    response: str
-    context_used: list[ContextReference]
-    suggested_actions: list[SuggestedAction]
-    model_profile_id: str
-    tokens_used: int | None
-
-class ContextReference(BaseModel):
-    type: str                                 # "workflow_state" | "queue_stats" | "agent_run" | "record" | "validation"
-    id: str | None
-    summary: str
-
-class SuggestedAction(BaseModel):
-    action_type: str                          # "navigate" | "api_call" | "explanation"
-    label: str
-    target: str | None                        # URL path or endpoint
-    params: dict[str, Any] | None
-```
-
----
-
-#### `GET /assistant/context`
-
-Get the current context summary the assistant would use. Useful for debugging and transparency.
-
-**Response:** `200 OK`
-
-```python
-class AssistantContext(BaseModel):
-    workspace_summary: dict[str, Any]
-    active_workflow: dict[str, Any] | None
-    queue_stats: dict[str, Any] | None
-    recent_agent_runs: list[dict[str, Any]]
-    recent_validation_results: list[dict[str, Any]]
-    context_token_count: int
-```
-
----
-
 ### Audit
 
 Append-only audit log for all significant operations.
@@ -3249,8 +3187,6 @@ The local FastAPI server supports multiple concurrent reviewer sessions (PRD Sec
 | GET | `/plugins/{id}` | Plugin detail |
 | POST | `/plugins/{id}/enable` | Enable plugin |
 | POST | `/plugins/{id}/disable` | Disable plugin |
-| POST | `/assistant/query` | AI assistant query |
-| GET | `/assistant/context` | Assistant context |
 | GET | `/audit` | List audit events |
 | GET | `/audit/{id}` | Audit event detail |
 | GET | `/session` | Current session |

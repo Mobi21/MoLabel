@@ -90,13 +90,11 @@ logic stays out of Tauri.
 
 ### 2.5 Assistant Surface Status
 
-The backend still mounts assistant-related API routes, but the product
-direction has moved away from an in-app assistant being the main AI surface.
-Current direction is:
+The in-app assistant API routes and frontend panel have been removed. The
+current direction is:
 
 - external agent plus CLI for primary operation,
-- GUI for control-room and manual operations,
-- assistant APIs treated as secondary or transitional.
+- GUI for control-room and manual operations.
 
 ## 3. Package Map
 
