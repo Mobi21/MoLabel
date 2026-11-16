@@ -394,7 +394,11 @@ async function readWorkflowDefinitionFile(
 async function readWorkflowTemplateDefinition(
   client: Awaited<ReturnType<typeof requireClient>>,
   templateId: string,
-  bindings: { workspaceId: string; datasetId?: string; taskSchemaId?: string },
+  bindings: {
+    workspaceId: string
+    datasetId: string | undefined
+    taskSchemaId: string | undefined
+  },
   overrides: {
     name?: string
     slug?: string
