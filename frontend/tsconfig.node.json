@@ -14,6 +14,8 @@
     "vite.config.ts",
     "vitest.config.ts",
     "eslint.config.js",
-    "openapi-ts.config.ts"
+    "openapi-ts.config.ts",
+    "playwright.config.ts",
+    "e2e"
   ]
 }
