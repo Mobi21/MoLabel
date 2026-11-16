@@ -49,8 +49,8 @@ MoLabel is built to support the full lifecycle of labeled data work:
 
 - `cli/`: the public `molabel` CLI for agents and scripted operation
 - `packages/molabel-app/`: the FastAPI backend API behind the CLI
-- `frontend/`: a work-in-progress control-room UI that is not ready for public
-  use yet
+- `frontend/`: a keyboard-first review GUI for people: review a queue,
+  adjudicate disagreements, and check agreement
 <!-- DRAFT: needs Mobi approval -->
 
 The intended center of gravity is the CLI, not the GUI.

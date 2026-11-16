@@ -21,7 +21,7 @@ This is a uv workspace monorepo with three Python packages, a TypeScript CLI, an
 | `packages/molabel-app/` | `molabel.app` | FastAPI backend: REST API under `/api/v1`, including the CLI routes under `/api/v1/cli`, and the `molabel-dev` launcher |
 | `packages/molabel-plugins/` | `molabel.plugins` | Built-in data loaders and exporters, registered through the `molabel.plugins` entry-point group |
 | `cli/` | `@molabel/cli` | The `molabel` CLI, its command manifest (`cli/manifest/`), and the bundled agent skills (`cli/skills/`) |
-| `frontend/` | N/A | Work-in-progress React control-room UI. Its pages render mock data from `src/mocks/data.ts` and call no API yet |
+| `frontend/` | N/A | The review GUI: a keyboard-first review, adjudication, and calibration queue on the REST API |
 | `tests/` | N/A | pytest suites: `unit/`, `integration/`, `e2e/` |
 | `fixtures/` | N/A | Sample workspaces and grounded benchmark fixtures |
 
@@ -80,10 +80,10 @@ CLI:
 Frontend:
 
 - React 19 + TypeScript (strict), Vite, Tailwind CSS
-- shadcn/ui-style components on Radix primitives
-- React Router, TanStack Query (client set up, no queries yet), Zustand (UI state), React Flow (workflow page)
-- vitest, eslint (`strict-type-checked`), prettier
-- `npm run generate:api` runs `@hey-api/openapi-ts` against a running backend and writes the client to `src/api/generated/`. No generated client is committed yet.
+- shadcn/ui-style components
+- React Router, TanStack Query for server state; screen state lives in components and the URL
+- vitest for components and logic, Playwright for the end-to-end review loop, eslint (`strict-type-checked`), prettier
+- `npm run generate:api` runs `@hey-api/openapi-ts` and writes the client to `src/api/generated/`, which is committed. It reads a running backend on :8000, or the spec file `MOLABEL_OPENAPI_INPUT` names. CI regenerates it and fails on any diff. The generated code builds as its own tsconfig project and eslint and knip skip it.
 
 ## Conventions
 
@@ -109,7 +109,11 @@ uv run pytest tests/integration/ # integration tests
 uv run pytest tests/e2e/         # end-to-end tests (in-process API, recorded LLM cassettes)
 cd cli && npx vitest run         # CLI tests
 cd frontend && npm run test      # frontend tests
+cd frontend && npm run test:e2e  # Playwright: real backend, seeded by the CLI, in Chromium
 ```
+
+The Playwright run needs `uv sync`, `npm run build` in `cli/`, and
+`npx playwright install chromium` in `frontend/`.
 
 Fixture workspaces in `fixtures/` provide sample project data for tests.
 
@@ -120,7 +124,7 @@ Fixture workspaces in `fixtures/` provide sample project data for tests.
 - Do not bypass the plugin interface to add task-specific behavior to the core
 - Do not use wildcard imports
 - Do not import Python modules from the frontend or the CLI (use the REST API only)
-- Do not add heavyweight frontend state management beyond Zustand
+- Do not add frontend state management beyond TanStack Query for server state; shared UI state, if a screen ever needs it, goes in a Zustand store
 - Do not use WebSocket. A feature that needs server push uses SSE.
 - Do not store task schemas, prompts, or workflows only in the database (they must be YAML files)
 - Do not hand-write frontend API calls; use the client that `npm run generate:api` produces

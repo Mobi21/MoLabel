@@ -67,7 +67,7 @@ MoLabel is a uv workspace monorepo with three packages: <!-- DRAFT: needs Mobi a
 Additional top-level apps:
 
 - **cli** (`cli/`) — public `molabel` CLI and bundled agent skills
-- **frontend** (`frontend/`) — work-in-progress control-room UI
+- **frontend** (`frontend/`) — keyboard-first review, adjudication, and calibration GUI
 
 See [AGENTS.md](AGENTS.md) for module boundary rules and conventions.
 
