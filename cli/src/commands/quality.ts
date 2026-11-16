@@ -11,6 +11,7 @@ import {
 
 interface QualityQueryOptions {
   workspaceId?: string
+  queueId?: string
   datasetId?: string
   taskSchemaId?: string
 }
@@ -36,8 +37,11 @@ export function registerQualityCommands(
 
   quality
     .command('agreement')
-    .description('Show agreement metrics')
+    .description(
+      'Measure inter-annotator and human-agent agreement from review events',
+    )
     .option('--workspace-id <id>', 'Workspace ID')
+    .option('--queue-id <id>', 'Review queue ID')
     .option('--dataset-id <id>', 'Dataset ID')
     .option('--task-schema-id <id>', 'Task schema ID')
     .action(async function (this: Command) {
@@ -85,6 +89,7 @@ async function runQualityAgreement(
   const response = await client.getJson(
     `/api/v1/quality/agreement${buildQuery({
       workspace_id: workspaceId,
+      queue_id: query.queueId,
       dataset_id: query.datasetId,
       task_schema_id: query.taskSchemaId,
     })}`,

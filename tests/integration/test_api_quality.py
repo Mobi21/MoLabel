@@ -132,17 +132,16 @@ class TestQualityDashboard:
 
 class TestAgreementMetrics:
     @pytest.mark.asyncio
-    async def test_returns_200(self, auth_client):
+    async def test_an_empty_workspace_measures_nothing(self, auth_client):
         resp = await auth_client.get(
             "/api/v1/quality/agreement",
             params={"workspace_id": _ws(auth_client)},
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert "overall" in body
-        assert "per_field" in body
-        assert "per_reviewer" in body
-        assert "confusion_matrices" in body
+        assert body["record_count"] == 0
+        assert body["inter_annotator"]["pooled"]["krippendorff_alpha"] is None
+        assert "No comparable annotations were available." in body["warnings"]
 
     @pytest.mark.asyncio
     async def test_requires_workspace_id(self, auth_client):

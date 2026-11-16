@@ -249,6 +249,6 @@ async def test_krippendorffs_alpha_ordinal_and_missing(
         )
         assert agreement_resp.status_code == 200
         ag_body = agreement_resp.json()
-        assert "overall" in ag_body
-        assert "per_field" in ag_body
-        assert "per_reviewer" in ag_body
+        assert ag_body["record_count"] == 0
+        assert "skipped_fields" in ag_body["inter_annotator"]
+        assert "pooled" in ag_body["human_agent"]

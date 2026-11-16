@@ -210,6 +210,16 @@ them, and the remaining copies stay `available`. The step cannot resume, and
 advancing it returns 409 with a message such as "3 copies need 3 distinct
 reviewers; 2 have submitted". A new reviewer can claim the remaining copies.
 
+## Measuring a queue
+
+`GET /api/v1/quality/agreement?workspace_id=...&queue_id=...`, the CLI's
+`molabel quality agreement --queue-id <id>`, and the GUI's calibration screen
+measure a queue outside any workflow, from the same review events. They run
+`analyze` twice: `inter_annotator` for the reviewers against each other and
+`human_agent` for each reviewer value paired with each proposal the queue's
+tasks are bound to. Each scope lists its `skipped_fields`, the fields whose
+Krippendorff's alpha is null, with the reason.
+
 ## Workflow outputs
 
 The `agreement_analysis` step's summary holds `pooled`, `fields`, `human_agent`

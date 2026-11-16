@@ -260,8 +260,8 @@ async def test_full_pipeline_text_classification(
         )
         assert agreement_resp.status_code == 200, agreement_resp.text
         agreement_data = agreement_resp.json()
-        assert "overall" in agreement_data
-        assert "per_field" in agreement_data
+        assert "pooled" in agreement_data["inter_annotator"]
+        assert "fields" in agreement_data["inter_annotator"]
 
     # ── Checkpoint 7: Export + Release ────────────────────────────────────
     with checkpoint(ctx, "export_release"):

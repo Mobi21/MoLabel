@@ -446,6 +446,17 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       description: 'Show quality dashboard metrics',
     },
     {
+      name: 'quality agreement',
+      group: 'quality',
+      description:
+        'Measure inter-annotator and human-agent agreement from review events',
+      flags: [
+        { name: '--queue-id', description: 'Measure one review queue' },
+        { name: '--task-schema-id', description: 'Measure one task schema' },
+        { name: '--dataset-id', description: 'Measure one dataset' },
+      ],
+    },
+    {
       name: 'export list',
       group: 'export',
       description: 'List exports',
