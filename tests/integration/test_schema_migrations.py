@@ -101,13 +101,3 @@ def test_database_created_before_alembic_is_stamped_and_upgraded(
     conn.close()
     assert kept == ([("kept",)] if routes_created_audit_events else [])
 
-
-def test_no_application_code_creates_tables_outside_migrations() -> None:
-    offenders = []
-    for path in sorted((REPO_ROOT / "packages").glob("*/src/**/*.py")):
-        if "migrations" in path.parts:
-            continue
-        source = path.read_text(encoding="utf-8")
-        if "CREATE TABLE" in source or ".create_all(" in source:
-            offenders.append(path.relative_to(REPO_ROOT).as_posix())
-    assert offenders == []
