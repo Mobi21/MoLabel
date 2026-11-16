@@ -12,12 +12,14 @@ from molabel.core.quality.grounded_benchmarks import (
     load_jsonl,
     score_grounded_stage,
 )
+from tests.fixture_data import requires_benchmark_fixtures
 
 ROOT = (
     Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks-grounded" / "totto"
 )
 
 
+@requires_benchmark_fixtures
 def test_totto_fixture_preserves_cell_grounded_generation() -> None:
     bundle = load_grounded_benchmark(ROOT)
     assert bundle.scenario.benchmark_id == "totto"

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { readFile, mkdtemp } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -37,6 +38,19 @@ interface ScenarioFixture {
 
 const openServers: MockApiServer[] = []
 
+// Tracked in https://github.com/Mobi21/MoLabel/issues/3
+const benchmarkFixturesPresent = existsSync(
+  resolve(
+    process.cwd(),
+    '..',
+    'fixtures',
+    'benchmarks',
+    'messy-support-ops',
+    'workbench',
+    'benchmarks',
+  ),
+)
+
 afterEach(async () => {
   await Promise.all(openServers.splice(0).map((server) => server.close()))
 })
@@ -65,12 +79,12 @@ async function captureCliJson(
 ): Promise<{ exitCode: number; json: unknown }> {
   const chunks: string[] = []
   const originalWrite = process.stdout.write.bind(process.stdout)
-  process.stdout.write = ((chunk: string | Uint8Array) => {
+  process.stdout.write = (chunk: string | Uint8Array) => {
     chunks.push(
       typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'),
     )
     return true
-  })
+  }
 
   try {
     const result = await runCli(argv)
@@ -463,7 +477,7 @@ async function createMockApiServer(
   return mockServer
 }
 
-describe('benchmark live cli flows', () => {
+describe.skipIf(!benchmarkFixturesPresent)('benchmark live cli flows', () => {
   it('drives the messy support CSV benchmark through session, dataset, import, and schema commands', async () => {
     const fixture = await loadScenario('messy-support-ops')
     const configPath = join(

@@ -10,6 +10,7 @@ from molabel.core.quality.grounded_benchmarks import (
     load_grounded_benchmark,
     load_jsonl,
 )
+from tests.fixture_data import requires_benchmark_fixtures
 
 ROOT = (
     Path(__file__).resolve().parents[2]
@@ -46,6 +47,7 @@ def _score_predictions(
     }
 
 
+@requires_benchmark_fixtures
 def test_clinc150_grounded_fixture_contract() -> None:
     bundle = load_grounded_benchmark(ROOT)
     scenario = bundle.scenario
@@ -96,6 +98,7 @@ def test_clinc150_grounded_fixture_contract() -> None:
     assert heuristic.metrics["intent_accuracy"] == pytest.approx(0.25)
 
 
+@requires_benchmark_fixtures
 def test_clinc150_grounded_files_align() -> None:
     train_rows = load_jsonl(
         ROOT / "workbench" / "benchmarks" / "splits" / "train.jsonl"
@@ -134,6 +137,7 @@ def test_clinc150_grounded_files_align() -> None:
     assert all(row["record_id"] in raw_ids for row in review_rows)
 
 
+@requires_benchmark_fixtures
 def test_clinc150_reference_runs_bound_the_slice() -> None:
     gold_rows = load_jsonl(
         ROOT / "workbench" / "benchmarks" / "gold" / "paper-direct" / "test.jsonl"

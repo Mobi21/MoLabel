@@ -10,6 +10,7 @@ from molabel.core.quality.grounded_benchmarks import (
     load_grounded_benchmark,
     load_jsonl,
 )
+from tests.fixture_data import requires_benchmark_fixtures
 
 ROOT = (
     Path(__file__).resolve().parents[2] / "fixtures" / "benchmarks-grounded" / "scifact"
@@ -56,6 +57,7 @@ def _joint_score(
     }
 
 
+@requires_benchmark_fixtures
 def test_scifact_grounded_fixture_contract() -> None:
     bundle = load_grounded_benchmark(ROOT)
     scenario = bundle.scenario
@@ -103,6 +105,7 @@ def test_scifact_grounded_fixture_contract() -> None:
     }
 
 
+@requires_benchmark_fixtures
 def test_scifact_grounded_files_align() -> None:
     split_rows = load_jsonl(ROOT / "workbench" / "benchmarks" / "splits" / "dev.jsonl")
     paper_gold_rows = load_jsonl(
@@ -187,6 +190,7 @@ def test_scifact_grounded_files_align() -> None:
             assert "_sentence_" in atom
 
 
+@requires_benchmark_fixtures
 def test_scifact_reference_runs_bound_the_slice() -> None:
     gold_rows = load_jsonl(
         ROOT / "workbench" / "benchmarks" / "gold" / "paper-direct" / "dev.jsonl"
