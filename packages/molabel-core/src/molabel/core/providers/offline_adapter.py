@@ -40,13 +40,17 @@ def _mentions(text: str, value: object) -> bool:
     """Whether ``value`` appears in ``text`` as a whole phrase, ignoring case.
 
     Underscores and hyphens in ``value`` match any run of whitespace, so the
-    option ``billing_issue`` matches "billing issue".
+    option ``billing_issue`` matches "billing issue". A word boundary applies
+    only at an edge of ``value`` that is a word character, so ``C++`` and
+    ``(urgent)`` match as written while ``cat`` does not match "category".
     """
     words = [word for word in re.split(r"[\s_-]+", str(value)) if word]
     if not words:
         return False
     phrase = r"[\s_-]+".join(re.escape(word) for word in words)
-    return re.search(rf"\b{phrase}\b", text, re.IGNORECASE) is not None
+    start = r"(?<!\w)" if re.match(r"\w", words[0]) else ""
+    end = r"(?!\w)" if re.search(r"\w$", words[-1]) else ""
+    return re.search(start + phrase + end, text, re.IGNORECASE) is not None
 
 
 def _label_value(name: str, prop: dict[str, Any], text: str) -> Any:

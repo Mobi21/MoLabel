@@ -49,6 +49,37 @@ def test_matches_options_on_word_boundaries_only() -> None:
     assert _label("Any debugging tips?", fields) == {"intent": "other"}
 
 
+@pytest.mark.parametrize(
+    ("option", "text"),
+    [
+        ("C++", "Our backend is written in C++."),
+        (".NET", "Migrating the .NET service"),
+        ("(urgent)", "Subject: (urgent) server down"),
+        ("crédit", "Problème de CRÉDIT sur ma carte"),
+    ],
+)
+def test_matches_options_with_punctuation_or_non_ascii_letters(
+    option: str, text: str
+) -> None:
+    fields = [_categorical(["other", option])]
+
+    assert _label(text, fields) == {"intent": option}
+
+
+@pytest.mark.parametrize(
+    ("option", "text"),
+    [
+        ("cat", "Pick a category"),
+        ("C++", "ABC++ is a different language"),
+        ("crédit", "Trois crédits restants"),
+    ],
+)
+def test_does_not_match_an_option_inside_a_longer_word(option: str, text: str) -> None:
+    fields = [_categorical(["other", option])]
+
+    assert _label(text, fields) == {"intent": "other"}
+
+
 def test_matches_multi_word_options_written_with_separators() -> None:
     fields = [_categorical(["other", "billing_issue", "card-arrival"])]
 
