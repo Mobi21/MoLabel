@@ -80,7 +80,13 @@ export function readErrorCode(result: CliResult): string | undefined {
   return typeof parsed.error?.code === 'string' ? parsed.error.code : undefined
 }
 
-export async function startMockApi(routes: MockRoutes): Promise<MockApi> {
+export async function startMockApi(
+  routes: MockRoutes,
+  fallback: (request: MockRequest) => MockReply = () => ({
+    status: 404,
+    body: { detail: 'Not Found' },
+  }),
+): Promise<MockApi> {
   const requests: MockRequest[] = []
   const server = createServer((req, res) => {
     void (async () => {
@@ -97,10 +103,8 @@ export async function startMockApi(routes: MockRoutes): Promise<MockApi> {
         body: rawBody ? (JSON.parse(rawBody) as unknown) : null,
       }
       requests.push(request)
-      const handler = routes[`${request.method} ${request.path}`]
-      const reply = handler
-        ? handler(request)
-        : { status: 404, body: { detail: 'Not Found' } }
+      const handler = routes[`${request.method} ${request.path}`] ?? fallback
+      const reply = handler(request)
       res.statusCode = reply.status ?? 200
       res.setHeader('content-type', 'application/json')
       for (const [name, value] of Object.entries(reply.headers ?? {})) {
