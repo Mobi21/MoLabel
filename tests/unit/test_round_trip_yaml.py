@@ -47,3 +47,23 @@ def test_comments_survive_when_the_new_data_orders_keys_differently() -> None:
     assert yaml.safe_load(rendered) == data
     assert "# keep me" in rendered
     assert "# and me" in rendered
+
+
+def test_a_float_in_exponent_form_reads_back_as_a_float() -> None:
+    data = {"config": {"threshold": 1e20}}
+
+    for previous in (None, "config:\n  threshold: 0.5  # tuned\n"):
+        assert yaml.safe_load(dump_yaml(data, previous)) == data
+
+
+def test_a_custom_tag_in_the_previous_file_does_not_block_the_write() -> None:
+    data = {"x": {"a": 2}}
+
+    assert yaml.safe_load(dump_yaml(data, "x: !custom {a: 1}\n")) == data
+
+
+def test_a_mapping_key_keeps_its_requested_kind() -> None:
+    value = yaml.safe_load(dump_yaml({"x": {1: "a"}}, "x: {true: a}\n"))
+
+    assert list(value["x"]) == [1]
+    assert type(next(iter(value["x"]))) is int
