@@ -114,6 +114,7 @@ def workspace_folder(engine, workspace_id: str) -> WorkspaceFolder:
 
 
 WORKSPACE_STATE_DIR = ".molabel"
+_IGNORE_ALL = b"*\n"
 
 
 def _state_path(root: Path, *names: str) -> Path:
@@ -124,12 +125,15 @@ def _state_path(root: Path, *names: str) -> Path:
 def _state_dir(root: Path, name: str) -> Path:
     """The folder ``.molabel/<name>/`` in the workspace at *root*, created.
 
-    ``.molabel/`` ignores itself in git.
+    ``.molabel/`` ignores itself in git. Its ``.gitignore`` is rewritten
+    whenever it does not hold exactly ``*``, so a write cut short is
+    repaired by the next one.
     """
     _state_path(root).mkdir(parents=True, exist_ok=True)
     ignore = _state_path(root, ".gitignore")
-    if not ignore.exists():
-        ignore.write_text("*\n", encoding="utf-8")
+    if not (ignore.is_file() and ignore.read_bytes() == _IGNORE_ALL):
+        temp = _state_path(root, f".gitignore.{uuid.uuid4().hex}.tmp")
+        _write_atomically(ignore, _IGNORE_ALL, temp)
     folder = _state_path(root, name)
     folder.mkdir(exist_ok=True)
     return folder

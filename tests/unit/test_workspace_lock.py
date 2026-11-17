@@ -64,11 +64,16 @@ with workspace_files(folder) as files:
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
+@pytest.mark.parametrize("ignore_before", [None, b"", b"*.lock\n"])
 def test_a_config_write_killed_before_its_replace_leaves_git_status_clean(
-    tmp_path: Path,
+    tmp_path: Path, ignore_before: bytes | None
 ) -> None:
     workspace = tmp_path / "workspace"
+    ignore = workspace / ".molabel" / ".gitignore"
     workspace.mkdir()
+    if ignore_before is not None:
+        ignore.parent.mkdir()
+        ignore.write_bytes(ignore_before)
     subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
 
     killed = subprocess.run(
@@ -87,3 +92,4 @@ def test_a_config_write_killed_before_its_replace_leaves_git_status_clean(
 
     assert killed.returncode == 17, killed.stderr
     assert status == ""
+    assert ignore.read_bytes() == b"*\n"

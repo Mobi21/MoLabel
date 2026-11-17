@@ -152,7 +152,8 @@ two disagree:
 - Every writer of a workspace takes turns, whatever its data directory. Each
   write holds an OS-level lock on `.molabel/locks/workspace.lock` inside the
   workspace. `.molabel/` holds a `.gitignore` of `*`, so it never shows in
-  `git status`.
+  `git status`. Every write puts that file back first when it is missing,
+  empty or changed.
 - A write puts the new content in `.molabel/tmp/` and moves it over the file,
   so a process killed partway leaves the old file whole and no stray file
   beside it. The move needs `.molabel/` and the file on one filesystem.
