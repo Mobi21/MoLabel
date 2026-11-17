@@ -147,6 +147,69 @@ All of the formulas above then apply to those pairs.
 - `fleiss_kappa` on two-value units equals Scott's pi.
 - `krippendorff_alpha` is the two-rater alpha over the same pairs.
 
+## Records from review events
+
+In a running workflow, `agreement_analysis` reads its records from the
+workflow's review events and agent outputs, unless the step's
+`agreement_records` config or the `agreement.records` context variable passes
+records in. `molabel.core.quality.review_agreement` builds them.
+
+- The records are the workflow's active record set.
+- Each reviewer is one rater. The annotation's source is `human` and its
+  `rater_id` is the reviewer's id.
+- Each agent run of the workflow is one rater. The annotation's source is
+  `agent`, its `rater_id` is the agent run's id, and its labels are the run's
+  output for the record. `inter_annotator` leaves these out, and the human-agent
+  summary pairs them with the reviewers' values.
+- Only events on tasks in the workflow's review queues count.
+
+The human-agent summary pairs every reviewer's value for a record with every
+run's output for it, including runs the reviewer never saw. The reviewer's
+value is the labels they submitted, so it is the reference for each run. A
+blind reviewer saw no run, and their value still measures every run.
+
+A reviewer can leave several events on one record. One of them counts.
+
+- A correction supersedes the event before it, so the head of the correction
+  chain counts: the event no other event supersedes.
+- A reviewer can have two chain heads for one record, from two tasks in
+  different queues, such as a loop pass that reviews the record again. The
+  latest head counts.
+
+The counted event's labels are the reviewer's value. Submit and correct store
+them when the reviewer acts, and agreement reads them as stored. The event's
+decision, after `canonical_review_decision` maps a legacy name such as
+`accept_ai` or `correct`, says whether they count.
+
+| Decision | Value |
+| --- | --- |
+| `accept` | The labels the reviewer sent. An accept with no labels stores the labels of the proposal the reviewer was shown. With no proposal shown, it stores none and gives no value. |
+| `edit` | The labels the reviewer sent. |
+| no decision | The labels the reviewer sent. |
+| `reject` | No value. Rejecting a proposal does not say which label is right. |
+| `skip` | No value. |
+
+An event that stores no labels gives no value, whatever its decision.
+
+Each claim and reveal records the agent output it returns, or none, as the
+task's `shown_agent_output_id`. Under `hide_agent_outputs_by_default` a claim
+shows no output until the reviewer reveals one, and under `no_agent` no output
+is ever shown. The output shown is the newest one for the record and task
+schema, so it can come from a later run than the one the queue was built from.
+Submit and correct copy the id to the event's `agent_output_id`, and agreement
+never looks the proposal up again.
+
+Two reviewers see the same record only when the queue holds two tasks for it.
+A `human_review` step with `overlap_count: 2` creates two tasks per record, and
+the queue never hands one reviewer both. The step resumes once every task is
+submitted, so each record then has two reviewers.
+
+A step with `overlap_count: N` needs N distinct reviewers. With fewer, each
+reviewer submits one copy of every record, the queue then looks empty to all of
+them, and the remaining copies stay `available`. The step cannot resume, and
+advancing it returns 409 with a message such as "3 copies need 3 distinct
+reviewers; 2 have submitted". A new reviewer can claim the remaining copies.
+
 ## Workflow outputs
 
 The `agreement_analysis` step's summary holds `pooled`, `fields`, `human_agent`
@@ -164,52 +227,107 @@ The step also writes the pooled `agreement.kappa` (`cohen_kappa`),
 `context.variables["agreement.fields"]`.
 
 A null metric is removed from `context.metrics`, which also clears a value from
-an earlier loop pass. `quality_check`, readiness gates and conditional
-predicates read a missing metric as 0.0. A loop with a `metric` termination
-keeps running while its metric is missing. The step summary keeps every key,
-with null for an undefined metric.
+an earlier loop pass. Readiness gates and conditional predicates read a missing
+metric as 0.0. A loop with a `metric` termination keeps running while its metric
+is missing. The step summary keeps every key, with null for an undefined metric.
+The step also writes the number of records it analyzed to its summary's
+`record_count` and to `context.variables["agreement.record_count"]`.
 
 ## The quality_check gate
 
 `quality_check` compares `config.min_agreement` with Krippendorff's alpha of
 each field in `context.variables["agreement.fields"]`. The check fails when any
-field's alpha is below the threshold or null, whatever the pooled alpha is.
-With no per-field summaries, because no `agreement_analysis` step has run, it
-compares the pooled `agreement.krippendorff_alpha` metric instead.
+measured field's alpha is below the threshold, whatever the pooled alpha is.
 
 Alpha is defined for any number of raters and handles missing values, so the
 gate works for three or more reviewers. Earlier versions compared
 `min_agreement` with `agreement.kappa`. That is Cohen's kappa, which is null
-with three or more raters, so those workflows always failed the gate. Configs
-keep the `min_agreement` key, and its threshold now applies to alpha.
+with three or more raters, so those workflows always failed the gate.
 
-A field whose alpha is null fails the gate. Null means the data cannot show
-agreement on that field. Either no record has two values for it, or every value
-is the same label. Passing such a field would certify a reliability nobody
-measured. The field's `null_reasons` in the `agreement_analysis` summary says
-which case applies. To keep a field out of the gate, list the fields to check
-in the `agreement_analysis` step's `fields` config.
+### Thresholds
 
-The check's entry in the step's `details` lists every field's alpha and the
-fields that failed:
+`min_agreement` now means Krippendorff's alpha, not Cohen's kappa. Configs keep
+the `min_agreement` key, and its threshold now applies to alpha. A threshold
+chosen for kappa is worth checking against the alpha standard below.
+
+Krippendorff (2004, p. 241) asks for alpha of at least .800 to rely on a
+variable. A variable between .667 and .800 supports only tentative
+conclusions, and one below .667 should not be relied on. Every bundled template
+sets `min_agreement: 0.80` and cites this standard. MoLabel does not rewrite
+existing workflow files, so a workflow created from an earlier template keeps
+the threshold it was created with.
+
+### Null fields
+
+A field's alpha is null when the data cannot show agreement on it, for one of
+two reasons:
+
+- No unit has two values for the field, as when only one rater set it.
+- Every value is the same label, so chance alone predicts full agreement.
+
+The gate skips such a field. The field goes into the check's `skipped_fields`
+with its null reason and does not fail the gate. Its summary stays in the
+`agreement_analysis` output, so a field where every rater chose one label still
+shows its comparisons and a `percent_agreement` of 1.0.
+
+List a field in the `quality_check` step's `fields` config to require it. A
+listed field fails the gate when its alpha is null, when `agreement_analysis`
+did not report it, or when its alpha is below the threshold.
+
+```yaml
+- id: quality
+  type: quality_check
+  config:
+    # Reliable alpha per Krippendorff (2004, p. 241).
+    min_agreement: 0.80
+    fields: [sentiment, topic]
+```
+
+To leave a field out of both the analysis and the gate, list the fields to
+analyze in the `agreement_analysis` step's `fields` config.
+
+### Nothing measured
+
+When nothing was measured, the check fails with a `code` and a `reason`, and
+the step result's `warnings` repeat both. It never reads a missing agreement as
+0.0.
+
+| `code` | When |
+| --- | --- |
+| `NO_AGREEMENT_RECORDS` | No `agreement_analysis` step ran, or it found no records. |
+| `NO_MEASURED_FIELDS` | Every field was skipped. |
+
+### The check entry
+
+The check's entry in the step's `details` lists every field's alpha, the fields
+that failed, and the fields it skipped:
 
 ```json
 {
   "check": "min_agreement",
   "metric": "krippendorff_alpha",
-  "threshold": 0.6,
+  "threshold": 0.8,
   "actual": 0.125,
   "passed": false,
-  "fields": {"sentiment": 1.0, "topic": 0.125},
-  "failing_fields": {"topic": 0.125}
+  "fields": {"sentiment": 1.0, "topic": 0.125, "flag": null},
+  "failing_fields": {"topic": 0.125},
+  "skipped_fields": {
+    "flag": "Every compared value is the same label, so chance alone predicts full agreement and the coefficient is 0/0."
+  },
+  "code": null,
+  "reason": null
 }
 ```
 
-`actual` and `metrics["quality.agreement"]` hold the lowest field alpha, with a
-null field read as 0.0. So `quality.agreement` reaches a positive threshold
-exactly when every field does, and a loop that terminates on it stops when the
-gate would pass. In this example the pooled alpha is 0.6875, above the
-threshold, and the gate still fails on `topic`.
+Only the fields decide. The gate fails on `topic` here whatever the pooled alpha
+is.
+
+`actual` and `metrics["quality.agreement"]` hold the lowest alpha of the fields
+the gate did not skip. When a required field is null, or nothing was measured,
+`actual` is null and `quality_check` removes `quality.agreement`. So
+`quality.agreement` reaches the threshold exactly when the gate passes. A loop
+that terminates on `quality.agreement` at the gate's threshold stops when the
+gate would pass, and keeps running while the gate cannot measure.
 
 ## Level of measurement
 
@@ -241,6 +359,9 @@ those rows nor the 0.430 have been checked against a copy of the paper.
   *Educational and Psychological Measurement*, 20(1), 37-46.
 - Fleiss, J. L. (1971). Measuring nominal scale agreement among many raters.
   *Psychological Bulletin*, 76(5), 378-382.
+- Krippendorff, K. (2004). *Content Analysis: An Introduction to Its
+  Methodology* (2nd ed.). Sage. The reliability chapter, p. 241, sets the
+  .800 and .667 standards.
 - Krippendorff, K. (2011). Computing Krippendorff's alpha-reliability.
   Departmental Papers (ASC) 43, University of Pennsylvania. Version 2011.1.25,
   literature updated 2013.9.13.

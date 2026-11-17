@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -18,7 +19,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from molabel.app.api.v1.model_profiles import SHARED_PROFILE_WORKSPACE
 from molabel.app.middleware.session import CurrentReviewer
@@ -41,6 +42,12 @@ from molabel.core.providers.model_defaults import (
 from molabel.core.providers.offline_adapter import (
     OFFLINE_CONFIDENCE,
     OFFLINE_MODEL_ID,
+)
+from molabel.core.quality.agreement_metrics import AgreementRecord
+from molabel.core.quality.review_agreement import (
+    AgentProposal,
+    ReviewEventLabels,
+    agreement_records_from_reviews,
 )
 from molabel.core.types import (
     BlindReviewPolicy,
@@ -1618,6 +1625,7 @@ class _LlmAgentRunner:
             "batch_count": 1 if record_ids else 0,
             "event_count": completed,
             "error_summary": error_summary,
+            "provider_type": provider_type,
         }
 
     def _label_record(
@@ -1991,6 +1999,72 @@ class _WorkflowExporter:
         }
 
 
+def _utc(value: Any) -> datetime:
+    parsed = datetime.fromisoformat(str(value))
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+class _ReviewAgreementSource:
+    """Agreement records from a workflow's review events and agent proposals.
+
+    ``molabel.core.quality.review_agreement`` decides which event counts and
+    which labels each decision rates.
+    """
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    def load_agreement_records(
+        self,
+        *,
+        record_ids: Sequence[str],
+        review_queue_ids: Sequence[str],
+        agent_run_ids: Sequence[str],
+        analysis_type: str,
+        config: dict[str, Any],
+    ) -> list[AgreementRecord]:
+        del analysis_type, config
+        output_rows = self._conn.execute(
+            text(
+                "SELECT record_id, agent_run_id, labels FROM agent_outputs "
+                "WHERE agent_run_id IN :run_ids"
+            ).bindparams(bindparam("run_ids", expanding=True)),
+            {"run_ids": list(agent_run_ids)},
+        ).fetchall()
+        event_rows = self._conn.execute(
+            text(
+                "SELECT e.id, e.record_id, e.reviewer_id, e.decision, e.labels, "
+                "e.supersedes_event_id, e.created_at "
+                "FROM review_events e "
+                "JOIN review_tasks t ON t.id = e.review_task_id "
+                "WHERE e.source = 'human' AND e.reviewer_id IS NOT NULL "
+                "AND t.queue_id IN :queue_ids"
+            ).bindparams(bindparam("queue_ids", expanding=True)),
+            {"queue_ids": list(review_queue_ids)},
+        ).fetchall()
+        events = [
+            ReviewEventLabels(
+                event_id=str(row[0]),
+                record_id=str(row[1]),
+                reviewer_id=str(row[2]),
+                decision=row[3],
+                labels=_json_loads(row[4]) or {},
+                supersedes_event_id=str(row[5]) if row[5] else None,
+                created_at=_utc(row[6]),
+            )
+            for row in event_rows
+        ]
+        proposals = [
+            AgentProposal(
+                record_id=str(row[0]),
+                agent_run_id=str(row[1]),
+                labels=_json_loads(row[2]) or {},
+            )
+            for row in output_rows
+        ]
+        return agreement_records_from_reviews(events, proposals, record_ids=record_ids)
+
+
 def _materialize_review_queue(
     conn: Any,
     *,
@@ -2027,6 +2101,7 @@ def _materialize_review_queue(
             {"agent_run_id": latest_agent_run_id},
         ).fetchall()
     output_by_record = {str(row[1]): uuid.UUID(str(row[0])) for row in output_rows}
+    overlap_count = int(config.get("overlap_count", 1))
 
     now = datetime.now(UTC).isoformat()
     for priority, record_id in enumerate(record_ids, start=1):
@@ -2040,33 +2115,35 @@ def _materialize_review_queue(
         output_id = output_by_record.get(record_id)
         if output_id is not None:
             agent_output_ids = serialize_agent_output_ids([output_id])
-        conn.execute(
-            text(
-                "INSERT INTO review_tasks "
-                "(id, queue_id, record_id, task_schema_id, status, priority, "
-                "priority_reason, claimed_by, claimed_at, claim_expired_count, "
-                "is_overlap, is_calibration, draft_labels, agent_output_ids, "
-                "ai_revealed, ai_revealed_at, submitted_at, created_at, updated_at, "
-                "workspace_id, dataset_id) "
-                "VALUES (:id, :queue_id, :record_id, :task_schema_id, :status, "
-                ":priority, 'workflow_queue', NULL, NULL, 0, 0, 0, NULL, "
-                ":agent_output_ids, 0, NULL, NULL, :created_at, :updated_at, "
-                ":workspace_id, :dataset_id)"
-            ),
-            {
-                "id": str(uuid.uuid4()),
-                "queue_id": queue_id,
-                "record_id": record_id,
-                "task_schema_id": task_schema_id,
-                "status": ReviewTaskStatusEnum.available.value,
-                "priority": priority,
-                "agent_output_ids": agent_output_ids,
-                "created_at": now,
-                "updated_at": now,
-                "workspace_id": workspace_id,
-                "dataset_id": str(record_row[0]),
-            },
-        )
+        for _copy in range(overlap_count):
+            conn.execute(
+                text(
+                    "INSERT INTO review_tasks "
+                    "(id, queue_id, record_id, task_schema_id, status, priority, "
+                    "priority_reason, claimed_by, claimed_at, claim_expired_count, "
+                    "is_overlap, is_calibration, draft_labels, agent_output_ids, "
+                    "ai_revealed, ai_revealed_at, submitted_at, created_at, "
+                    "updated_at, workspace_id, dataset_id) "
+                    "VALUES (:id, :queue_id, :record_id, :task_schema_id, :status, "
+                    ":priority, 'workflow_queue', NULL, NULL, 0, :is_overlap, 0, "
+                    "NULL, :agent_output_ids, 0, NULL, NULL, :created_at, "
+                    ":updated_at, :workspace_id, :dataset_id)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "queue_id": queue_id,
+                    "record_id": record_id,
+                    "task_schema_id": task_schema_id,
+                    "status": ReviewTaskStatusEnum.available.value,
+                    "priority": priority,
+                    "is_overlap": overlap_count > 1,
+                    "agent_output_ids": agent_output_ids,
+                    "created_at": now,
+                    "updated_at": now,
+                    "workspace_id": workspace_id,
+                    "dataset_id": str(record_row[0]),
+                },
+            )
 
 
 def _assert_human_queue_complete(
@@ -2082,21 +2159,29 @@ def _assert_human_queue_complete(
     if not queue_id:
         return
 
-    remaining = conn.execute(
+    remaining, copies, reviewers = conn.execute(
         text(
-            "SELECT count(*) FROM review_tasks "
-            "WHERE queue_id = :queue_id AND status != 'submitted'"
+            "SELECT "
+            "(SELECT count(*) FROM review_tasks "
+            " WHERE queue_id = :queue_id AND status != 'submitted'), "
+            "(SELECT coalesce(max(n), 0) FROM (SELECT count(*) AS n FROM review_tasks "
+            " WHERE queue_id = :queue_id GROUP BY record_id)), "
+            "(SELECT count(DISTINCT claimed_by) FROM review_tasks "
+            " WHERE queue_id = :queue_id AND status = 'submitted')"
         ),
         {"queue_id": queue_id},
-    ).scalar_one()
+    ).one()
     if int(remaining) > 0:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Review queue '{queue_id}' is not complete; "
-                f"{int(remaining)} task(s) still need submission"
-            ),
+        detail = (
+            f"Review queue '{queue_id}' is not complete; "
+            f"{int(remaining)} task(s) still need submission"
         )
+        if int(copies) > max(int(reviewers), 1):
+            detail += (
+                f". {copies} copies need {copies} distinct reviewers; "
+                f"{reviewers} have submitted"
+            )
+        raise HTTPException(status_code=409, detail=detail)
 
 
 def _restore_engine_state(
@@ -2144,6 +2229,7 @@ def _run_engine_until_blocked(
                 conn,
                 workspace_root=workspace_root,
             ),
+            "agreement_data_source": _ReviewAgreementSource(conn),
         },
     )
     engine.initialize(definition, workflow_context)

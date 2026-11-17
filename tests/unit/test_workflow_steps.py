@@ -7,12 +7,17 @@ output steps (WF-018 through WF-020), and control steps (WF-021 through WF-034).
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+
 from molabel.core.agents.agent_run_orchestrator import AgentRunBatchResult
 from molabel.core.workflow.context import (
     RecordSet,
     WorkflowContext,
 )
 from molabel.core.workflow.steps.agent_steps import (
+    OFFLINE_SMOKE_RUN_NOTE,
     AgentCompareExecutor,
     AgentRunExecutor,
 )
@@ -367,6 +372,35 @@ class TestAgentRun:
 
 
 class TestAgentCompare:
+    @pytest.mark.parametrize(
+        ("providers", "offline"),
+        [
+            ({"m1": "offline", "m2": "offline"}, True),
+            ({"m1": "offline", "m2": "anthropic"}, False),
+        ],
+    )
+    def test_a_comparison_of_offline_models_is_an_offline_smoke_run(
+        self, providers: dict[str, str], offline: bool
+    ) -> None:
+        class Runner:
+            def run(self, **kwargs: Any) -> dict[str, Any]:
+                return {
+                    "agent_run_id": kwargs["agent_run_id"],
+                    "completed_records": 5,
+                    "provider_type": providers[kwargs["config"]["model"]],
+                }
+
+        result = AgentCompareExecutor().execute(
+            "compare",
+            {"models": list(providers), "prompt_ref": "p.yaml"},
+            _ctx_with_records(),
+            {"agent_runner": Runner()},
+        )
+
+        assert result.output is not None
+        assert result.output.summary["offline_smoke_run"] is offline
+        assert result.output.warnings == ([OFFLINE_SMOKE_RUN_NOTE] if offline else [])
+
     def test_basic_compare(self) -> None:
         executor = AgentCompareExecutor()
         ctx = _ctx_with_records()
@@ -501,6 +535,17 @@ class TestHumanReview:
         assert result.success
         assert ctx.metrics["review.accept_ai_rate"] == 0.7
 
+    @pytest.mark.parametrize(
+        ("overlap_count", "valid"), [(2, True), (0, False), ("two", False)]
+    )
+    def test_overlap_count_is_a_positive_integer(
+        self, overlap_count: object, valid: bool
+    ) -> None:
+        errors = HumanReviewExecutor().validate(
+            "review", {"overlap_count": overlap_count}, _ctx_with_records()
+        )
+        assert (errors == []) is valid
+
 
 class TestHumanTriage:
     def test_creates_queue(self) -> None:
@@ -551,11 +596,27 @@ class TestHumanAdjudication:
 # ---------------------------------------------------------------------------
 
 
+def _analyze_two_raters(ctx: WorkflowContext, pairs: list[tuple[str, str]]) -> None:
+    records = [
+        {
+            "record_id": f"u{index}",
+            "annotations": [
+                {"source": "human", "rater_id": rater, "labels": {"label": value}}
+                for rater, value in zip(("a", "b"), pair, strict=True)
+            ],
+        }
+        for index, pair in enumerate(pairs)
+    ]
+    AgreementAnalysisExecutor().execute(
+        "agreement", {"agreement_records": records}, ctx
+    )
+
+
 class TestQualityCheck:
     def test_all_pass(self) -> None:
         executor = QualityCheckExecutor()
         ctx = _ctx_with_records()
-        ctx.metrics["agreement.krippendorff_alpha"] = 0.95
+        _analyze_two_raters(ctx, [("x", "x"), ("y", "y")])
         ctx.metrics["review.coverage"] = 0.98
         ctx.metrics["agent.avg_confidence"] = 0.90
 
@@ -570,7 +631,7 @@ class TestQualityCheck:
     def test_agreement_fails(self) -> None:
         executor = QualityCheckExecutor()
         ctx = _ctx_with_records()
-        ctx.metrics["agreement.krippendorff_alpha"] = 0.50
+        _analyze_two_raters(ctx, [("x", "x"), ("y", "x")])
 
         result = executor.execute(
             "quality",
@@ -586,6 +647,15 @@ class TestQualityCheck:
         result = executor.execute("quality", {}, ctx)
         assert result.success
         assert ctx.variables["quality.passed"] is True
+
+    @pytest.mark.parametrize(
+        ("fields", "valid"), [(["sentiment"], True), ("sentiment", False)]
+    )
+    def test_fields_is_a_list_of_field_names(self, fields: object, valid: bool) -> None:
+        errors = QualityCheckExecutor().validate(
+            "quality", {"fields": fields}, _ctx_with_records()
+        )
+        assert (errors == []) is valid
 
 
 class TestAgreementAnalysis:

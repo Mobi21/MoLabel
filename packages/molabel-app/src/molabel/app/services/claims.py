@@ -370,49 +370,37 @@ def _validate_structured_submission_labels(
     return errors
 
 
+def _shown_agent_output_id(conn, task_id: uuid.UUID) -> str | None:
+    """Return the agent output the task's claim or reveal showed, if any."""
+    shown = conn.execute(
+        text("SELECT shown_agent_output_id FROM review_tasks WHERE id = :task_id"),
+        {"task_id": str(task_id)},
+    ).scalar()
+    return str(shown) if shown else None
+
+
 def _resolve_effective_submission_labels(
     conn,
     *,
-    task_id: uuid.UUID,
+    shown_output_id: str | None,
     explicit_labels: dict[str, Any],
     decision: ReviewDecision | None,
 ) -> dict[str, Any]:
-    """Resolve the labels that should be persisted for a review submission."""
-    if explicit_labels:
-        return explicit_labels
+    """Return the labels a submission stands for.
 
-    if decision != ReviewDecision.accept:
-        return explicit_labels
-
-    row = conn.execute(
-        text("SELECT agent_output_ids FROM review_tasks WHERE id = :task_id"),
-        {"task_id": str(task_id)},
-    ).first()
-    if row is None or not row[0]:
-        return explicit_labels
-
-    try:
-        output_ids = json.loads(str(row[0]))
-    except (json.JSONDecodeError, TypeError):
-        return explicit_labels
-
-    if not isinstance(output_ids, list) or not output_ids:
+    The labels the reviewer sent stand for themselves. An accept with no
+    labels takes the labels of the proposal the reviewer was shown, and with
+    no proposal shown it stands for no labels.
+    """
+    if explicit_labels or decision != ReviewDecision.accept or not shown_output_id:
         return explicit_labels
 
     output_row = conn.execute(
         text("SELECT labels FROM agent_outputs WHERE id = :id LIMIT 1"),
-        {"id": str(output_ids[0])},
+        {"id": shown_output_id},
     ).first()
-    if output_row is None:
-        return explicit_labels
-
-    labels = output_row[0]
-    if isinstance(labels, str):
-        try:
-            labels = json.loads(labels)
-        except (json.JSONDecodeError, TypeError):
-            return explicit_labels
-    return labels if isinstance(labels, dict) else explicit_labels
+    shown_labels = _parse_json_object(output_row[0]) if output_row else None
+    return shown_labels or explicit_labels
 
 
 def _get_record_context(
@@ -615,9 +603,10 @@ def submit_review(
     normalized_decision = _normalize_review_decision(decision)
 
     with engine.begin() as conn:
+        shown_output_id = _shown_agent_output_id(conn, task_id)
         effective_labels = _resolve_effective_submission_labels(
             conn,
-            task_id=task_id,
+            shown_output_id=shown_output_id,
             explicit_labels=labels,
             decision=normalized_decision,
         )
@@ -683,6 +672,7 @@ def submit_review(
                     labels,
                     rationale,
                     ai_was_revealed,
+                    agent_output_id,
                     created_at,
                     workspace_id
                 ) VALUES (
@@ -697,6 +687,7 @@ def submit_review(
                     :labels,
                     :rationale,
                     :ai_was_revealed,
+                    :agent_output_id,
                     :created_at,
                     :workspace_id
                 )
@@ -714,6 +705,7 @@ def submit_review(
                 "labels": labels_json,
                 "rationale": rationale,
                 "ai_was_revealed": parse_bool(row[13]),
+                "agent_output_id": shown_output_id,
                 "created_at": now,
                 "workspace_id": str(row[18]),
             },
@@ -1204,37 +1196,39 @@ def apply_blind_review_policy(
     - ``show_agent_outputs``: always include agent_output
     - ``no_agent``: never include agent_output
 
-    Adds an ``agent_output`` key to the task dict (or None).
-    Also adds ``blind_review_policy`` so the frontend knows the mode.
+    Adds an ``agent_output`` key to the task dict (or None), and records its
+    id on the task as ``shown_agent_output_id``, which a label-less accept
+    takes. Also adds ``blind_review_policy`` so the frontend knows the mode.
     """
     task_schema_id = task_dict.get("task_schema_id", "")
     record_id = task_dict.get("record_id", "")
     ai_revealed = task_dict.get("ai_revealed", False)
 
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         task_dict.update(_get_record_context(conn, record_id))
         policy = _get_blind_review_policy(conn, task_schema_id)
+        shows_output = policy == BlindReviewPolicy.show_agent_outputs or (
+            policy == BlindReviewPolicy.hide_agent_outputs_by_default and ai_revealed
+        )
+        agent_output = (
+            _get_agent_output_for_task(conn, record_id, task_schema_id)
+            if shows_output
+            else None
+        )
+        conn.execute(
+            text(
+                "UPDATE review_tasks SET shown_agent_output_id = :output_id "
+                "WHERE id = :task_id"
+            ),
+            {
+                "output_id": agent_output["id"] if agent_output else None,
+                "task_id": task_dict["id"],
+            },
+        )
 
-        if policy == BlindReviewPolicy.no_agent:
-            task_dict["agent_output"] = None
-            task_dict["blind_review_policy"] = policy.value
-            return task_dict
-
-        if policy == BlindReviewPolicy.show_agent_outputs:
-            agent_output = _get_agent_output_for_task(conn, record_id, task_schema_id)
-            task_dict["agent_output"] = agent_output
-            task_dict["blind_review_policy"] = policy.value
-            return task_dict
-
-        # hide_agent_outputs_by_default: only show if revealed
-        if ai_revealed:
-            agent_output = _get_agent_output_for_task(conn, record_id, task_schema_id)
-            task_dict["agent_output"] = agent_output
-        else:
-            task_dict["agent_output"] = None
-
-        task_dict["blind_review_policy"] = policy.value
-        return task_dict
+    task_dict["agent_output"] = agent_output
+    task_dict["blind_review_policy"] = policy.value
+    return task_dict
 
 
 # ---------------------------------------------------------------------------
@@ -1287,13 +1281,18 @@ def reveal_ai(
         if policy == BlindReviewPolicy.no_agent:
             return None
 
-        # Set ai_revealed=True and ai_revealed_at
+        agent_output = _get_agent_output_for_task(
+            conn,
+            task_dict["record_id"],
+            task_schema_id,
+        )
         result = conn.execute(
             text(
                 f"""
                 UPDATE review_tasks
                 SET ai_revealed = 1,
                     ai_revealed_at = :now,
+                    shown_agent_output_id = :output_id,
                     updated_at = :now
                 WHERE id = :task_id
                   AND claimed_by = :reviewer_id
@@ -1305,6 +1304,7 @@ def reveal_ai(
                 "task_id": str(task_id),
                 "reviewer_id": str(reviewer_id),
                 "now": now,
+                "output_id": agent_output["id"] if agent_output else None,
             },
         )
         updated_row = result.first()
@@ -1315,13 +1315,7 @@ def reveal_ai(
 
     updated_task = _row_to_task_dict(updated_row)
 
-    # Fetch and attach agent output
     with engine.connect() as conn:
-        agent_output = _get_agent_output_for_task(
-            conn,
-            updated_task["record_id"],
-            updated_task["task_schema_id"],
-        )
         updated_task.update(_get_record_context(conn, updated_task["record_id"]))
 
     updated_task["agent_output"] = agent_output
@@ -1406,6 +1400,13 @@ def submit_correction(
         task_schema_version = int(latest_event[3])
         workspace_id = str(latest_event[10])
 
+        shown_output_id = _shown_agent_output_id(conn, task_id)
+        labels = _resolve_effective_submission_labels(
+            conn,
+            shown_output_id=shown_output_id,
+            explicit_labels=labels,
+            decision=normalized_decision,
+        )
         normalized_labels = _normalize_submission_labels(conn, task_schema_id, labels)
         validation_errors = _validate_structured_submission_labels(
             conn,
@@ -1450,6 +1451,7 @@ def submit_correction(
                     previous_labels,
                     rationale,
                     ai_was_revealed,
+                    agent_output_id,
                     supersedes_event_id,
                     created_at,
                     workspace_id
@@ -1466,6 +1468,7 @@ def submit_correction(
                     :previous_labels,
                     :rationale,
                     :ai_was_revealed,
+                    :agent_output_id,
                     :supersedes_event_id,
                     :created_at,
                     :workspace_id
@@ -1485,6 +1488,7 @@ def submit_correction(
                 "previous_labels": json.dumps(previous_labels),
                 "rationale": rationale,
                 "ai_was_revealed": 1 if ai_was_revealed else 0,
+                "agent_output_id": shown_output_id,
                 "supersedes_event_id": superseded_event_id,
                 "created_at": now,
                 "workspace_id": workspace_id,

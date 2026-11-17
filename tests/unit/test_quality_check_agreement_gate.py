@@ -6,6 +6,10 @@ from typing import Any
 
 import pytest
 
+from molabel.core.quality.agreement_metrics import (
+    NO_PAIRABLE_VALUES,
+    SINGLE_CATEGORY,
+)
 from molabel.core.workflow.context import WorkflowContext
 from molabel.core.workflow.steps.quality_steps import (
     AgreementAnalysisExecutor,
@@ -13,7 +17,9 @@ from molabel.core.workflow.steps.quality_steps import (
 )
 
 
-def _records(units: list[dict[str, tuple[str, ...]]]) -> list[dict[str, Any]]:
+def _records(
+    units: list[dict[str, tuple[str | None, ...]]],
+) -> list[dict[str, Any]]:
     """One record per unit. A unit maps each field to the values of r0, r1, ..."""
     return [
         {
@@ -43,6 +49,7 @@ def _run_gate(
     records: list[dict[str, Any]],
     min_agreement: float,
     services: dict[str, Any] | None = None,
+    required: list[str] | None = None,
 ) -> tuple[WorkflowContext, dict[str, Any]]:
     ctx = WorkflowContext(
         workspace_id="ws-1", workflow_execution_id="exec-1", workflow_version=1
@@ -53,9 +60,10 @@ def _run_gate(
         ctx,
     )
     assert analysis.success
-    check = QualityCheckExecutor().execute(
-        "quality", {"min_agreement": min_agreement}, ctx, services
-    )
+    config: dict[str, Any] = {"min_agreement": min_agreement}
+    if required is not None:
+        config["fields"] = required
+    check = QualityCheckExecutor().execute("quality", config, ctx, services)
     assert check.success
     assert check.output is not None
     return ctx, check.output.summary["details"][0]
@@ -105,17 +113,84 @@ def test_min_agreement_fails_on_one_field_while_the_pooled_alpha_passes() -> Non
     assert detail["actual"] == pytest.approx(0.125)
 
 
-def test_min_agreement_fails_on_a_field_whose_alpha_is_null() -> None:
+SENTIMENT_SPLIT = [("pos", "pos"), ("neg", "neg"), ("pos", "neg"), ("neg", "neg")]
+# n = 8 with pos = 3, neg = 5, and one mismatching unit, 2 coincidences:
+# alpha = 1 - 7 * 2 / (64 - 9 - 25) = 8 / 15.
+SENTIMENT_ALPHA = 8 / 15
+
+
+@pytest.mark.parametrize(
+    ("other", "reason"),
+    [
+        (("x", None), NO_PAIRABLE_VALUES),
+        (("no", "no"), SINGLE_CATEGORY),
+    ],
+    ids=["one-rater", "one-label"],
+)
+def test_a_null_field_is_skipped_and_the_measured_fields_decide(
+    other: tuple[str | None, str | None], reason: str
+) -> None:
+    units = [{"sentiment": pair, "other": other} for pair in SENTIMENT_SPLIT]
+
+    ctx, detail = _run_gate(_records(units), 0.5)
+
+    assert detail["skipped_fields"] == {"other": reason}
+    assert detail["fields"] == pytest.approx(
+        {"sentiment": SENTIMENT_ALPHA, "other": None}
+    )
+    assert detail["failing_fields"] == {}
+    assert (detail["passed"], detail["code"]) == (True, None)
+    assert detail["actual"] == pytest.approx(SENTIMENT_ALPHA)
+    assert ctx.metrics["quality.agreement"] == pytest.approx(SENTIMENT_ALPHA)
+    assert ctx.variables["quality.passed"] is True
+    summary = ctx.variables["agreement.fields"]["other"]
+    assert summary["null_reasons"]["krippendorff_alpha"] == reason
+
+
+@pytest.mark.parametrize("required", [["flag"], ["sentiment", "absent"]])
+def test_a_required_field_that_is_null_fails_the_gate(required: list[str]) -> None:
+    units = [{"sentiment": pair, "flag": ("no", "no")} for pair in SENTIMENT_SPLIT]
+
+    ctx, detail = _run_gate(_records(units), 0.5, required=required)
+
+    null_field = required[-1]
+    assert detail["failing_fields"] == {null_field: None}
+    assert null_field not in detail["skipped_fields"]
+    assert (detail["passed"], detail["actual"], detail["code"]) == (False, None, None)
+    assert "quality.agreement" not in ctx.metrics
+    assert ctx.variables["quality.passed"] is False
+
+
+def test_a_required_field_below_the_threshold_fails_the_gate() -> None:
+    units = [{"sentiment": pair, "flag": ("no", "no")} for pair in SENTIMENT_SPLIT]
+
+    ctx, detail = _run_gate(_records(units), 0.6, required=["sentiment"])
+
+    assert detail["failing_fields"] == pytest.approx({"sentiment": SENTIMENT_ALPHA})
+    assert detail["skipped_fields"] == {"flag": SINGLE_CATEGORY}
+    assert detail["actual"] == pytest.approx(SENTIMENT_ALPHA)
+    assert ctx.variables["quality.passed"] is False
+
+
+def test_the_gate_fails_when_every_field_is_skipped() -> None:
     units = [
-        {"sentiment": ("pos", "pos"), "flag": ("no", "no")},
-        {"sentiment": ("neg", "neg"), "flag": ("no", "no")},
+        {"flag": ("no", "no"), "note": ("x", None)},
+        {"flag": ("no", "no"), "note": ("y", None)},
     ]
 
-    ctx, detail = _run_gate(_records(units), 0.8)
+    ctx, detail = _run_gate(_records(units), 0.5)
 
-    assert ctx.metrics["agreement.krippendorff_alpha"] == pytest.approx(1.0)
+    assert detail["skipped_fields"] == {
+        "flag": SINGLE_CATEGORY,
+        "note": NO_PAIRABLE_VALUES,
+    }
+    assert (detail["passed"], detail["actual"], detail["code"]) == (
+        False,
+        None,
+        "NO_MEASURED_FIELDS",
+    )
+    assert "quality.agreement" not in ctx.metrics
     assert ctx.variables["quality.passed"] is False
-    assert detail["failing_fields"] == {"flag": None}
 
 
 PER_FIELD_SPLIT = [
@@ -150,3 +225,30 @@ def test_an_injected_checker_cannot_fail_fields_that_all_agree() -> None:
 
     assert detail["actual"] == pytest.approx(1.0)
     assert ctx.variables["quality.passed"] is True
+
+
+@pytest.mark.parametrize("analyzed", [False, True], ids=["no-analysis", "no-records"])
+def test_min_agreement_fails_when_no_agreement_records_were_analyzed(
+    analyzed: bool,
+) -> None:
+    ctx = WorkflowContext(
+        workspace_id="ws-1", workflow_execution_id="exec-1", workflow_version=1
+    )
+    ctx.metrics["quality.agreement"] = 0.9
+    if analyzed:
+        AgreementAnalysisExecutor().execute(
+            "agreement", {"agreement_records": [], "fields": ["code"]}, ctx
+        )
+
+    check = QualityCheckExecutor().execute("quality", {"min_agreement": 0.8}, ctx)
+
+    assert check.output is not None
+    detail = check.output.summary["details"][0]
+    assert (detail["passed"], detail["actual"], detail["code"]) == (
+        False,
+        None,
+        "NO_AGREEMENT_RECORDS",
+    )
+    assert check.output.warnings == [f"NO_AGREEMENT_RECORDS: {detail['reason']}"]
+    assert ctx.variables["quality.passed"] is False
+    assert "quality.agreement" not in ctx.metrics

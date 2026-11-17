@@ -38,6 +38,9 @@ steps:
   - id: quality
     type: quality_check
     config:
+      # min_agreement is Krippendorff's alpha. Rely on >= .800, and draw only
+      # tentative conclusions from .667 to .800 (Krippendorff, Content
+      # Analysis, 2nd ed., 2004, reliability chapter, p. 241).
       min_agreement: 0.80
 
   - id: select_best

@@ -555,6 +555,7 @@ reviewer_profile (global, not workspace-scoped)
 | is_overlap | bool | yes | Whether this is an overlap review task (default false) |
 | is_calibration | bool | yes | Whether this is a calibration task (default false) |
 | draft_labels | JSON | no | Saved draft label values; preserved if claim expires |
+| shown_agent_output_id | UUID | no | The agent output the last claim or reveal showed; a submit with `accept` and no labels stores its labels |
 | ai_revealed | bool | yes | Whether the reviewer has viewed agent suggestions (default false) |
 | ai_revealed_at | datetime | no | When AI suggestions were revealed |
 | submitted_at | datetime | no | When the review was submitted |
@@ -598,7 +599,7 @@ reviewer_profile (global, not workspace-scoped)
 | ai_was_revealed | bool | no | Whether agent output was visible when this event was created |
 | review_duration_ms | int | no | Time spent on this review in milliseconds |
 | agent_run_id | UUID | no | FK to agent_run (when source is agent) |
-| agent_output_id | UUID | no | FK to agent_output (when reviewing a specific agent output) |
+| agent_output_id | UUID | no | FK to agent_output. For a human event, the output the reviewer was shown, copied from the task's `shown_agent_output_id` |
 | unmapped_fields | JSON | no | For imports: source fields that did not map to the task schema |
 | supersedes_event_id | UUID | no | FK to review_event this event corrects (self-referential) |
 | created_at | datetime | yes | When this event was recorded |

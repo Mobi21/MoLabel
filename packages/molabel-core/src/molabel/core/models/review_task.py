@@ -30,6 +30,8 @@ class ReviewTask(SQLModel, table=True):
     is_calibration: bool = Field(default=False)
     draft_labels: dict | None = Field(default=None, sa_column=Column(JSON))
     agent_output_ids: str | None = Field(default=None)
+    # The agent output the last claim or reveal showed the claimant, if any.
+    shown_agent_output_id: uuid.UUID | None = None
     ai_revealed: bool = Field(default=False)
     ai_revealed_at: datetime | None = None
     submitted_at: datetime | None = None
