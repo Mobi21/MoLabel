@@ -98,8 +98,9 @@ without `..`. A file the server writes in a workspace, such as a config file,
 a gold set or an export, must also have names Windows can hold, whatever
 platform runs the server, so the workspace opens on every machine. No folder
 or file name may end with a dot or a space, or be a Windows device name
-(`con`, `prn`, `aux`, `nul`, `com0` to `com9`, `lpt0` to `lpt9`, in any case
-and with any extension).
+(`con`, `prn`, `aux`, `nul`, `com1` to `com9`, `lpt1` to `lpt9`, and `com`
+or `lpt` with a superscript 1, 2 or 3, in any case and with any extension).
+`com0` and `lpt0` are ordinary names.
 
 | HTTP Status | Code                     | When                                              |
 |-------------|--------------------------|---------------------------------------------------|

@@ -627,7 +627,18 @@ def test_a_name_windows_cannot_hold_is_not_portable(name):
 
 
 @pytest.mark.parametrize(
-    "name", ["console", "com10", "lpt", "nul-set", "gold.yaml", "my.con", ".molabel"]
+    "name",
+    [
+        "console",
+        "com10",
+        "com0",
+        "LPT0.yaml",
+        "lpt",
+        "nul-set",
+        "gold.yaml",
+        "my.con",
+        ".molabel",
+    ],
 )
 def test_an_ordinary_name_is_portable(name):
     assert workspace_paths.portable_name_problem(name) is None

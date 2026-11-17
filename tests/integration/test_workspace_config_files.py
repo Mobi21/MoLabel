@@ -135,6 +135,31 @@ async def test_config_with_a_name_windows_cannot_hold_is_refused(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("slug", ["com0", "lpt0", "COM0"])
+async def test_config_named_com0_or_lpt0_is_written_as_windows_holds_it(
+    client, workspace, slug
+):
+    created = await client.post(
+        "/api/v1/task-schemas",
+        json={**SCHEMA, "task_schema_slug": slug, "workspace_id": client.workspace_id},
+    )
+    refused = await client.post(
+        "/api/v1/task-schemas",
+        json={
+            **SCHEMA,
+            "task_schema_slug": "com1",
+            "workspace_id": client.workspace_id,
+        },
+    )
+
+    assert created.status_code == 201, created.text
+    written = workspace / f"workbench/config/task-schemas/{slug}.yaml"
+    assert _yaml(written)["task_schema_slug"] == slug
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["error"]["code"] == "PATH_NOT_PORTABLE"
+
+
+@pytest.mark.asyncio
 async def test_a_prompt_named_like_a_windows_device_is_refused(client, workspace):
     schema = await _create(client, "/api/v1/task-schemas", SCHEMA)
     before = _tree(workspace)

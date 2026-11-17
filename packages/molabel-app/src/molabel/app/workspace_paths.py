@@ -63,7 +63,7 @@ _WINDOWS_DEVICES = frozenset(
     | {
         f"{port}{number}"
         for port in ("com", "lpt")
-        for number in [*"0123456789", chr(0xB9), chr(0xB2), chr(0xB3)]
+        for number in [*"123456789", chr(0xB9), chr(0xB2), chr(0xB3)]
     }
 )
 
