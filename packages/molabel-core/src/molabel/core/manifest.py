@@ -71,6 +71,13 @@ class WorkflowManifestEntry(ManifestModel):
     definition_path: str | None = None
 
 
+class GoldSetManifestEntry(ManifestModel):
+    """A gold set within the workspace manifest, by the path of its header."""
+
+    gold_set_id: str
+    definition_path: str
+
+
 # ---------------------------------------------------------------------------
 # WorkspaceManifest
 # ---------------------------------------------------------------------------
@@ -87,6 +94,7 @@ class WorkspaceManifest(ManifestModel):
     task_schemas: list[TaskSchemaManifestEntry] = PydanticField(default_factory=list)
     prompts: list[PromptManifestEntry] = PydanticField(default_factory=list)
     workflows: list[WorkflowManifestEntry] = PydanticField(default_factory=list)
+    gold_sets: list[GoldSetManifestEntry] = PydanticField(default_factory=list)
     export_targets: list[dict[str, Any]] = PydanticField(default_factory=list)
     validation_gates: list[dict[str, Any]] = PydanticField(default_factory=list)
 
@@ -201,6 +209,9 @@ def detect_conflicts(
     ]
     definitions += [
         ("workflow", w.workflow_id, w.definition_path) for w in manifest.workflows
+    ]
+    definitions += [
+        ("gold_set", g.gold_set_id, g.definition_path) for g in manifest.gold_sets
     ]
     for entity_type, entity_id, definition_path in definitions:
         if definition_path and not (workspace_path / definition_path).exists():
