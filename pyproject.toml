@@ -7,11 +7,19 @@ molabel-app = { workspace = true }
 molabel-plugins = { workspace = true }
 molabel-depolarize = { workspace = true }
 
+[tool.uv]
+constraint-dependencies = [
+    "anyio>=4.14.2",
+    "certifi>=2026.10.18",
+    "idna>=3.15",
+    "mako>=1.3.12",
+]
+
 [dependency-groups]
 dev = [
-    "anyio>=4.12.1",
+    "anyio>=4.14.2",
     "httpx>=0.28.1",
-    "pytest>=8.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.24",
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8.0",
