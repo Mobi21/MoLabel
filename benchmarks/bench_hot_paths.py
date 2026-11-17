@@ -17,12 +17,15 @@ Paths, each run through the code a user's request runs:
 - export: ``ExportOrchestrator.export`` with the JSONL packager, and the
   workflow ``export`` step with the server's exporter service.
 
-Every path gets ``--warmup`` untimed runs, then ``--runs`` timed runs per
-size. The report gives the median, the p95 (nearest rank; with 7 runs that is
-the slowest run), the work each run did (rows imported, items returned,
-comparisons counted, records exported) and the errors it saw. ``--profile``
-adds one cProfile run per path at the largest size, not counted in the
-timings, and writes the top frames beside the results.
+Each size gets its own server and database, so a timing at one size never
+runs against another size's tables. Every path gets ``--warmup`` untimed
+runs, then ``--runs`` timed runs per size. The report gives the median, the
+p95 (nearest rank; with 7 runs that is the slowest run), the work each run
+did (rows imported, items returned, comparisons counted, records exported)
+and the errors it saw. ``--profile`` adds one cProfile run per path at the
+largest size, not counted in the timings, and writes the top frames beside
+the results. ``--no-seed`` skips the reviewed-dataset seed, which leaves the
+in-memory paths and the ingest endpoint for sizes too large to seed.
 
     uv run python benchmarks/bench_hot_paths.py --sizes 1000,10000,100000
     uv run python benchmarks/bench_hot_paths.py --paths agreement --profile
@@ -281,7 +284,7 @@ class BenchServer:
         from molabel.app.main import create_app
 
         self.app = create_app()
-        self._client_cm = TestClient(self.app)
+        self._client_cm = TestClient(self.app, raise_server_exceptions=False)
 
     def __enter__(self) -> BenchServer:
         self.client = self._client_cm.__enter__()
@@ -943,11 +946,15 @@ class Context:
     largest: int
     out_dir: Path
     max_run_seconds: float
+    skip: set[str] = field(default_factory=set)
     timings: list[Timing] = field(default_factory=list)
     profiles: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     def measure(self, path: str, size: int, run: RunFn, note: str = "") -> None:
+        if path in self.skip or f"{path}@{size}" in self.skip:
+            self.log(f"{path} n={size}: skipped on request")
+            return
         self.timings.append(
             timed(
                 path,
@@ -1034,6 +1041,19 @@ def main(argv: list[str] | None = None) -> int:
         help="a path whose warmup run takes longer gets one timed run, marked capped",
     )
     parser.add_argument("--profile", action="store_true")
+    parser.add_argument(
+        "--skip",
+        default="",
+        help=(
+            "comma-separated timing names to leave out, such as query_queues, "
+            "or name@size to leave one out at one size only"
+        ),
+    )
+    parser.add_argument(
+        "--no-seed",
+        action="store_true",
+        help="skip the reviewed-dataset seed, and with it every database-backed timing",
+    )
     parser.add_argument("--label", default="baseline")
     parser.add_argument("--keep-temp", action="store_true")
     args = parser.parse_args(argv)
@@ -1052,33 +1072,35 @@ def main(argv: list[str] | None = None) -> int:
         max(sizes),
         RESULTS_DIR,
         args.max_run_seconds,
+        {name for name in args.skip.split(",") if name},
     )
     info = machine_info()
     print(f"machine: {info}")
     print(f"sizes={sizes} runs={args.runs} warmup={args.warmup} paths={paths}")
 
     started = time.perf_counter()
-    with temp_dir(args.keep_temp) as tmp, BenchServer(tmp) as server:
-        reviewed: dict[int, ReviewedDataset] = {}
-        if {"query", "agreement", "export"} & set(paths):
-            for size in sizes:
+    db_bytes: dict[int, int] = {}
+    for size in sizes:
+        with temp_dir(args.keep_temp) as tmp, BenchServer(tmp) as server:
+            reviewed: dict[int, ReviewedDataset] = {}
+            if {"query", "agreement", "export"} & set(paths) and not args.no_seed:
                 seed_start = time.perf_counter()
                 reviewed[size] = seed_reviewed_dataset(server, size)
                 print(
                     f"seeded reviewed dataset n={size} in "
                     f"{time.perf_counter() - seed_start:.1f}s"
                 )
-        if "ingest" in paths:
-            bench_ingest(server, sizes, ctx)
-        if "query" in paths:
-            bench_query(server, reviewed, ctx)
-        if "agreement" in paths:
-            bench_agreement(server, reviewed, sizes, ctx)
-        if "benchmark" in paths:
-            bench_benchmark(sizes, ctx)
-        if "export" in paths:
-            bench_export(server, reviewed, sizes, ctx)
-        db_bytes = server.db_path.stat().st_size
+            if "ingest" in paths:
+                bench_ingest(server, [size], ctx)
+            if "query" in paths:
+                bench_query(server, reviewed, ctx)
+            if "agreement" in paths:
+                bench_agreement(server, reviewed, [size], ctx)
+            if "benchmark" in paths:
+                bench_benchmark([size], ctx)
+            if "export" in paths:
+                bench_export(server, reviewed, [size], ctx)
+            db_bytes[size] = server.db_path.stat().st_size
 
     report = {
         "label": args.label,
@@ -1090,6 +1112,8 @@ def main(argv: list[str] | None = None) -> int:
             "runs": args.runs,
             "warmup": args.warmup,
             "max_run_seconds": args.max_run_seconds,
+            "skip": sorted(name for name in args.skip.split(",") if name),
+            "no_seed": args.no_seed,
         },
         "synthetic": {
             "fields": FIELD_COUNT,
