@@ -1,71 +1,71 @@
 # cProfile of one ingest_api_jsonl run at n=100000, not counted in timings
 
 ## top 25 by cumulative time
-         25312620 function calls (25307909 primitive calls) in 20.577 seconds
+         5640676 function calls (5639254 primitive calls) in 6.600 seconds
 
    Ordered by: cumulative time
-   List reduced from 1342 to 25 due to restriction <25>
+   List reduced from 1309 to 25 due to restriction <25>
 
    ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-       80    0.000    0.000   41.147    0.514 events.py:86(_run)
-       80    0.000    0.000   41.146    0.514 {method 'run' of '_contextvars.Context' objects}
-       52    0.000    0.000   20.645    0.397 base_events.py:1922(_run_once)
-        2    0.000    0.000   20.577   10.288 _client.py:1123(post)
-        2    0.000    0.000   20.577   10.288 testclient.py:493(request)
-        2    0.000    0.000   20.576   10.288 _client.py:771(request)
-        2    0.000    0.000   20.576   10.288 _client.py:879(send)
-       16    0.000    0.000   20.574    1.286 from_thread.py:459(start_task_soon)
-       26    0.000    0.000   20.571    0.791 _tasks.py:322(_run_coro)
-       26    0.000    0.000   20.571    0.791 from_thread.py:242(_call_func)
-        6    0.000    0.000   20.571    3.428 testclient.py:362(run_app)
-        6    0.000    0.000   20.571    3.428 applications.py:1157(__call__)
-        6    0.000    0.000   20.571    3.428 applications.py:92(__call__)
-        6    0.000    0.000   20.571    3.428 errors.py:149(__call__)
-        6    0.000    0.000   20.571    3.428 cors.py:77(__call__)
-        6    0.000    0.000   20.571    3.428 cors.py:147(simple_response)
-        6    0.000    0.000   20.571    3.428 exceptions.py:47(__call__)
-     12/6    0.000    0.000   20.571    3.428 _exception_handler.py:31(wrapped_app)
-        6    0.000    0.000   20.571    3.428 asyncexitstack.py:15(__call__)
-        6    0.000    0.000   20.571    3.428 routing.py:679(__call__)
-        6    0.000    0.000   20.571    3.428 routing.py:685(app)
-        6    0.000    0.000   20.571    3.428 routing.py:280(handle)
-        6    0.000    0.000   20.571    3.428 routing.py:106(app)
-        6    0.000    0.000   20.571    3.428 routing.py:109(app)
-        2    0.000    0.000   20.570   10.285 routing.py:378(app)
+       74    0.000    0.000   13.154    0.178 events.py:86(_run)
+       74    0.000    0.000   13.153    0.178 {method 'run' of '_contextvars.Context' objects}
+      2/1    0.000    0.000    6.600    6.600 bench_hot_paths.py:597(import_api)
+        2    0.000    0.000    6.600    3.300 _client.py:1123(post)
+        2    0.000    0.000    6.600    3.300 testclient.py:493(request)
+        2    0.000    0.000    6.599    3.300 _client.py:771(request)
+        2    0.000    0.000    6.599    3.300 _client.py:879(send)
+       51    0.000    0.000    6.598    0.129 base_events.py:1922(_run_once)
+        2    0.000    0.000    6.597    3.299 _client.py:930(_send_handling_auth)
+        2    0.000    0.000    6.597    3.299 _client.py:964(_send_handling_redirects)
+        2    0.000    0.000    6.597    3.299 _client.py:1001(_send_single_request)
+        2    0.000    0.000    6.597    3.299 testclient.py:234(handle_request)
+       16    0.000    0.000    6.597    0.412 from_thread.py:459(start_task_soon)
+       16    0.000    0.000    6.597    0.412 from_thread.py:291(_spawn_task_from_thread)
+       26    0.000    0.000    6.594    0.254 _tasks.py:322(_run_coro)
+       26    0.000    0.000    6.594    0.254 from_thread.py:242(_call_func)
+        6    0.000    0.000    6.594    1.099 testclient.py:362(run_app)
+        6    0.000    0.000    6.594    1.099 applications.py:1157(__call__)
+        6    0.000    0.000    6.594    1.099 applications.py:92(__call__)
+        6    0.000    0.000    6.594    1.099 errors.py:149(__call__)
+        6    0.000    0.000    6.594    1.099 cors.py:77(__call__)
+        6    0.000    0.000    6.593    1.099 cors.py:147(simple_response)
+        6    0.000    0.000    6.593    1.099 exceptions.py:47(__call__)
+     12/6    0.000    0.000    6.593    1.099 _exception_handler.py:31(wrapped_app)
+        6    0.000    0.000    6.593    1.099 asyncexitstack.py:15(__call__)
 
 
 
 ## top 25 by own time
-         25312620 function calls (25307909 primitive calls) in 20.577 seconds
+         5640676 function calls (5639254 primitive calls) in 6.600 seconds
 
    Ordered by: internal time
-   List reduced from 1342 to 25 due to restriction <25>
+   List reduced from 1309 to 25 due to restriction <25>
 
    ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-   100012    5.379    0.000    5.379    0.000 {method 'execute' of 'sqlite3.Cursor' objects}
-   100014    2.075    0.000    4.980    0.000 {method 'sub' of 're.Pattern' objects}
-  1200027    1.129    0.000    2.905    0.000 elements.py:2316(repl)
-  1200025    0.966    0.000    1.235    0.000 elements.py:2161(_gen_cache_key)
-        1    0.850    0.850   20.487   20.487 datasets.py:521(import_dataset)
-   400002    0.676    0.000    0.676    0.000 encoder.py:205(iterencode)
-  1200027    0.643    0.000    1.306    0.000 elements.py:1975(__init__)
-        3    0.587    0.196    0.587    0.196 {method 'commit' of 'sqlite3.Connection' objects}
-   100012    0.504    0.000    0.521    0.000 compiler.py:1852(construct_params)
-   100012    0.495    0.000    1.213    0.000 default.py:1313(_init_compiled)
-  1200027    0.487    0.000    0.662    0.000 sqltypes.py:3894(_resolve_value_to_type)
-  3600081    0.471    0.000    0.471    0.000 {method 'group' of 're.Match' objects}
-  1802906    0.391    0.000    0.391    0.000 {method 'get' of 'dict' objects}
-   400002    0.322    0.000    1.142    0.000 encoder.py:183(encode)
-  1300037    0.318    0.000    1.553    0.000 cache_key.py:939(<genexpr>)
-   100012    0.299    0.000    2.185    0.000 cache_key.py:221(_gen_cache_key)
-   100012    0.289    0.000   11.040    0.000 base.py:1591(_execute_clauseelement)
-   100010    0.260    0.000    0.338    0.000 uuid.py:139(__init__)
-   100012    0.234    0.000    1.832    0.000 cache_key.py:929(visit_string_clauseelement_dict)
-   400002    0.222    0.000    1.383    0.000 __init__.py:183(dumps)
-   100012    0.212    0.000    6.191    0.000 base.py:1850(_exec_single_context)
-   100012    0.199    0.000    0.380    0.000 default.py:1921(_setup_dml_or_text_result)
-   100012    0.190    0.000    7.602    0.000 base.py:1791(_execute_context)
-   200008    0.189    0.000    0.189    0.000 uuid.py:280(__str__)
-   100012    0.164    0.000    2.626    0.000 langhelpers.py:1247(oneshot)
+        1    3.460    3.460    3.460    3.460 {method 'executemany' of 'sqlite3.Cursor' objects}
+   400002    0.510    0.000    0.510    0.000 encoder.py:205(iterencode)
+        1    0.442    0.442    6.515    6.515 datasets.py:521(import_dataset)
+   100010    0.366    0.000    0.376    0.000 compiler.py:1852(construct_params)
+   400002    0.235    0.000    0.846    0.000 encoder.py:183(encode)
+   400002    0.145    0.000    1.004    0.000 __init__.py:183(dumps)
+   100010    0.130    0.000    0.171    0.000 uuid.py:139(__init__)
+       11    0.122    0.011    0.505    0.046 default.py:1313(_init_compiled)
+   200008    0.118    0.000    0.118    0.000 uuid.py:280(__str__)
+        2    0.106    0.053    0.106    0.053 {method 'commit' of 'sqlite3.Connection' objects}
+   100006    0.099    0.000    0.294    0.000 decoder.py:333(decode)
+   100006    0.099    0.000    0.099    0.000 decoder.py:344(raw_decode)
+1015340/1015336    0.082    0.000    0.082    0.000 {built-in method builtins.isinstance}
+   200169    0.063    0.000    0.063    0.000 {method 'match' of 're.Pattern' objects}
+   100006    0.059    0.000    0.379    0.000 __init__.py:299(loads)
+   100000    0.058    0.000    0.058    0.000 {method 'hexdigest' of '_hashlib.HASH' objects}
+   100004    0.054    0.000    0.243    0.000 uuid.py:723(uuid4)
+   100000    0.044    0.000    0.044    0.000 {built-in method _hashlib.openssl_sha256}
+        2    0.040    0.020    6.591    3.296 routing.py:316(run_endpoint_function)
+   400318    0.037    0.000    0.037    0.000 {method 'join' of 'str' objects}
+   302708    0.033    0.000    0.033    0.000 {method 'append' of 'list' objects}
+   201005    0.026    0.000    0.026    0.000 {method 'get' of 'dict' objects}
+   200012    0.024    0.000    0.024    0.000 {method 'end' of 're.Match' objects}
+        5    0.023    0.005    0.026    0.005 {method 'read' of '_io.TextIOWrapper' objects}
+225511/225458    0.020    0.000    0.020    0.000 {built-in method builtins.len}
 
 

@@ -1,0 +1,60 @@
+{
+  "label": "profile-agreement-api-100k",
+  "generated_at": "2026-11-17T04:39:27.209142+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "git_rev": "66ef77c"
+  },
+  "args": {
+    "sizes": [
+      100000
+    ],
+    "paths": [
+      "agreement"
+    ],
+    "runs": 1,
+    "warmup": 0,
+    "max_run_seconds": 120.0,
+    "skip": [
+      "agreement_service_human_agent",
+      "agreement_service_inter_annotator"
+    ],
+    "no_seed": false
+  },
+  "synthetic": {
+    "fields": 3,
+    "raters": 2,
+    "overlap": 3,
+    "rater_disagreement": 0.2,
+    "agent_disagreement": 0.1
+  },
+  "database_bytes": {
+    "100000": 581750784
+  },
+  "wall_seconds": 98.8,
+  "notes": [
+    "agreement_service_inter_annotator n=100000: skipped on request",
+    "agreement_service_human_agent n=100000: skipped on request"
+  ],
+  "profiles": [
+    "benchmarks\\results\\profile-agreement_api-100000.txt"
+  ],
+  "timings": [
+    {
+      "path": "agreement_api",
+      "size": 100000,
+      "runs": 1,
+      "median_s": 25.6131,
+      "p95_s": 25.6131,
+      "min_s": 25.6131,
+      "max_s": 25.6131,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    }
+  ]
+}

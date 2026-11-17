@@ -1,0 +1,126 @@
+{
+  "label": "fixed-100k-rest",
+  "generated_at": "2026-11-17T04:33:47.219518+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "git_rev": "66ef77c"
+  },
+  "args": {
+    "sizes": [
+      100000
+    ],
+    "paths": [
+      "agreement",
+      "benchmark",
+      "export"
+    ],
+    "runs": 7,
+    "warmup": 1,
+    "max_run_seconds": 120.0,
+    "skip": [],
+    "no_seed": false
+  },
+  "synthetic": {
+    "fields": 3,
+    "raters": 2,
+    "overlap": 3,
+    "rater_disagreement": 0.2,
+    "agent_disagreement": 0.1
+  },
+  "database_bytes": {
+    "100000": 553562112
+  },
+  "wall_seconds": 390.4,
+  "notes": [],
+  "profiles": [],
+  "timings": [
+    {
+      "path": "agreement_service_inter_annotator",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 2.7482,
+      "p95_s": 3.1935,
+      "min_s": 2.2556,
+      "max_s": 3.1935,
+      "work": 300000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_human_agent",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 11.6225,
+      "p95_s": 12.0843,
+      "min_s": 11.5229,
+      "max_s": 12.0843,
+      "work": 600000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_api",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 25.1796,
+      "p95_s": 25.6688,
+      "min_s": 24.7969,
+      "max_s": 25.6688,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "benchmark_clinc150",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 2.0545,
+      "p95_s": 2.2928,
+      "min_s": 2.018,
+      "max_s": 2.2928,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "benchmark_banking77",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 1.3834,
+      "p95_s": 1.4298,
+      "min_s": 1.3632,
+      "max_s": 1.4298,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "export_orchestrator_jsonl",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 0.8524,
+      "p95_s": 1.1125,
+      "min_s": 0.8492,
+      "max_s": 1.1125,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "export_workflow_step",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 1.3066,
+      "p95_s": 1.5181,
+      "min_s": 1.2703,
+      "max_s": 1.5181,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    }
+  ]
+}

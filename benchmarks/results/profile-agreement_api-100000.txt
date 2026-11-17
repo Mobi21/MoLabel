@@ -1,71 +1,71 @@
 # cProfile of one agreement_api run at n=100000, not counted in timings
 
 ## top 25 by cumulative time
-         9007081 function calls (9007042 primitive calls) in 7.107 seconds
+         109536384 function calls (109536319 primitive calls) in 40.658 seconds
 
    Ordered by: cumulative time
-   List reduced from 728 to 25 due to restriction <25>
+   List reduced from 787 to 25 due to restriction <25>
 
    ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-       26    0.000    0.000   14.564    0.560 base_events.py:1922(_run_once)
-       39    0.000    0.000   14.564    0.373 events.py:86(_run)
-       39    0.000    0.000   14.564    0.373 {method 'run' of '_contextvars.Context' objects}
-      2/1    0.000    0.000    7.283    7.283 _client.py:930(_send_handling_auth)
-        1    0.000    0.000    7.283    7.283 _client.py:964(_send_handling_redirects)
-        1    0.000    0.000    7.283    7.283 _client.py:1001(_send_single_request)
-        8    0.000    0.000    7.283    0.910 from_thread.py:459(start_task_soon)
-        1    0.000    0.000    7.283    7.283 testclient.py:234(handle_request)
-       13    0.000    0.000    7.281    0.560 _tasks.py:322(_run_coro)
-       13    0.000    0.000    7.281    0.560 from_thread.py:242(_call_func)
-        3    0.000    0.000    7.281    2.427 testclient.py:362(run_app)
-        3    0.000    0.000    7.281    2.427 applications.py:1157(__call__)
-        3    0.000    0.000    7.281    2.427 applications.py:92(__call__)
-        3    0.000    0.000    7.281    2.427 errors.py:149(__call__)
-        1    0.000    0.000    7.281    7.281 cors.py:77(__call__)
-        1    0.000    0.000    7.281    7.281 cors.py:147(simple_response)
-        1    0.000    0.000    7.281    7.281 exceptions.py:47(__call__)
-      2/1    0.000    0.000    7.281    7.281 _exception_handler.py:31(wrapped_app)
-        1    0.000    0.000    7.281    7.281 asyncexitstack.py:15(__call__)
-        1    0.000    0.000    7.281    7.281 routing.py:679(__call__)
-        1    0.000    0.000    7.281    7.281 routing.py:685(app)
-        1    0.000    0.000    7.281    7.281 routing.py:280(handle)
-        1    0.000    0.000    7.281    7.281 routing.py:106(app)
-        1    0.000    0.000    7.281    7.281 routing.py:109(app)
-        1    0.000    0.000    7.281    7.281 routing.py:378(app)
+       27    0.000    0.000   84.325    3.123 base_events.py:1922(_run_once)
+    40/39    0.000    0.000   84.323    2.162 events.py:86(_run)
+    40/39    0.000    0.000   84.323    2.162 {method 'run' of '_contextvars.Context' objects}
+        8    0.000    0.000   42.162    5.270 from_thread.py:459(start_task_soon)
+       13    0.000    0.000   42.161    3.243 _tasks.py:322(_run_coro)
+       13    0.000    0.000   42.161    3.243 from_thread.py:242(_call_func)
+        3    0.000    0.000   42.160   14.053 testclient.py:362(run_app)
+        3    0.000    0.000   42.160   14.053 applications.py:1157(__call__)
+        3    0.000    0.000   42.160   14.053 applications.py:92(__call__)
+        3    0.000    0.000   42.160   14.053 errors.py:149(__call__)
+        3    0.000    0.000   42.160   14.053 cors.py:77(__call__)
+        3    0.000    0.000   42.160   14.053 cors.py:147(simple_response)
+        3    0.000    0.000   42.160   14.053 exceptions.py:47(__call__)
+      6/3    0.000    0.000   42.160   14.053 _exception_handler.py:31(wrapped_app)
+        3    0.000    0.000   42.160   14.053 asyncexitstack.py:15(__call__)
+        3    0.000    0.000   42.160   14.053 routing.py:679(__call__)
+        3    0.000    0.000   42.160   14.053 routing.py:685(app)
+        3    0.000    0.000   42.160   14.053 routing.py:280(handle)
+        3    0.000    0.000   42.160   14.053 routing.py:106(app)
+        3    0.000    0.000   42.160   14.053 routing.py:109(app)
+        1    0.000    0.000   42.160   42.160 routing.py:378(app)
+        1    0.246    0.246   42.158   42.158 routing.py:316(run_endpoint_function)
+        1    0.379    0.379   41.913   41.913 quality.py:178(get_agreement_metrics)
+        2    0.020    0.010   30.706   15.353 agreement_metrics.py:299(analyze)
+        3    0.290    0.097   21.328    7.109 agreement_metrics.py:250(_summarize_fields)
 
 
 
 ## top 25 by own time
-         9007081 function calls (9007042 primitive calls) in 7.107 seconds
+         109536384 function calls (109536319 primitive calls) in 40.658 seconds
 
    Ordered by: internal time
-   List reduced from 728 to 25 due to restriction <25>
+   List reduced from 787 to 25 due to restriction <25>
 
    ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-        3    2.382    0.794    2.382    0.794 {method 'fetchall' of 'sqlite3.Cursor' objects}
-        3    1.103    0.368    3.523    1.174 result.py:555(_allrows)
-        5    0.461    0.092    0.461    0.092 {method 'execute' of 'sqlite3.Cursor' objects}
-   300003    0.414    0.000    0.621    0.000 uuid.py:139(__init__)
-   500001    0.401    0.000    0.942    0.000 decoder.py:333(decode)
-        1    0.257    0.257    2.810    2.810 review_events.py:39(queue_review_events)
-   500001    0.232    0.000    1.272    0.000 __init__.py:299(loads)
-  1000102    0.223    0.000    0.223    0.000 {method 'match' of 're.Pattern' objects}
-   500001    0.198    0.000    0.198    0.000 decoder.py:344(raw_decode)
-        1    0.189    0.189    2.879    2.879 review_events.py:88(queue_agent_proposals)
-   300000    0.182    0.000    1.534    0.000 queue_binding.py:47(deserialize_agent_output_ids)
-   300002    0.164    0.000    0.164    0.000 uuid.py:280(__str__)
-   900017    0.125    0.000    0.125    0.000 {method 'replace' of 'str' objects}
-        1    0.102    0.102    7.279    7.279 quality.py:178(get_agreement_metrics)
-   200000    0.100    0.000    0.669    0.000 review_events.py:21(json_object)
-  1000002    0.088    0.000    0.088    0.000 {method 'end' of 're.Match' objects}
-   500010    0.064    0.000    0.064    0.000 {method 'startswith' of 'str' objects}
-900588/900586    0.062    0.000    0.062    0.000 {built-in method builtins.isinstance}
-   200000    0.057    0.000    0.097    0.000 review_events.py:34(_utc)
-   800136    0.052    0.000    0.052    0.000 {built-in method builtins.len}
-   200002    0.040    0.000    0.040    0.000 {built-in method fromisoformat}
-        3    0.038    0.013    2.421    0.807 cursor.py:1191(fetchall)
-   300003    0.033    0.000    0.033    0.000 {method 'count' of 'list' objects}
-   300011    0.030    0.000    0.030    0.000 {method 'strip' of 'str' objects}
-       15    0.020    0.001    0.020    0.001 {built-in method builtins.sorted}
+  3000000    6.102    0.000    9.779    0.000 agreement_metrics.py:79(_tally)
+      203    2.930    0.014    2.930    0.014 {method 'fetchall' of 'sqlite3.Cursor' objects}
+       12    2.805    0.234    5.039    0.420 agreement_metrics.py:127(_cohen_kappa)
+  1413052    2.662    0.000    3.731    0.000 main.py:240(__init__)
+        1    2.127    2.127    8.055    8.055 agreement_metrics.py:396(_compute_human_agent_breakdown)
+ 18733377    1.840    0.000    1.840    0.000 {method 'get' of 'dict' objects}
+       24    1.790    0.075    2.875    0.120 agreement_metrics.py:86(_totals)
+  3000108    1.765    0.000    3.613    0.000 {built-in method builtins.sum}
+       12    1.640    0.137   21.038    1.753 agreement_metrics.py:218(_summarize)
+  3486980    1.116    0.000    2.555    0.000 main.py:1028(__setattr__)
+  1413068    1.069    0.000    1.069    0.000 {method 'validate_python' of 'pydantic_core._pydantic_core.SchemaValidator' objects}
+   600003    0.970    0.000    1.658    0.000 decoder.py:333(decode)
+  3486980    0.783    0.000    1.095    0.000 main.py:94(_model_field_setattr_handler)
+       24    0.620    0.026    1.321    0.055 {built-in method _collections._count_elements}
+  1500000    0.584    0.000    0.893    0.000 canonical.py:14(canonical_label_value)
+10200828/10200827    0.574    0.000    0.574    0.000 {built-in method builtins.len}
+  6572598    0.523    0.000    0.523    0.000 agreement_metrics.py:83(<genexpr>)
+      205    0.516    0.003    0.516    0.003 {method 'execute' of 'sqlite3.Cursor' objects}
+        3    0.507    0.169    1.271    0.424 agreement_metrics.py:377(_units)
+  1500000    0.490    0.000    1.651    0.000 agreement_metrics.py:162(value)
+  6000460    0.488    0.000    0.488    0.000 {method 'items' of 'dict' objects}
+6301504/6301502    0.452    0.000    0.452    0.000 {built-in method builtins.isinstance}
+   300003    0.412    0.000    0.616    0.000 uuid.py:139(__init__)
+  3000012    0.408    0.000    0.408    0.000 agreement_metrics.py:146(<genexpr>)
+        1    0.390    0.390    3.026    3.026 review_agreement.py:79(agreement_records_from_reviews)
 
 

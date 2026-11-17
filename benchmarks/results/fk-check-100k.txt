@@ -1,0 +1,3 @@
+machine: {'platform': 'Windows-11-10.0.26300-SP0', 'cpu': 'AMD Ryzen 7 7800X3D 8-Core Processor', 'logical_cpus': 16, 'python': '3.12.14', 'sqlite': '3.53.1', 'git_rev': '36dcdc8'}
+size=100000 records, 700011 rows in 30 tables, 582 MB
+foreign_key_violations: median 2.510 s, max 2.617 s over 5 runs; violations=[]
