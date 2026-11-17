@@ -43,6 +43,7 @@ import cProfile
 import csv
 import io
 import json
+import math
 import os
 import platform
 import pstats
@@ -688,6 +689,18 @@ def agreement_records(size: int) -> list[Any]:
     ]
 
 
+def expected_comparisons(size: int) -> dict[str, int]:
+    """The rater pairs each analysis compares on ``size`` synthetic records.
+
+    Every record has RATER_COUNT reviewers and one agent proposal, and each of
+    them labels all FIELD_COUNT fields.
+    """
+    return {
+        "inter_annotator": size * FIELD_COUNT * math.comb(RATER_COUNT, 2),
+        "human_agent": size * FIELD_COUNT * RATER_COUNT,
+    }
+
+
 def bench_agreement(
     server: BenchServer,
     reviewed: dict[int, ReviewedDataset],
@@ -700,21 +713,26 @@ def bench_agreement(
     fields = [f"label_{k}" for k in range(FIELD_COUNT)]
     for size in sizes:
         records = agreement_records(size)
+        expected = expected_comparisons(size)
 
-        def inter_annotator(records: list[Any] = records) -> tuple[int, int]:
+        def inter_annotator(
+            records: list[Any] = records, expected: dict[str, int] = expected
+        ) -> tuple[int, int]:
             result = service.analyze(
                 records, analysis_type="inter_annotator", fields=fields
             )
-            return result.overall.comparisons, int(result.overall.comparisons == 0)
+            done = result.overall.comparisons
+            return done, int(done != expected["inter_annotator"])
 
-        def human_agent(records: list[Any] = records) -> tuple[int, int]:
+        def human_agent(
+            records: list[Any] = records, expected: dict[str, int] = expected
+        ) -> tuple[int, int]:
             result = service.analyze(
                 records, analysis_type="human_agent", fields=fields
             )
             assert result.human_agent is not None
-            return result.human_agent.comparisons, int(
-                result.human_agent.comparisons == 0
-            )
+            done = result.human_agent.comparisons
+            return done, int(done != expected["human_agent"])
 
         ctx.measure("agreement_service_inter_annotator", size, inter_annotator)
         ctx.measure("agreement_service_human_agent", size, human_agent)
@@ -724,7 +742,9 @@ def bench_agreement(
             continue
 
         def agreement_api(
-            data: ReviewedDataset = data, size: int = size
+            data: ReviewedDataset = data,
+            size: int = size,
+            expected: dict[str, int] = expected,
         ) -> tuple[int, int]:
             resp = server.client.get(
                 "/api/v1/quality/agreement",
@@ -737,7 +757,14 @@ def bench_agreement(
                 )
                 return 0, 1
             body = resp.json()
-            return body["record_count"], int(body["record_count"] != size)
+            want = {"record_count": size, **expected}
+            got = {
+                "record_count": body["record_count"],
+                **{name: body[name]["pooled"]["comparisons"] for name in expected},
+            }
+            if got != want:
+                ctx.log(f"agreement_api n={size}: counted {got}, expected {want}")
+            return body["record_count"], int(got != want)
 
         ctx.measure("agreement_api", size, agreement_api)
 
