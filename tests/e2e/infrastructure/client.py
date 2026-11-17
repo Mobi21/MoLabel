@@ -13,35 +13,10 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
 
 import httpx
 
 from tests.e2e.infrastructure.logging_config import TestContext
-
-
-class _StreamingASGITransport(httpx.ASGITransport):
-    """ASGI transport that sets spec_version='2.4' in the ASGI scope.
-
-    This makes Starlette's StreamingResponse use the simple streaming code
-    path (without anyio task groups), which allows asyncio.wait_for to
-    properly cancel infinite SSE generators during tests.
-    """
-
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        original_app = self.app
-
-        async def _patched_app(scope: dict[str, Any], receive: Any, send: Any) -> None:
-            if scope.get("type") == "http":
-                asgi_info = scope.setdefault("asgi", {})
-                asgi_info.setdefault("spec_version", "2.4")
-            await original_app(scope, receive, send)
-
-        self.app = _patched_app
-        try:
-            return await super().handle_async_request(request)
-        finally:
-            self.app = original_app
 
 
 class E2EClient:
@@ -75,7 +50,7 @@ class E2EClient:
         self.app.state.app_secret = get_or_create_app_secret()
 
         self._client = httpx.AsyncClient(
-            transport=_StreamingASGITransport(app=self.app),
+            transport=httpx.ASGITransport(app=self.app),
             base_url="http://test",
             timeout=30.0,
         )

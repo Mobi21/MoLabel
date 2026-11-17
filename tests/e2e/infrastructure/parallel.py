@@ -7,7 +7,7 @@ Tests are assigned to groups based on their state isolation properties:
 - ``SHARED_WORKSPACE``: tests share a read-only pre-populated workspace,
   safe to run in parallel as long as they don't mutate shared state.
 - ``SEQUENTIAL``: tests must run in order because they exercise concurrent
-  claim semantics, SSE streams, or session lifecycle operations.
+  claim semantics or session lifecycle operations.
 
 Apply these markers to test functions or classes::
 
@@ -36,6 +36,6 @@ INDEPENDENT = pytest.mark.xdist_group("independent")
 # Covers: Tier 3, Tier 5, Tier 6
 SHARED_WORKSPACE = pytest.mark.xdist_group("shared_workspace")
 
-# Group 3: Must run sequentially (SSE streams, concurrent claims, sessions)
-# Covers: Tier 4, Tier 9 SSE + concurrency tests
+# Group 3: Must run sequentially (concurrent claims, sessions)
+# Covers: Tier 4, Tier 9 concurrency tests
 SEQUENTIAL = pytest.mark.xdist_group("sequential")

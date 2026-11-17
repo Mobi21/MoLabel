@@ -24,7 +24,6 @@ Primary scope:
 Critical rules:
 
 - Respect the module boundaries in `AGENTS.md`.
-- Do not add DePolarize-specific logic outside `packages/molabel-depolarize`.
 - Do not create a parallel benchmark path.
 - Do not add dataset-name branching in `grounded_benchmarks.py`.
 - Do not weaken or bypass the authority-pack system.

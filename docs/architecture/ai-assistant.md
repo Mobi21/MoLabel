@@ -18,7 +18,7 @@ The file path is retained for continuity, but the architectural role has changed
 MoLabel now uses this operating model:
 
 1. An external agent operates the system through `molabel`.
-2. The CLI talks to backend REST and SSE endpoints.
+2. The CLI talks to backend REST endpoints.
 3. The backend owns business logic, workflow execution, state transitions, and safe writes.
 4. Canonical project artifacts remain on disk.
 5. Humans inspect, review, correct, adjudicate, and approve through the GUI or equivalent explicit workflows.
@@ -29,7 +29,6 @@ The public agent contract is:
 
 - `molabel` CLI,
 - backend `/api/v1/*` and `/api/v1/cli/*` endpoints,
-- SSE streams for long-running visibility,
 - bundled agent skills and command manifests.
 
 There is no first-class direct Python SDK in this phase.
@@ -160,7 +159,7 @@ For every major action, the system should make it easy to answer:
 
 ## Legacy Assistant Migration
 
-Existing assistant endpoints and UI components may remain in the codebase temporarily, but they are legacy from the old product direction.
+The legacy assistant endpoints (`/api/v1/assistant/*`) and the frontend assistant panel have been removed.
 
 Migration intent:
 

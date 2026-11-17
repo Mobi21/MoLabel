@@ -62,8 +62,7 @@ application with a single `/api/v1` router tree. It exposes domains including:
 - queue, review, corrections, and adjudication,
 - providers and model/runtime profiles,
 - quality, exports, releases, and audit,
-- CLI-oriented endpoints under `/api/v1/cli`,
-- SSE events for real-time updates.
+- CLI-oriented endpoints under `/api/v1/cli`.
 
 The backend is the system of operational coordination. It is not meant to be
 the everyday human authoring surface.
@@ -82,21 +81,13 @@ This repo contains the React application, but it is not ready as a public or
 primary operating surface yet. Treat it as a work-in-progress control-room UI,
 not as a completed production shell.
 
-### 2.4 Desktop Shell
+### 2.4 Assistant Surface Status
 
-`src-tauri/` packages the system into a desktop application. It is responsible
-for windowing, local app behavior, and managing the backend sidecar. Business
-logic stays out of Tauri.
-
-### 2.5 Assistant Surface Status
-
-The backend still mounts assistant-related API routes, but the product
-direction has moved away from an in-app assistant being the main AI surface.
-Current direction is:
+The in-app assistant API routes and frontend panel have been removed. The
+current direction is:
 
 - external agent plus CLI for primary operation,
-- GUI for control-room and manual operations,
-- assistant APIs treated as secondary or transitional.
+- GUI for control-room and manual operations.
 
 ## 3. Package Map
 
@@ -109,16 +100,12 @@ The repo is a `uv` workspace monorepo with strict package boundaries.
   FastAPI backend. It depends on `molabel-core` only.
 - `packages/molabel-plugins`
   Built-in plugin implementations layered on top of core contracts.
-- `packages/molabel-depolarize`
-  Separate reference implementation under a separate namespace.
 - `cli`
   TypeScript CLI and bundled skill surface.
 - `frontend`
   React application.
-- `src-tauri`
-  Desktop shell.
 
-These boundaries matter. Core must not import app, plugins, or depolarize.
+These boundaries matter. Core must not import app or plugins.
 Frontend only talks to backend through the API.
 
 ## 4. Storage Ownership
@@ -152,6 +139,9 @@ two disagree:
   Create never overwrites: if a file already sits at the target path, it is
   left as it is and the request registers it. That is what
   `molabel task-schema create --file workbench/config/task-schemas/x.yaml` does.
+- A write keeps what a person put in the file. Comments, key order, quoting
+  and indentation survive for every key the write keeps, in the config file
+  and in the manifest.
 - Every writer of a workspace takes turns, whatever its data directory. Each
   write holds an OS-level lock on `.molabel/locks/workspace.lock` inside the
   workspace. `.molabel/` holds a `.gitignore` of `*`, so it never shows in

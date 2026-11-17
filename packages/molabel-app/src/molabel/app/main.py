@@ -2,7 +2,7 @@
 
 Module boundary rule (SC-006):
     This package (molabel.app) may only import from ``molabel.core``.
-    It must NEVER import from ``molabel.plugins`` or ``molabel.depolarize``.
+    It must NEVER import from ``molabel.plugins``.
 """
 
 from __future__ import annotations
@@ -52,9 +52,6 @@ _DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
     "http://localhost:5173",
     "http://127.0.0.1:8000",
     "http://localhost:8000",
-    "http://tauri.localhost",
-    "https://tauri.localhost",
-    "tauri://localhost",
 )
 
 
@@ -81,8 +78,8 @@ def _create_engine_from_env():
 def _cors_origins_from_env() -> list[str]:
     """Return the allowed browser origins for the API.
 
-    By default, MoLabel only permits localhost/Tauri origins that are used by
-    the dev server and desktop shell. Set ``MOLABEL_CORS_ORIGINS`` to a
+    By default, MoLabel only permits the localhost origins used by the dev
+    server and the bundled frontend. Set ``MOLABEL_CORS_ORIGINS`` to a
     comma-separated list to override that allowlist, or to an empty string to
     disable cross-origin browser access entirely.
     """

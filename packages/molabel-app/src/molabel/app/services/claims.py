@@ -46,7 +46,7 @@ IDLE_THRESHOLD_MINUTES: int = 30
 # Maps reviewer_id (str) -> list of dicts with expiry info.
 # NOTE: This dict is per-process. In a multi-worker deployment (e.g.
 # gunicorn with N workers), notifications are only visible to the worker
-# that expired the claim. Acceptable for local-first / Tauri single-worker
+# that expired the claim. Acceptable for local-first single-worker
 # deployments. For multi-worker, move to the database or a shared cache.
 _expired_claim_notifications: dict[str, list[dict[str, Any]]] = {}
 

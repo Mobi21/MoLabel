@@ -6,7 +6,11 @@ import { parse as parseYaml } from 'yaml'
 
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
-import { detectWorkspaceRoot, getRuntimeOptions, outputMode } from './context.js'
+import {
+  detectWorkspaceRoot,
+  getRuntimeOptions,
+  outputMode,
+} from './context.js'
 
 interface CodebookTestOptions {
   file?: string
@@ -16,7 +20,9 @@ export function registerCodebookCommands(
   program: Command,
   runtime: CliRuntimeOptions,
 ): void {
-  const codebook = program.command('codebook').description('Codebook operations')
+  const codebook = program
+    .command('codebook')
+    .description('Codebook operations')
 
   codebook
     .command('test <codebookId>')

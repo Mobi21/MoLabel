@@ -252,7 +252,7 @@ class WorkspaceCreate(BaseModel):
 
 #### `POST /workspaces/{workspace_id}/reindex`
 
-Trigger a full reindex of workspace files. Returns immediately; reindex runs in background. Monitor progress via SSE.
+Trigger a full reindex of workspace files. Returns immediately; reindex runs in background.
 
 **Request:**
 
@@ -2553,68 +2553,6 @@ Disable a plugin. Warns if the plugin is required by active task schemas or data
 
 ---
 
-### Assistant
-
-Supportive AI assistant powered by the user's own configured model providers.
-
----
-
-#### `POST /assistant/query`
-
-Send a question or request to the AI assistant. The server assembles focused context (workflow state, queue stats, agent runs, validation results) and passes it to the user's chosen model.
-
-**Request:**
-
-```python
-class AssistantQuery(BaseModel):
-    query: str                                    # the user's question
-    screen: str                                   # current screen name (e.g., "review", "mission_control", "data_explorer")
-    record_id: str | None = None                  # if asking about a specific record
-    model_profile_id: str | None = None           # null = workspace default
-```
-
-**Response:** `200 OK` (streamed via SSE within the POST response body using `text/event-stream` content type)
-
-```python
-class AssistantResponse(BaseModel):
-    response: str
-    context_used: list[ContextReference]
-    suggested_actions: list[SuggestedAction]
-    model_profile_id: str
-    tokens_used: int | None
-
-class ContextReference(BaseModel):
-    type: str                                 # "workflow_state" | "queue_stats" | "agent_run" | "record" | "validation"
-    id: str | None
-    summary: str
-
-class SuggestedAction(BaseModel):
-    action_type: str                          # "navigate" | "api_call" | "explanation"
-    label: str
-    target: str | None                        # URL path or endpoint
-    params: dict[str, Any] | None
-```
-
----
-
-#### `GET /assistant/context`
-
-Get the current context summary the assistant would use. Useful for debugging and transparency.
-
-**Response:** `200 OK`
-
-```python
-class AssistantContext(BaseModel):
-    workspace_summary: dict[str, Any]
-    active_workflow: dict[str, Any] | None
-    queue_stats: dict[str, Any] | None
-    recent_agent_runs: list[dict[str, Any]]
-    recent_validation_results: list[dict[str, Any]]
-    context_token_count: int
-```
-
----
-
 ### Audit
 
 Append-only audit log for all significant operations.
@@ -2840,258 +2778,6 @@ class CostEstimate(BaseModel):
 
 ---
 
-## SSE Event Streams
-
-All SSE endpoints use standard `text/event-stream` content type. Each event has a `type` field and a JSON `data` payload. The client connects with `EventSource` or the auto-generated client's SSE helper.
-
-Connection management:
-- Clients should implement automatic reconnection with exponential backoff
-- The server sends a `:keepalive` comment every 15 seconds to prevent timeout
-- Each event includes an `id` field; clients send `Last-Event-ID` on reconnect to resume
-
----
-
-### `GET /api/v1/events/agent-runs/{agent_run_id}`
-
-Stream real-time updates for an agent run.
-
-**TypeScript event types:**
-
-```typescript
-// SSE event: type = "progress"
-interface AgentRunProgressEvent {
-  agent_run_id: string;
-  records_completed: number;
-  records_total: number;
-  records_failed: number;
-  percentage: number;           // 0-100
-  current_record_id: string | null;
-  estimated_time_remaining_seconds: number | null;
-}
-
-// SSE event: type = "log"
-interface AgentRunLogEvent {
-  agent_run_id: string;
-  level: "info" | "warning" | "error";
-  message: string;
-  timestamp: string;            // ISO 8601
-  record_id: string | null;
-}
-
-// SSE event: type = "status_change"
-interface AgentRunStatusChangeEvent {
-  agent_run_id: string;
-  previous_status: string;
-  new_status: string;
-  timestamp: string;
-  error: string | null;
-}
-
-// SSE event: type = "cost_update"
-interface AgentRunCostUpdateEvent {
-  agent_run_id: string;
-  tokens_input: number;
-  tokens_output: number;
-  cost_so_far_usd: number;
-  cost_estimate_total_usd: number | null;
-}
-
-// SSE event: type = "error"
-interface AgentRunErrorEvent {
-  agent_run_id: string;
-  message: string;
-  record_id: string | null;
-  recoverable: boolean;
-  timestamp: string;
-}
-
-// SSE event: type = "output"
-interface AgentRunOutputEvent {
-  agent_run_id: string;
-  record_id: string;
-  agent_output_id: string;
-  labels: Record<string, unknown>;
-  confidence: number | null;
-  validation_status: "valid" | "invalid";
-}
-```
-
----
-
-### `GET /api/v1/events/queue/{queue_id}`
-
-Stream real-time queue updates. Used by the review screen and mission control.
-
-**TypeScript event types:**
-
-```typescript
-// SSE event: type = "item_claimed"
-interface QueueItemClaimedEvent {
-  queue_id: string;
-  record_id: string;
-  review_task_id: string;
-  reviewer_id: string;
-  reviewer_name: string;
-  timestamp: string;
-}
-
-// SSE event: type = "item_completed"
-interface QueueItemCompletedEvent {
-  queue_id: string;
-  record_id: string;
-  review_task_id: string;
-  reviewer_id: string;
-  reviewer_name: string;
-  review_duration_ms: number;
-  timestamp: string;
-}
-
-// SSE event: type = "item_released"
-interface QueueItemReleasedEvent {
-  queue_id: string;
-  record_id: string;
-  review_task_id: string;
-  reason: "timeout" | "manual" | "error";
-  timestamp: string;
-}
-
-// SSE event: type = "stats_update"
-interface QueueStatsUpdateEvent {
-  queue_id: string;
-  pending: number;
-  in_progress: number;
-  completed: number;
-  active_reviewers: Array<{
-    reviewer_id: string;
-    reviewer_name: string;
-    current_record_id: string | null;
-  }>;
-  avg_review_time_seconds: number | null;
-  estimated_completion: string | null;
-  timestamp: string;
-}
-```
-
----
-
-### `GET /api/v1/events/workflow/{execution_id}`
-
-Stream workflow execution events. Used by the workflow screen and mission control.
-
-**TypeScript event types:**
-
-```typescript
-// SSE event: type = "step_started"
-interface WorkflowStepStartedEvent {
-  execution_id: string;
-  workflow_id: string;
-  step_id: string;
-  step_type: string;
-  step_label: string;
-  timestamp: string;
-}
-
-// SSE event: type = "step_completed"
-interface WorkflowStepCompletedEvent {
-  execution_id: string;
-  workflow_id: string;
-  step_id: string;
-  step_type: string;
-  step_label: string;
-  duration_seconds: number;
-  outputs: Record<string, unknown> | null;
-  timestamp: string;
-}
-
-// SSE event: type = "step_failed"
-interface WorkflowStepFailedEvent {
-  execution_id: string;
-  workflow_id: string;
-  step_id: string;
-  step_type: string;
-  step_label: string;
-  error: string;
-  recoverable: boolean;
-  timestamp: string;
-}
-
-// SSE event: type = "step_paused"
-interface WorkflowStepPausedEvent {
-  execution_id: string;
-  workflow_id: string;
-  step_id: string;
-  step_type: string;
-  step_label: string;
-  pause_reason: "human_step" | "gate" | "breakpoint" | "manual";
-  timestamp: string;
-}
-
-// SSE event: type = "loop_iteration"
-interface WorkflowLoopIterationEvent {
-  execution_id: string;
-  workflow_id: string;
-  step_id: string;
-  iteration: number;
-  metric_name: string | null;
-  metric_value: number | null;
-  termination_threshold: number | null;
-  will_continue: boolean;
-  timestamp: string;
-}
-
-// SSE event: type = "workflow_completed"
-interface WorkflowCompletedEvent {
-  execution_id: string;
-  workflow_id: string;
-  steps_completed: number;
-  total_duration_seconds: number;
-  timestamp: string;
-}
-
-// SSE event: type = "workflow_failed"
-interface WorkflowFailedEvent {
-  execution_id: string;
-  workflow_id: string;
-  failed_step_id: string;
-  error: string;
-  steps_completed: number;
-  timestamp: string;
-}
-```
-
----
-
-### `GET /api/v1/events/providers`
-
-Stream provider health status changes. Used by the model configuration screen and mission control.
-
-**TypeScript event types:**
-
-```typescript
-// SSE event: type = "provider_status"
-interface ProviderStatusEvent {
-  provider_id: string;
-  provider_type: string;
-  previous_status: string | null;
-  status: "online" | "offline" | "error";
-  latency_ms: number | null;
-  error: string | null;
-  available_models: string[];
-  timestamp: string;
-}
-
-// SSE event: type = "model_status"
-interface ModelStatusEvent {
-  model_profile_id: string;
-  provider_id: string;
-  status: "online" | "offline" | "error";
-  latency_ms: number | null;
-  timestamp: string;
-}
-```
-
----
-
 ## OpenAPI Codegen Pipeline
 
 The API contract is enforced through an automated pipeline:
@@ -3115,7 +2801,6 @@ frontend/src/api/
 
 - All GET endpoints map to `useQuery` or `useSuspenseQuery` hooks
 - All POST/PUT/DELETE endpoints map to `useMutation` hooks
-- SSE streams map to custom hooks using `EventSource` with `useEffect` lifecycle
 - Optimistic updates are used for review event submission and draft saving
 - Query invalidation cascades: submitting a review invalidates queue stats, record detail, and dataset analytics queries
 
@@ -3159,7 +2844,6 @@ The local FastAPI server supports multiple concurrent reviewer sessions (PRD Sec
 - Queue assignment uses database-level locking to prevent double-claiming
 - SQLite WAL mode allows concurrent reads from multiple sessions
 - Write operations use row-level queue locking
-- The `/api/v1/events/queue/{queue_id}` SSE stream broadcasts claim/release events to all connected sessions so the mission control screen shows live reviewer activity
 
 ---
 
@@ -3249,8 +2933,6 @@ The local FastAPI server supports multiple concurrent reviewer sessions (PRD Sec
 | GET | `/plugins/{id}` | Plugin detail |
 | POST | `/plugins/{id}/enable` | Enable plugin |
 | POST | `/plugins/{id}/disable` | Disable plugin |
-| POST | `/assistant/query` | AI assistant query |
-| GET | `/assistant/context` | Assistant context |
 | GET | `/audit` | List audit events |
 | GET | `/audit/{id}` | Audit event detail |
 | GET | `/session` | Current session |
@@ -3259,7 +2941,3 @@ The local FastAPI server supports multiple concurrent reviewer sessions (PRD Sec
 | POST | `/reviewers` | Create reviewer |
 | GET | `/costs` | Cost summary |
 | GET | `/costs/estimate` | Cost estimate |
-| GET | `/api/v1/events/agent-runs/{id}` | SSE: agent run events |
-| GET | `/api/v1/events/queue/{queue_id}` | SSE: queue events |
-| GET | `/api/v1/events/workflow/{execution_id}` | SSE: workflow events |
-| GET | `/api/v1/events/providers` | SSE: provider health |

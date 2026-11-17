@@ -18,6 +18,8 @@ import yaml
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
+from molabel.core.utils.round_trip_yaml import dump_yaml
+
 logger = logging.getLogger(__name__)
 
 
@@ -103,15 +105,12 @@ def load_manifest(path: Path) -> WorkspaceManifest:
     return WorkspaceManifest.model_validate(data)
 
 
-def dump_manifest(manifest: WorkspaceManifest) -> str:
-    """Render a *WorkspaceManifest* as YAML.
+def dump_manifest(manifest: WorkspaceManifest, previous: str | None = None) -> str:
+    """Render a *WorkspaceManifest* as YAML over *previous*, the text it replaces.
 
-    Uses ``default_flow_style=False`` and ``sort_keys=False`` so the
-    output matches the human-authored fixture style.
+    Comments, key order and layout in *previous* are kept (see ``dump_yaml``).
     """
-    return yaml.dump(
-        manifest.model_dump(mode="json"), default_flow_style=False, sort_keys=False
-    )
+    return dump_yaml(manifest.model_dump(mode="json"), previous)
 
 
 def save_manifest(manifest: WorkspaceManifest, path: Path) -> None:

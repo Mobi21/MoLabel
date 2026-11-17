@@ -1,7 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { fileURLToPath } from 'node:url'
 
 import { parse as parseYaml } from 'yaml'
 
@@ -12,12 +11,7 @@ import {
   normalizeArtifactSelector,
   resolveArtifact,
 } from '../workspace-context.js'
-import {
-  getDefaultConfigPath,
-  loadConfig,
-  resolveConfig,
-  saveConfig,
-} from '../config.js'
+import { getDefaultConfigPath, loadConfig, resolveConfig } from '../config.js'
 import type {
   CliConfig,
   CliRuntimeOptions,
@@ -103,7 +97,7 @@ export async function safeReadText(path: string): Promise<string | null> {
   }
 }
 
-export async function readWorkspaceManifest(
+async function readWorkspaceManifest(
   options: CliRuntimeOptions,
 ): Promise<Record<string, unknown> | null> {
   const workspace = await detectWorkspaceRoot(options.workspaceRoot)
@@ -234,7 +228,7 @@ export {
   resolveArtifact,
 } from '../workspace-context.js'
 
-export function readStringField(value: unknown): string | undefined {
+function readStringField(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
@@ -281,19 +275,6 @@ export async function detectWorkspaceRoot(
   path?: string,
 ): Promise<WorkspaceDetection> {
   return detectWorkspace(path)
-}
-
-export async function writeResolvedConfig(
-  config: CliConfig,
-  options: CliRuntimeOptions,
-): Promise<void> {
-  const configPath = options.configPath ?? getDefaultConfigPath()
-  await saveConfig(config, configPath)
-}
-
-export function cliPackageRoot(): string {
-  const packageRoot = dirname(fileURLToPath(import.meta.url))
-  return resolve(packageRoot, '..', '..')
 }
 
 export async function resolveArtifactPath(

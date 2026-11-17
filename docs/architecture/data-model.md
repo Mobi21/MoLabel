@@ -309,7 +309,7 @@ reviewer_profile (global, not workspace-scoped)
 | core_version | str | yes | MoLabel core version this workspace was created with |
 | root_path | str | yes | Absolute path to workspace root directory on disk |
 | manifest_path | str | yes | Relative path to `workbench.project.yaml` from root |
-| reference_app | str | no | Reference app plugin ID (e.g., `depolarize`) |
+| reference_app | str | no | Reference app plugin ID (e.g., `benchmark_authority`) |
 | settings | JSON | no | Workspace-level settings (indexing mode, default profiles, etc.) |
 | created_at | datetime | yes | When the workspace was bootstrapped |
 | updated_at | datetime | yes | Last modification timestamp |
@@ -1149,11 +1149,11 @@ Note: The plugin-interfaces.md PromptTemplate dataclass uses simplified field na
 |-------|------|----------|-------------|
 | id | UUID | yes | Primary key |
 | workspace_id | UUID | yes | FK to workspace |
-| plugin_id | str | yes | Plugin identifier (e.g., `depolarize.reference_app`) |
+| plugin_id | str | yes | Plugin identifier (e.g., `benchmark_authority.reference_app`) |
 | plugin_version | str | yes | Installed version |
 | plugin_type | str | yes | Plugin category: data_loader, task_type, model_provider, etc. |
 | compatible_core_version | str | yes | Core version compatibility range |
-| entrypoint | str | yes | Python entrypoint (e.g., `depolarize.plugin:register`) |
+| entrypoint | str | yes | Python entrypoint (e.g., `benchmark_authority.plugin:register`) |
 | is_enabled | bool | yes | Whether the plugin is currently active |
 | is_compatible | bool | yes | Whether the plugin passes compatibility checks |
 | capabilities | JSON | no | Declared capabilities: record_kinds, task_types, export_formats, etc. |

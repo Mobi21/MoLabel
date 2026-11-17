@@ -169,7 +169,7 @@ Tier map:
 - T6-xx: Quality metrics (agreement, delta analysis, validation runs, readiness, throughput)
 - T7-xx: Data management (import/export for all formats, snapshots, label mapping, dataset operations)
 - T8-xx: Resilience (malformed input, unicode, long text, empty dataset, duplicate records, nested JSON, concurrent ops, partial labels, rollback, invalid YAML, session expiry, provider timeouts, empty filter)
-- T9-xx: Cross-cutting (audit trail, cost tracking, SSE events, auth/session, RBAC)
+- T9-xx: Cross-cutting (audit trail, cost tracking, auth/session, RBAC)
 
 ## Parallel Execution Model
 
@@ -177,7 +177,7 @@ Tests run in three xdist groups. The default `-n 4 --dist loadgroup` flag respec
 
 - `independent` — Tier 1, 2, 7, 8: fully parallel (own in-memory DB per test)
 - `shared_workspace` — Tier 3, 5, 6: parallel with shared read-only fixtures
-- `sequential` — Tier 4, Tier 9 concurrency/SSE: must run in order
+- `sequential` — Tier 4, Tier 9 concurrency: must run in order
 
 When running a subset that mixes groups, xdist handles scheduling automatically.
 

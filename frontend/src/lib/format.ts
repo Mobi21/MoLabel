@@ -27,34 +27,3 @@ export function formatDate(iso: string): string {
     year: 'numeric',
   })
 }
-
-export function formatTimestamp(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
-export function formatCost(value: number): string {
-  return `$${value.toFixed(2)}`
-}
-
-export function formatAccuracy(value: number): string {
-  return `${(value * 100).toFixed(1)}%`
-}
-
-export function formatConfidence(value: number): string {
-  return `${(value * 100).toFixed(0)}%`
-}
-
-export function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}

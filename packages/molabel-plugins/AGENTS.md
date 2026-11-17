@@ -2,19 +2,19 @@
 
 ## Responsibility
 
-Built-in task type plugins that ship with MoLabel. These are first-party plugins that use the same plugin interfaces as third-party plugins.
+Built-in plugins that ship with MoLabel. These are first-party plugins that use the same plugin interfaces as third-party plugins.
 
-## Planned Plugins
+## Plugins
 
-- `text_labeling` — generic text classification and scoring
-- `chat_review` — conversation/chat window review
+Each one registers through the `molabel.plugins` entry-point group in `pyproject.toml`:
 
-More may be added (pairwise ranking, extraction, rubric scoring, etc.).
+- `loaders/` — CSV, JSON, JSONL, Parquet, YAML, Markdown, and Hugging Face data loaders
+- `exporters/` — JSONL, CSV, Parquet, and Hugging Face exporters
 
 ## Rules
 
 - Depends on molabel-core only
 - Must use the public plugin interfaces defined in molabel-core
 - Must not access core internals or bypass the plugin API
-- Each plugin should be self-contained with its own task schemas, renderers, and export serializers
+- Each plugin should be self-contained
 - Plugins serve as reference examples for third-party plugin authors

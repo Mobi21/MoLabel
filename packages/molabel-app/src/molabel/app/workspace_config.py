@@ -36,6 +36,7 @@ from molabel.core.manifest import (
     dump_manifest,
     load_manifest,
 )
+from molabel.core.utils.round_trip_yaml import dump_yaml
 
 MANIFEST_FILENAME = "workbench.project.yaml"
 _CORE_VERSION = "0.1.0"
@@ -118,6 +119,19 @@ def _write_atomically(path: Path, content: str | bytes) -> None:
         temp.unlink(missing_ok=True)
 
 
+def _text_or_none(path: Path) -> str | None:
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
+def _replaced(entries: list[Any], entry: Any, id_field: str) -> list[Any]:
+    """*entries* with *entry* where its id first appears, so the file keeps order."""
+    key = getattr(entry, id_field)
+    ids = [getattr(e, id_field) for e in entries]
+    index = ids.index(key) if key in ids else len(entries)
+    kept = [e for e, id_ in zip(entries, ids, strict=True) if id_ != key]
+    return [*kept[:index], entry, *kept[index:]]
+
+
 class WorkspaceFiles:
     """The config files and manifest that one request writes in a workspace."""
 
@@ -144,15 +158,16 @@ class WorkspaceFiles:
             self.folder.path, file_path or f"{kind.directory}/{slug}.yaml"
         )
         if overwrite or not target.exists():
-            self._write(
-                target, yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
-            )
+            self._write(target, dump_yaml(document, _text_or_none(target)))
         relative = target.relative_to(self.folder.path).as_posix()
 
         def list_file(manifest: WorkspaceManifest) -> None:
             entries = getattr(manifest, kind.manifest_list)
-            kept = [e for e in entries if getattr(e, kind.id_field) != slug]
-            setattr(manifest, kind.manifest_list, [*kept, kind.entry(slug, relative)])
+            setattr(
+                manifest,
+                kind.manifest_list,
+                _replaced(entries, kind.entry(slug, relative), kind.id_field),
+            )
 
         self._update_manifest(list_file)
         return relative
@@ -161,8 +176,7 @@ class WorkspaceFiles:
         """Add or replace the manifest entry for a dataset."""
 
         def list_entry(manifest: WorkspaceManifest) -> None:
-            kept = [d for d in manifest.datasets if d.dataset_id != entry.dataset_id]
-            manifest.datasets = [*kept, entry]
+            manifest.datasets = _replaced(manifest.datasets, entry, "dataset_id")
 
         self._update_manifest(list_entry)
 
@@ -184,9 +198,10 @@ class WorkspaceFiles:
 
     def _update_manifest(self, change: Callable[[WorkspaceManifest], None]) -> None:
         path = resolve_in_workspace(self.folder.path, MANIFEST_FILENAME)
+        previous = _text_or_none(path)
         manifest = (
             load_manifest(path)
-            if path.is_file()
+            if previous is not None
             else WorkspaceManifest(
                 workspace_id=self.folder.workspace_id,
                 workspace_name=self.folder.name,
@@ -194,7 +209,7 @@ class WorkspaceFiles:
             )
         )
         change(manifest)
-        self._write(path, dump_manifest(manifest))
+        self._write(path, dump_manifest(manifest, previous))
 
     def _write(self, path: Path, content: str) -> None:
         original = path.read_bytes() if path.exists() else None

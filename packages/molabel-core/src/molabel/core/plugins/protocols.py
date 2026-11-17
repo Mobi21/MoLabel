@@ -708,8 +708,7 @@ class ValidationPlugin(Protocol):
         """Unique identifier for this validation gate.
 
         Referenced in workflow YAML configs and reference app readiness
-        gate lists. Example: ``min_agreement_check``,
-        ``depolarize.release_readiness``.
+        gate lists. Example: ``min_agreement_check``.
         """
         ...
 
@@ -837,7 +836,7 @@ class ReferenceAppPlugin(Protocol):
 
     Reference apps package workspace templates, custom screens,
     validation gates, project dashboards, and bootstrap rules into a
-    cohesive domain package. DePolarize is the first reference app.
+    cohesive domain package.
     """
 
     @property
@@ -849,8 +848,8 @@ class ReferenceAppPlugin(Protocol):
     def app_id(self) -> str:
         """Unique reference app identifier.
 
-        Stored in ``Workspace.reference_app``. Examples: ``depolarize``,
-        ``benchmark_authority``, ``red_team_review``.
+        Stored in ``Workspace.reference_app``. Examples: ``benchmark_authority``,
+        ``red_team_review``.
         """
         ...
 

@@ -51,7 +51,7 @@ MoLabel is built to support the full lifecycle of labeled data work:
 - `packages/molabel-app/`: the FastAPI backend API behind the CLI
 - `frontend/`: a work-in-progress control-room UI that is not ready for public
   use yet
-- `src-tauri/`: a work-in-progress desktop shell for the local app experience
+<!-- DRAFT: needs Mobi approval -->
 
 The intended center of gravity is the CLI, not the GUI.
 
@@ -71,8 +71,8 @@ What is not ready yet:
 
 - the cleanest public install path is currently from source,
 - the frontend is not ready for general public use,
-- the desktop shell is still early,
 - and the product direction is clearer than the packaging story.
+<!-- DRAFT: needs Mobi approval -->
 
 That means you can use the project today, but you should expect an early
 open-source developer experience rather than a finished end-user product.
@@ -345,14 +345,13 @@ packages/
   molabel-core/         Core runtime, storage, workflow, providers, quality
   molabel-app/          FastAPI backend API
   molabel-plugins/      Built-in plugin implementations
-  molabel-depolarize/   DePolarize reference implementation
 cli/                    Public CLI and bundled MoLabel skills
 frontend/               React control-room UI
-src-tauri/              Tauri desktop shell
 docs/                   Guides, architecture docs, PRDs, and research notes
 fixtures/               Sample workspaces and benchmark fixtures
 tests/                  Unit, integration, and e2e coverage
 ```
+<!-- DRAFT: needs Mobi approval -->
 
 ## Documentation
 

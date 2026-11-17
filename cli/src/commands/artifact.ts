@@ -364,7 +364,10 @@ async function runArtifactTrace(
   if (!proposal) {
     throw new Error(`Artifact trace not found: ${artifactId}`)
   }
-  await emit(JSON.parse(proposal) as Record<string, unknown>, outputMode(options))
+  await emit(
+    JSON.parse(proposal) as Record<string, unknown>,
+    outputMode(options),
+  )
 }
 
 async function runArtifactDecide(

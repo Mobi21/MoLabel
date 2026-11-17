@@ -121,7 +121,6 @@ Do not create a parallel benchmark path.
 - Reuse primitives from `grounded_benchmark_primitives.py`; do not clone fixture-specific copies into benchmark-specific code.
 - Never silently flatten paper semantics when the task requires grouped evidence, joint QA plus support, ranking depth, span offsets, or grounded generation anchors.
 - Do not add one-off report logic or parser branches that only work for one benchmark id.
-- Do not add DePolarize-specific logic outside `packages/molabel-depolarize`.
 
 ## Semantic Rules
 
