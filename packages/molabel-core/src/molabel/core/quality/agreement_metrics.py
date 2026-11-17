@@ -66,44 +66,59 @@ def _is_agent_source(source: str) -> bool:
     return source == "agent"
 
 
-def _sum_of_squares(counts: Counter[str]) -> int:
-    return sum(count * count for count in counts.values())
+@dataclass(frozen=True, slots=True)
+class _Tally:
+    """One unit's values counted once, shared by every coefficient."""
+
+    size: int
+    counts: dict[str, int]
+    squares: int
+    """The sum of the squared counts."""
 
 
-def _krippendorff_alpha_nominal(units: Sequence[Sequence[str]]) -> float | _Undefined:
+def _tally(values: Sequence[str]) -> _Tally:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return _Tally(len(values), counts, sum(count * count for count in counts.values()))
+
+
+def _totals(tallies: Sequence[_Tally]) -> dict[str, int]:
+    totals: dict[str, int] = {}
+    for tally in tallies:
+        for value, count in tally.counts.items():
+            totals[value] = totals.get(value, 0) + count
+    return totals
+
+
+def _krippendorff_alpha_nominal(tallies: Sequence[_Tally]) -> float | _Undefined:
     """1 - (n - 1) * sum of o_ck over c != k / sum of n_c * n_k over c != k."""
-    totals: Counter[str] = Counter()
-    mismatched_coincidences = 0.0
-    for values in units:
-        counts = Counter(values)
-        totals.update(counts)
-        size = len(values)
-        mismatched_coincidences += (size * size - _sum_of_squares(counts)) / (size - 1)
+    totals = _totals(tallies)
     if len(totals) < 2:
         return _Undefined(SINGLE_CATEGORY)
+    mismatched_coincidences = sum(
+        (tally.size * tally.size - tally.squares) / (tally.size - 1)
+        for tally in tallies
+    )
     n = sum(totals.values())
-    expected_mismatches = n * n - _sum_of_squares(totals)
+    expected_mismatches = n * n - sum(count * count for count in totals.values())
     return 1.0 - (n - 1) * mismatched_coincidences / expected_mismatches
 
 
-def _fleiss_kappa(units: Sequence[Sequence[str]]) -> float | _Undefined:
+def _fleiss_kappa(tallies: Sequence[_Tally]) -> float | _Undefined:
     """(P - P_e) / (1 - P_e) with every unit rated the same number of times."""
-    sizes = {len(values) for values in units}
+    sizes = {tally.size for tally in tallies}
     if len(sizes) > 1:
         return _Undefined(
             "Fleiss' kappa needs the same number of values in every unit, and "
             f"units hold {min(sizes)} to {max(sizes)}. Use krippendorff_alpha."
         )
     raters = sizes.pop()
-    totals: Counter[str] = Counter()
-    matched_pairs = 0
-    for values in units:
-        counts = Counter(values)
-        totals.update(counts)
-        matched_pairs += _sum_of_squares(counts) - raters
+    totals = _totals(tallies)
     if len(totals) < 2:
         return _Undefined(SINGLE_CATEGORY)
-    ratings = len(units) * raters
+    matched_pairs = sum(tally.squares - raters for tally in tallies)
+    ratings = len(tallies) * raters
     observed = matched_pairs / (ratings * (raters - 1))
     expected = sum((count / ratings) ** 2 for count in totals.values())
     return (observed - expected) / (1.0 - expected)
@@ -205,16 +220,14 @@ def _summarize(units: Sequence[Sequence[Rating]]) -> AgreementMetricSummary:
         return AgreementMetricSummary(
             null_reasons=dict.fromkeys(_METRIC_FIELDS, NO_PAIRABLE_VALUES)
         )
-    values = [[value for _, value in unit] for unit in units]
-    comparisons = sum(len(unit) * (len(unit) - 1) // 2 for unit in values)
-    agreements = sum(
-        count * (count - 1) // 2 for unit in values for count in Counter(unit).values()
-    )
+    tallies = [_tally([value for _, value in unit]) for unit in units]
+    comparisons = sum(tally.size * (tally.size - 1) // 2 for tally in tallies)
+    agreements = sum((tally.squares - tally.size) // 2 for tally in tallies)
     metrics: dict[str, float | _Undefined] = {
         "percent_agreement": agreements / comparisons,
         "cohen_kappa": _cohen_kappa(units),
-        "fleiss_kappa": _fleiss_kappa(values),
-        "krippendorff_alpha": _krippendorff_alpha_nominal(values),
+        "fleiss_kappa": _fleiss_kappa(tallies),
+        "krippendorff_alpha": _krippendorff_alpha_nominal(tallies),
     }
     return AgreementMetricSummary.model_validate(
         {
@@ -313,9 +326,12 @@ class AgreementMetricsService:
             }
 
         overall, overall_fields = _summarize_fields(overall_units)
-        human_agent, human_agent_fields = (
-            _summarize_fields(human_agent_units) if with_human_agent else (None, {})
-        )
+        if overall_units is human_agent_units:
+            human_agent, human_agent_fields = overall, overall_fields
+        else:
+            human_agent, human_agent_fields = (
+                _summarize_fields(human_agent_units) if with_human_agent else (None, {})
+            )
         if human_agent is not None and human_agent.comparisons == 0:
             warnings.append("No human-agent comparisons were available.")
         if analysis_type != "human_agent" and overall.comparisons == 0:
