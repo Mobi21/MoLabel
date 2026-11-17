@@ -7,14 +7,14 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.pool import StaticPool
 
 from molabel.app.api.v1.workflows import _WorkflowExporter
 from molabel.core.migration_runner import upgrade_database
 
 
-def _seeded_engine(record_ids: list[str]) -> tuple[object, str]:
+def _seeded_engine(record_ids: list[str]) -> tuple[Engine, str]:
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
@@ -72,7 +72,7 @@ def test_export_keeps_the_step_order_and_skips_unknown_ids(tmp_path: Path) -> No
     requested = list(reversed(record_ids))
     requested.insert(7, str(uuid.uuid4()))
 
-    with engine.connect() as conn:  # type: ignore[attr-defined]
+    with engine.connect() as conn:
         result = _WorkflowExporter(conn, workspace_root=tmp_path).export(
             record_ids=requested,
             format="jsonl",
