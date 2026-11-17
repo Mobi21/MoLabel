@@ -57,18 +57,25 @@ function AlphaScale({ alpha }: { alpha: number | null | undefined }) {
 
 function Headline({
   title,
+  note,
   scope,
   testId,
 }: {
   title: string
+  note?: string
   scope: AgreementScope
   testId: string
 }) {
   const weakest = weakestField(scope.fields)
   const pooled = scope.pooled
   return (
-    <div className="rounded-[3px] border border-rule bg-sheet p-5">
+    <div
+      role="group"
+      aria-label={title}
+      className="rounded-[3px] border border-rule bg-sheet p-5"
+    >
       <p className="font-mono text-xs text-faint">{title}</p>
+      {note && <p className="font-mono text-[11px] text-ink-soft">{note}</p>}
       {weakest ? (
         <>
           <p
@@ -258,6 +265,7 @@ export function CalibrationPage() {
               />
               <Headline
                 title="Reviewers against the AI proposal"
+                note="includes accepts of shown proposals"
                 scope={data.human_agent}
                 testId="alpha-human-agent"
               />
