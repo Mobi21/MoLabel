@@ -391,6 +391,64 @@ async def test_a_claim_of_an_ai_value_the_resolution_does_not_hold_is_refused(
 
 
 @pytest.mark.asyncio
+async def test_a_claimed_selection_must_hold_the_proposals_values_in_any_order(
+    client, app, tmp_path
+):
+    tokens, _, _, path, shown = await _r3_disagreement(client, app, tmp_path)
+    (proposal,) = shown["agent_labels"]
+    tags = {
+        "name": "tags",
+        "field_type": "multi_select",
+        "required": False,
+        "options": ["a", "b", "a,b"],
+    }
+    with app.state.engine.begin() as conn:
+        task_schema_id = conn.execute(text("SELECT id FROM task_schemas")).scalar()
+        fields = json.loads(
+            conn.execute(
+                text("SELECT label_fields FROM task_schemas WHERE id = :id"),
+                {"id": task_schema_id},
+            ).scalar()
+        )
+        conn.execute(
+            text("UPDATE task_schemas SET label_fields = :fields WHERE id = :id"),
+            {
+                "fields": json.dumps([*fields, tags]),
+                "id": task_schema_id,
+            },
+        )
+        conn.execute(
+            text("UPDATE agent_outputs SET labels = :labels WHERE id = :id"),
+            {
+                "labels": json.dumps({**proposal["labels"], "tags": ["a", "b"]}),
+                "id": proposal["agent_output_id"],
+            },
+        )
+
+    async def resolve(selected):
+        return await client.post(
+            f"{path}/resolve",
+            json={
+                "resolved_labels": {"sentiment": "negative", "tags": selected},
+                "review_event_ids": [
+                    s["review_event_id"] for s in shown["reviewer_labels"]
+                ],
+                "agent_sources": {"tags": proposal["agent_output_id"]},
+            },
+            headers=_as(tokens[0]),
+        )
+
+    refused = [await resolve(["a,b"]), await resolve(["a"])]
+    reordered = await resolve(["b", "a"])
+
+    assert [r.status_code for r in refused] == [422, 422], [r.text for r in refused]
+    assert reordered.status_code == 200, reordered.text
+    assert reordered.json()["resolution"]["agent_sources"] == {
+        "tags": proposal["agent_output_id"]
+    }
+
+
+@pytest.mark.asyncio
 async def test_promoting_the_same_records_again_changes_no_file(client, app, tmp_path):
     _, tokens, queue_id, _ = await _reviewed_and_adjudicated(client, app, tmp_path)
     await _create(client, tokens[0])

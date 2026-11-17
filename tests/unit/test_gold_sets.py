@@ -530,6 +530,36 @@ class TestFailures:
             skip_reason(promote(record, failures_only=True)) == SkipReason.model_agreed
         )
 
+    def test_a_selection_in_another_order_is_the_proposals_selection(self):
+        proposed = {**REFUND, "tags": ["a", "b"]}
+        proposal = Proposal(agent_output_id="o1", agent_run_id="run", labels=proposed)
+        labels = {**REFUND, "tags": ["b", "a"]}
+        record = reviewed(
+            review("a", labels), review("b", labels), proposals=(proposal,)
+        )
+        assert (
+            skip_reason(promote(record, failures_only=True)) == SkipReason.model_agreed
+        )
+
+    @pytest.mark.parametrize(
+        ("changed", "failed_fields"),
+        [({"tags": ["a,b"]}, ["tags"]), ({"urgent": "false"}, ["urgent"])],
+    )
+    def test_a_label_that_only_prints_like_the_proposal_is_a_failure(
+        self, changed, failed_fields
+    ):
+        proposed = {**REFUND, "tags": ["a", "b"]}
+        proposal = Proposal(agent_output_id="o1", agent_run_id="run", labels=proposed)
+        labels = {**proposed, **changed}
+        record = reviewed(
+            review("a", labels), review("b", labels), proposals=(proposal,)
+        )
+
+        result = promote(record, failures_only=True)
+
+        assert isinstance(result, GoldItem)
+        assert result.provenance.model_failure.failed_fields == failed_fields
+
     def test_a_record_with_no_proposal_is_not_a_failure(self):
         record = reviewed(review("a", REFUND), review("b", REFUND))
         assert skip_reason(promote(record, failures_only=True)) == (

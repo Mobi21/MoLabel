@@ -40,8 +40,23 @@ def canonical_label_value(value: Any) -> str:
 
 
 def present_label_value(value: Any) -> str | None:
-    """*value* as ``canonical_label_value`` gives it, or None when it is missing.
+    """*value* as JSON with every list sorted, or None when it is missing.
 
-    Null, ``""`` and ``[]`` are all missing: none of them is a label.
+    Null, ``""`` and ``[]`` are all missing: none of them is a label. A list is
+    a multiset, so ``["b", "a"]`` matches ``["a", "b"]``, while ``["a,b"]``
+    does not, and ``"false"`` does not match ``false``.
     """
-    return None if value in (None, "", []) else canonical_label_value(value)
+    if value in (None, "", []):
+        return None
+    return json.dumps(_sorted_lists(value), sort_keys=True)
+
+
+def _sorted_lists(value: Any) -> Any:
+    if isinstance(value, list):
+        return sorted(
+            (_sorted_lists(v) for v in value),
+            key=lambda v: json.dumps(v, sort_keys=True),
+        )
+    if isinstance(value, dict):
+        return {key: _sorted_lists(v) for key, v in value.items()}
+    return value

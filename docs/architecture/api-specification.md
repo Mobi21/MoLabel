@@ -2127,7 +2127,9 @@ it is already resolved. `agent_sources` maps each field whose resolved value
 the adjudicator took from an agent proposal to that proposal's
 `agent_output_id`. Each proposal must be an `agent_labels` entry of the
 disagreement, its value for the field must be present (not null, `""` or `[]`)
-and equal the resolved value, and the map needs `resolve` (422 otherwise). The
+and equal the resolved value, and the map needs `resolve` (422 otherwise).
+Values are equal when they have the same JSON type and value; a list matches
+one holding the same elements in any order. The
 adjudication stores the map, and gold promotion records that the adjudicator
 took an AI proposal.
 
