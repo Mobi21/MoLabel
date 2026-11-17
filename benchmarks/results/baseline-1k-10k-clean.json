@@ -1,0 +1,296 @@
+{
+  "label": "baseline-1k-10k-clean",
+  "generated_at": "2026-11-17T02:06:35.572128+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "git_rev": "263298d"
+  },
+  "args": {
+    "sizes": [
+      1000,
+      10000
+    ],
+    "paths": [
+      "ingest",
+      "agreement",
+      "benchmark",
+      "export"
+    ],
+    "runs": 7,
+    "warmup": 1,
+    "max_run_seconds": 120.0,
+    "skip": [],
+    "no_seed": false
+  },
+  "synthetic": {
+    "fields": 3,
+    "raters": 2,
+    "overlap": 3,
+    "rater_disagreement": 0.2,
+    "agent_disagreement": 0.1
+  },
+  "database_bytes": {
+    "1000": 14352384,
+    "10000": 149028864
+  },
+  "wall_seconds": 92.0,
+  "notes": [],
+  "profiles": [
+    "benchmarks\\results\\profile-ingest_api_jsonl-10000.txt",
+    "benchmarks\\results\\profile-ingest_loader_jsonl-10000.txt",
+    "benchmarks\\results\\profile-ingest_loader_csv-10000.txt",
+    "benchmarks\\results\\profile-agreement_service_inter_annotator-10000.txt",
+    "benchmarks\\results\\profile-agreement_service_human_agent-10000.txt",
+    "benchmarks\\results\\profile-agreement_api-10000.txt",
+    "benchmarks\\results\\profile-benchmark_clinc150-10000.txt",
+    "benchmarks\\results\\profile-benchmark_banking77-10000.txt",
+    "benchmarks\\results\\profile-export_orchestrator_jsonl-10000.txt",
+    "benchmarks\\results\\profile-export_workflow_step-10000.txt"
+  ],
+  "timings": [
+    {
+      "path": "ingest_api_jsonl",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.1457,
+      "p95_s": 0.1588,
+      "min_s": 0.1172,
+      "max_s": 0.1588,
+      "work": 1000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "ingest_loader_jsonl",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.0046,
+      "p95_s": 0.0049,
+      "min_s": 0.0045,
+      "max_s": 0.0049,
+      "work": 1000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "ingest_loader_csv",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.0049,
+      "p95_s": 0.0054,
+      "min_s": 0.0048,
+      "max_s": 0.0054,
+      "work": 1000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_inter_annotator",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.0276,
+      "p95_s": 0.1013,
+      "min_s": 0.027,
+      "max_s": 0.1013,
+      "work": 3000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_human_agent",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.1682,
+      "p95_s": 0.1858,
+      "min_s": 0.1183,
+      "max_s": 0.1858,
+      "work": 6000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_api",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.2351,
+      "p95_s": 0.2873,
+      "min_s": 0.1879,
+      "max_s": 0.2873,
+      "work": 1000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "benchmark_clinc150",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.0176,
+      "p95_s": 0.0177,
+      "min_s": 0.0169,
+      "max_s": 0.0177,
+      "work": 1000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "benchmark_banking77",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.036,
+      "p95_s": 0.0365,
+      "min_s": 0.0355,
+      "max_s": 0.0365,
+      "work": 1000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "export_orchestrator_jsonl",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.008,
+      "p95_s": 0.0083,
+      "min_s": 0.0075,
+      "max_s": 0.0083,
+      "work": 1000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "export_workflow_step",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.0902,
+      "p95_s": 0.1052,
+      "min_s": 0.0866,
+      "max_s": 0.1052,
+      "work": 1000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "ingest_api_jsonl",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 1.5971,
+      "p95_s": 2.176,
+      "min_s": 1.2067,
+      "max_s": 2.176,
+      "work": 10000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "ingest_loader_jsonl",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.0923,
+      "p95_s": 0.1262,
+      "min_s": 0.0475,
+      "max_s": 0.1262,
+      "work": 10000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "ingest_loader_csv",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.0985,
+      "p95_s": 0.1109,
+      "min_s": 0.0509,
+      "max_s": 0.1109,
+      "work": 10000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_inter_annotator",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.362,
+      "p95_s": 0.4074,
+      "min_s": 0.279,
+      "max_s": 0.4074,
+      "work": 30000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_human_agent",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 1.5493,
+      "p95_s": 1.5766,
+      "min_s": 1.4923,
+      "max_s": 1.5766,
+      "work": 60000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_api",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 2.6633,
+      "p95_s": 2.7311,
+      "min_s": 2.5391,
+      "max_s": 2.7311,
+      "work": 10000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "benchmark_clinc150",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.175,
+      "p95_s": 0.2226,
+      "min_s": 0.1728,
+      "max_s": 0.2226,
+      "work": 10000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "benchmark_banking77",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.4108,
+      "p95_s": 0.4206,
+      "min_s": 0.3807,
+      "max_s": 0.4206,
+      "work": 10000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "export_orchestrator_jsonl",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.0698,
+      "p95_s": 0.073,
+      "min_s": 0.0682,
+      "max_s": 0.073,
+      "work": 10000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "export_workflow_step",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 1.0147,
+      "p95_s": 1.0288,
+      "min_s": 1.0003,
+      "max_s": 1.0288,
+      "work": 10000,
+      "errors": 0,
+      "note": ""
+    }
+  ]
+}

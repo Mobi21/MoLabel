@@ -1664,7 +1664,10 @@ def list_queues(
     A queue exists as the set of review tasks that share a ``queue_id``. Its
     kind comes from the workflow step that created it. ``my_remaining``
     counts the records the reviewer can still claim or holds a claim on, and
-    ``my_submitted`` the tasks the reviewer submitted.
+    ``my_submitted`` the tasks the reviewer submitted. Whether the reviewer
+    holds a copy of an available record is one probe of the
+    ``(claimed_by, queue_id, record_id)`` index per available task, so the
+    listing stays close to linear in the workspace's tasks.
     """
     with engine.connect() as conn:
         rows = conn.execute(
@@ -1688,11 +1691,12 @@ def list_queues(
                     COUNT(DISTINCT CASE
                         WHEN t.claimed_by = :reviewer_id AND t.status = 'claimed'
                             THEN t.record_id
-                        WHEN t.status = 'available' AND t.record_id NOT IN (
-                            SELECT m.record_id
+                        WHEN t.status = 'available' AND NOT EXISTS (
+                            SELECT 1
                             FROM review_tasks m
-                            WHERE m.queue_id = t.queue_id
-                              AND m.claimed_by = :reviewer_id
+                            WHERE m.claimed_by = :reviewer_id
+                              AND m.queue_id = t.queue_id
+                              AND m.record_id = t.record_id
                               AND m.status IN ('claimed', 'submitted', 'skipped')
                         ) THEN t.record_id
                     END),

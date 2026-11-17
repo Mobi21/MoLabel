@@ -1,0 +1,113 @@
+{
+  "label": "wal-concurrency",
+  "generated_at": "2026-11-17T05:04:06.863309+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "git_rev": "36dcdc8"
+  },
+  "args": {
+    "size": 10000,
+    "writes": 300,
+    "readers": 4,
+    "rounds": 3,
+    "label": "wal-concurrency"
+  },
+  "sides": {
+    "DELETE": {
+      "rounds": [
+        {
+          "journal_mode": "DELETE",
+          "writer_seconds": 1.976,
+          "writes_per_second": 151.8,
+          "writes": 300,
+          "write_errors": 0,
+          "reads": 62,
+          "read_errors": 0,
+          "read_median_ms": 117.23,
+          "read_p95_ms": 343.04,
+          "read_max_ms": 497.1
+        },
+        {
+          "journal_mode": "DELETE",
+          "writer_seconds": 2.101,
+          "writes_per_second": 142.8,
+          "writes": 300,
+          "write_errors": 0,
+          "reads": 64,
+          "read_errors": 0,
+          "read_median_ms": 117.6,
+          "read_p95_ms": 265.51,
+          "read_max_ms": 308.76
+        },
+        {
+          "journal_mode": "DELETE",
+          "writer_seconds": 2.519,
+          "writes_per_second": 119.1,
+          "writes": 300,
+          "write_errors": 0,
+          "reads": 86,
+          "read_errors": 0,
+          "read_median_ms": 108.85,
+          "read_p95_ms": 270.51,
+          "read_max_ms": 275.99
+        }
+      ],
+      "writer_seconds_median": 2.101,
+      "writes_per_second_median": 142.8,
+      "read_median_ms_median": 117.23,
+      "read_p95_ms_median": 270.51,
+      "read_errors": 0,
+      "write_errors": 0
+    },
+    "WAL": {
+      "rounds": [
+        {
+          "journal_mode": "WAL",
+          "writer_seconds": 0.398,
+          "writes_per_second": 752.9,
+          "writes": 300,
+          "write_errors": 0,
+          "reads": 32,
+          "read_errors": 0,
+          "read_median_ms": 59.77,
+          "read_p95_ms": 111.64,
+          "read_max_ms": 113.16
+        },
+        {
+          "journal_mode": "WAL",
+          "writer_seconds": 0.407,
+          "writes_per_second": 736.3,
+          "writes": 300,
+          "write_errors": 0,
+          "reads": 32,
+          "read_errors": 0,
+          "read_median_ms": 60.23,
+          "read_p95_ms": 115.19,
+          "read_max_ms": 115.34
+        },
+        {
+          "journal_mode": "WAL",
+          "writer_seconds": 0.411,
+          "writes_per_second": 730.7,
+          "writes": 300,
+          "write_errors": 0,
+          "reads": 32,
+          "read_errors": 0,
+          "read_median_ms": 59.09,
+          "read_p95_ms": 116.48,
+          "read_max_ms": 118.22
+        }
+      ],
+      "writer_seconds_median": 0.407,
+      "writes_per_second_median": 736.3,
+      "read_median_ms_median": 59.77,
+      "read_p95_ms_median": 115.19,
+      "read_errors": 0,
+      "write_errors": 0
+    }
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "label": "fixed-agreement",
+  "generated_at": "2026-11-17T04:46:52.892475+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "git_rev": "66ef77c"
+  },
+  "args": {
+    "sizes": [
+      10000,
+      100000
+    ],
+    "paths": [
+      "agreement"
+    ],
+    "runs": 7,
+    "warmup": 1,
+    "max_run_seconds": 120.0,
+    "skip": [],
+    "no_seed": false
+  },
+  "synthetic": {
+    "fields": 3,
+    "raters": 2,
+    "overlap": 3,
+    "rater_disagreement": 0.2,
+    "agent_disagreement": 0.1
+  },
+  "database_bytes": {
+    "10000": 58302464,
+    "100000": 581914624
+  },
+  "wall_seconds": 297.3,
+  "notes": [],
+  "profiles": [],
+  "timings": [
+    {
+      "path": "agreement_service_inter_annotator",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.2127,
+      "p95_s": 0.2207,
+      "min_s": 0.1681,
+      "max_s": 0.2207,
+      "work": 30000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_human_agent",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.645,
+      "p95_s": 0.821,
+      "min_s": 0.5485,
+      "max_s": 0.821,
+      "work": 60000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_api",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 1.6022,
+      "p95_s": 1.7963,
+      "min_s": 1.3909,
+      "max_s": 1.7963,
+      "work": 10000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_inter_annotator",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 2.8094,
+      "p95_s": 2.9924,
+      "min_s": 2.3936,
+      "max_s": 2.9924,
+      "work": 300000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_human_agent",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 7.3279,
+      "p95_s": 7.9031,
+      "min_s": 6.9721,
+      "max_s": 7.9031,
+      "work": 600000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_api",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 20.3236,
+      "p95_s": 21.0762,
+      "min_s": 20.2205,
+      "max_s": 21.0762,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    }
+  ]
+}

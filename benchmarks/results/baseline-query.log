@@ -1,0 +1,46 @@
+  from starlette.testclient import TestClient as TestClient  # noqa
+machine: {'platform': 'Windows-11-10.0.26300-SP0', 'cpu': 'AMD Ryzen 7 7800X3D 8-Core Processor', 'logical_cpus': 16, 'python': '3.12.14', 'sqlite': '3.53.1', 'git_rev': '7c2d894'}
+sizes=[1000, 10000, 100000] runs=7 warmup=1 paths=['query']
+seeded reviewed dataset n=1000 in 0.2s
+  query_datasets                     n=1000     median=   0.0019s p95=   0.0020s work=1 errors=0
+  query_records                      n=1000     median=   0.0032s p95=   0.0040s work=200 errors=0
+  query_queues                       n=1000     median=   0.5822s p95=   0.6136s work=1 errors=0
+  query_queue_status                 n=1000     median=   0.0025s p95=   0.0027s work=3000 errors=0
+  query_my_tasks                     n=1000     median=   0.0693s p95=   0.0845s work=500 errors=0
+seeded reviewed dataset n=10000 in 1.9s
+  query_datasets                     n=10000    median=   0.0018s p95=   0.0019s work=1 errors=0
+  query_records                      n=10000    median=   0.0087s p95=   0.0091s work=200 errors=0
+Error in claim expiry task
+  query_queues                       n=10000    median= 168.1318s p95= 168.1318s work=1 errors=0
+  query_queue_status                 n=10000    median=   0.0054s p95=   0.0057s work=30000 errors=0
+  query_my_tasks                     n=10000    median=   2.7857s p95=   2.9888s work=500 errors=0
+seeded reviewed dataset n=100000 in 28.4s
+  query_datasets                     n=100000   median=   0.0018s p95=   0.0019s work=1 errors=0
+  profile -> benchmarks\results\profile-query_datasets-100000.txt
+  query_records                      n=100000   median=   0.0695s p95=   0.0888s work=200 errors=0
+  profile -> benchmarks\results\profile-query_records-100000.txt
+  note: query_queues n=100000: skipped on request
+  query_queue_status                 n=100000   median=   0.0330s p95=   0.0375s work=300000 errors=0
+  profile -> benchmarks\results\profile-query_queue_status-100000.txt
+Error in claim expiry task
+  query_my_tasks                     n=100000   median=  29.4270s p95=  29.7995s work=500 errors=0
+  profile -> benchmarks\results\profile-query_my_tasks-100000.txt
+wrote benchmarks\results\baseline-query.json (662.4s wall)
+| path | n | runs | median s | p95 s | work | errors |
+|---|---:|---:|---:|---:|---:|---:|
+| query_datasets | 1000 | 7 | 0.0019 | 0.002 | 1 | 0 |
+| query_records | 1000 | 7 | 0.0032 | 0.004 | 200 | 0 |
+| query_queues | 1000 | 7 | 0.5822 | 0.6136 | 1 | 0 |
+| query_queue_status | 1000 | 7 | 0.0025 | 0.0027 | 3000 | 0 |
+| query_my_tasks | 1000 | 7 | 0.0693 | 0.0845 | 500 | 0 |
+| query_datasets | 10000 | 7 | 0.0018 | 0.0019 | 1 | 0 |
+| query_records | 10000 | 7 | 0.0087 | 0.0091 | 200 | 0 |
+| query_queues | 10000 | 1 | 168.1318 | 168.1318 | 1 | 0 |
+| query_queue_status | 10000 | 7 | 0.0054 | 0.0057 | 30000 | 0 |
+| query_my_tasks | 10000 | 7 | 2.7857 | 2.9888 | 500 | 0 |
+| query_datasets | 100000 | 7 | 0.0018 | 0.0019 | 1 | 0 |
+| query_records | 100000 | 7 | 0.0695 | 0.0888 | 200 | 0 |
+| query_queue_status | 100000 | 7 | 0.033 | 0.0375 | 300000 | 0 |
+| query_my_tasks | 100000 | 7 | 29.427 | 29.7995 | 500 | 0 |
+
+[exited with code 0]

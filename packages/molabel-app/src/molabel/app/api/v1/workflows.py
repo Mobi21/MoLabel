@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from molabel.app.api.v1.model_profiles import SHARED_PROFILE_WORKSPACE
 from molabel.app.middleware.session import CurrentReviewer
@@ -37,6 +37,7 @@ from molabel.app.utils import get_engine
 from molabel.app.workspace_config import WORKFLOW, workspace_files, workspace_folder
 from molabel.app.workspace_paths import resolve_in_workspace
 from molabel.core.agents.queue_binding import serialize_agent_output_ids
+from molabel.core.database import hyphenated_id
 from molabel.core.providers.base import ProviderError, resolve_api_key
 from molabel.core.providers.detection import ProviderDetector
 from molabel.core.providers.model_defaults import (
@@ -775,12 +776,12 @@ def _resolve_task_schema(
                 SELECT id, blind_review_policy
                 FROM task_schemas
                 WHERE workspace_id = :wid
-                  AND (id = :selector OR task_schema_slug = :selector)
+                  AND (id = :id OR task_schema_slug = :selector)
                 ORDER BY created_at DESC
                 LIMIT 1
                 """
             ),
-            {"wid": workspace_id, "selector": selector},
+            {"wid": workspace_id, "id": hyphenated_id(selector), "selector": selector},
         ).first()
         if row is not None:
             return str(row[0]), str(row[1])
@@ -1189,6 +1190,7 @@ class _WorkflowDataLoader:
         self._workspace_root = workspace_root
 
     def load_dataset_records(self, dataset_id: str) -> list[_LoadedRecord]:
+        dataset_id = hyphenated_id(dataset_id)
         dataset = self._conn.execute(
             text("SELECT id FROM datasets WHERE id = :id AND workspace_id = :wid"),
             {"id": dataset_id, "wid": self._workspace_id},
@@ -1246,6 +1248,25 @@ class _WorkflowDataLoader:
         records: list[_LoadedRecord] = []
         now = datetime.now(UTC).isoformat()
         lines = source_path.read_text(encoding="utf-8").splitlines()
+        insert_record = text(
+            """
+            INSERT INTO records (
+                id, external_id, sequence_index, content_hash,
+                stable_fields, payload, record_kind, source_metadata,
+                label_count, latest_label, composite_confidence,
+                export_eligible, flags, created_at, updated_at,
+                workspace_id, dataset_id, artifact_id
+            )
+            VALUES (
+                :id, :external_id, :sequence_index, :content_hash,
+                :stable_fields, :payload, :record_kind,
+                :source_metadata, 0, NULL, NULL, 0, NULL,
+                :created_at, :updated_at, :workspace_id,
+                :dataset_id, NULL
+            )
+            """
+        )
+        new_rows: list[dict[str, Any]] = []
         for index, line in enumerate(lines):
             if not line.strip():
                 continue
@@ -1264,25 +1285,7 @@ class _WorkflowDataLoader:
                 stable_fields = {
                     "text": _extract_record_text(payload),
                 }
-                self._conn.execute(
-                    text(
-                        """
-                        INSERT INTO records (
-                            id, external_id, sequence_index, content_hash,
-                            stable_fields, payload, record_kind, source_metadata,
-                            label_count, latest_label, composite_confidence,
-                            export_eligible, flags, created_at, updated_at,
-                            workspace_id, dataset_id, artifact_id
-                        )
-                        VALUES (
-                            :id, :external_id, :sequence_index, :content_hash,
-                            :stable_fields, :payload, :record_kind,
-                            :source_metadata, 0, NULL, NULL, 0, NULL,
-                            :created_at, :updated_at, :workspace_id,
-                            :dataset_id, NULL
-                        )
-                        """
-                    ),
+                new_rows.append(
                     {
                         "id": record_id,
                         "external_id": external_id,
@@ -1298,9 +1301,11 @@ class _WorkflowDataLoader:
                         "updated_at": now,
                         "workspace_id": self._workspace_id,
                         "dataset_id": dataset_id,
-                    },
+                    }
                 )
             records.append(_LoadedRecord(record_id))
+        if new_rows:
+            self._conn.execute(insert_record, new_rows)
 
         self._conn.execute(
             text(
@@ -1358,7 +1363,9 @@ class _LlmAgentRunner:
             raise
 
     def _run_inner(self, **kwargs: Any) -> dict[str, Any]:
-        record_ids = [str(record_id) for record_id in kwargs.get("record_ids", [])]
+        record_ids = [
+            hyphenated_id(str(record_id)) for record_id in kwargs.get("record_ids", [])
+        ]
         agent_run_id = str(kwargs.get("agent_run_id") or uuid.uuid4())
         config = dict(kwargs.get("config", {}))
         task_schema_selector = config.get("task_schema_id")
@@ -1942,6 +1949,10 @@ def _get_structured_output_enforcer() -> Any:
     return StructuredOutputEnforcer()
 
 
+IN_LIST_CHUNK = 500
+"""Ids per IN list, well under SQLite's 32,766 bound variables."""
+
+
 class _WorkflowExporter:
     def __init__(self, conn: Any, *, workspace_root: Path) -> None:
         self._conn = conn
@@ -1959,30 +1970,35 @@ class _WorkflowExporter:
         del config
         if format != "jsonl":
             return {"record_count": len(record_ids)}
+        record_ids = [hyphenated_id(record_id) for record_id in record_ids]
 
         destination_dir = resolve_in_workspace(self._workspace_root, destination)
         destination_dir.mkdir(parents=True, exist_ok=True)
         output_path = destination_dir / f"{bundle_id}.jsonl"
 
+        select_records = text(
+            "SELECT id, external_id, payload, latest_label "
+            "FROM records WHERE id IN :ids"
+        ).bindparams(bindparam("ids", expanding=True))
+        by_id: dict[str, Any] = {}
+        for start in range(0, len(record_ids), IN_LIST_CHUNK):
+            chunk = record_ids[start : start + IN_LIST_CHUNK]
+            for row in self._conn.execute(select_records, {"ids": chunk}).fetchall():
+                by_id[str(row[0])] = row
+
         rows: list[str] = []
         for record_id in record_ids:
-            row = self._conn.execute(
-                text(
-                    "SELECT external_id, payload, latest_label "
-                    "FROM records WHERE id = :record_id LIMIT 1"
-                ),
-                {"record_id": record_id},
-            ).first()
+            row = by_id.get(record_id)
             if row is None:
                 continue
-            payload = _json_loads(row[1])
-            latest_label = _json_loads(row[2])
+            payload = _json_loads(row[2])
+            latest_label = _json_loads(row[3])
             payload_dict = payload if isinstance(payload, dict) else {"value": payload}
             rows.append(
                 json.dumps(
                     {
                         "record_id": record_id,
-                        "external_id": str(row[0]) if row[0] else None,
+                        "external_id": str(row[1]) if row[1] else None,
                         **payload_dict,
                         "labels": latest_label,
                     }
@@ -2017,8 +2033,8 @@ class _ReviewAgreementSource:
         del analysis_type, config
         return agreement_records_from_reviews(
             queue_review_events(self._conn, review_queue_ids),
-            run_agent_proposals(self._conn, agent_run_ids),
-            record_ids=record_ids,
+            run_agent_proposals(self._conn, [hyphenated_id(i) for i in agent_run_ids]),
+            record_ids=[hyphenated_id(i) for i in record_ids],
         )
 
 
@@ -2046,7 +2062,9 @@ def _materialize_review_queue(
         else None,
     )
     latest_agent_run_id = (
-        workflow_context.agent_run_ids[-1] if workflow_context.agent_run_ids else None
+        hyphenated_id(workflow_context.agent_run_ids[-1])
+        if workflow_context.agent_run_ids
+        else None
     )
     output_rows = []
     if latest_agent_run_id:
@@ -2061,7 +2079,7 @@ def _materialize_review_queue(
     overlap_count = int(config.get("overlap_count", 1))
 
     now = datetime.now(UTC).isoformat()
-    for priority, record_id in enumerate(record_ids, start=1):
+    for priority, record_id in enumerate(map(hyphenated_id, record_ids), start=1):
         record_row = conn.execute(
             text("SELECT dataset_id FROM records WHERE id = :record_id LIMIT 1"),
             {"record_id": record_id},

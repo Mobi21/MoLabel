@@ -21,10 +21,9 @@ import yaml
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
-from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
 
 from molabel.app.main import create_app
+from molabel.core.database import engine_from_url
 from molabel.core.migration_runner import upgrade_database
 from molabel.core.workflow.parser import parse_workflow_yaml
 
@@ -66,11 +65,7 @@ def workspace(tmp_path: Path) -> Path:
 @pytest_asyncio.fixture()
 async def client(workspace: Path):
     app = create_app()
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = engine_from_url("sqlite:///:memory:")
     upgrade_database(engine)
     app.state.engine = engine
     app.state.app_secret = "config-files-secret"
@@ -617,10 +612,7 @@ async def test_a_read_only_manifest_refuses_the_import_and_keeps_no_records(
 @pytest.fixture()
 def threaded(tmp_path: Path, workspace: Path):
     """An app on a database file, so requests on separate threads overlap."""
-    engine = create_engine(
-        f"sqlite:///{(tmp_path / 'threaded.db').as_posix()}",
-        connect_args={"check_same_thread": False},
-    )
+    engine = engine_from_url(f"sqlite:///{(tmp_path / 'threaded.db').as_posix()}")
     upgrade_database(engine)
     app = create_app()
     app.state.engine = engine

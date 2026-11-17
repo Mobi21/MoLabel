@@ -1,0 +1,71 @@
+# cProfile of one query_my_tasks run at n=100000, not counted in timings
+
+## top 25 by cumulative time
+         13184 function calls (13124 primitive calls) in 29.469 seconds
+
+   Ordered by: cumulative time
+   List reduced from 714 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       28    0.000    0.000   29.471    1.053 base_events.py:1922(_run_once)
+    46/45    0.000    0.000   29.471    0.655 {method 'run' of '_contextvars.Context' objects}
+       44    0.000    0.000   29.471    0.670 events.py:86(_run)
+      2/1    0.000    0.000   29.466   29.466 _client.py:930(_send_handling_auth)
+      2/1    0.000    0.000   29.466   29.466 _client.py:964(_send_handling_redirects)
+        1    0.000    0.000   29.466   29.466 _client.py:1001(_send_single_request)
+       16    0.000    0.000   29.465    1.842 _tasks.py:322(_run_coro)
+       16    0.000    0.000   29.464    1.842 from_thread.py:242(_call_func)
+        6    0.000    0.000   29.464    4.911 testclient.py:362(run_app)
+        6    0.000    0.000   29.464    4.911 applications.py:1157(__call__)
+        6    0.000    0.000   29.464    4.911 applications.py:92(__call__)
+        6    0.000    0.000   29.464    4.911 errors.py:149(__call__)
+        6    0.000    0.000   29.464    4.911 cors.py:77(__call__)
+        6    0.000    0.000   29.464    4.911 cors.py:147(simple_response)
+        6    0.000    0.000   29.464    4.911 exceptions.py:47(__call__)
+     12/6    0.000    0.000   29.464    4.911 _exception_handler.py:31(wrapped_app)
+        6    0.000    0.000   29.464    4.911 asyncexitstack.py:15(__call__)
+        6    0.000    0.000   29.464    4.911 routing.py:679(__call__)
+        6    0.000    0.000   29.464    4.911 routing.py:685(app)
+        6    0.000    0.000   29.464    4.911 routing.py:280(handle)
+        6    0.000    0.000   29.464    4.911 routing.py:106(app)
+        6    0.000    0.000   29.464    4.911 routing.py:109(app)
+        4    0.000    0.000   29.464    7.366 routing.py:378(app)
+        1    0.000    0.000   29.460   29.460 testclient.py:234(handle_request)
+        1    0.000    0.000   29.459   29.459 routing.py:316(run_endpoint_function)
+
+
+
+## top 25 by own time
+         13184 function calls (13124 primitive calls) in 29.469 seconds
+
+   Ordered by: internal time
+   List reduced from 714 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        4   29.456    7.364   29.456    7.364 {method 'execute' of 'sqlite3.Cursor' objects}
+        1    0.002    0.002    0.002    0.002 {method 'commit' of 'sqlite3.Connection' objects}
+      501    0.001    0.000    0.001    0.000 enum.py:1128(__new__)
+        1    0.001    0.001    0.001    0.001 {method 'fetchall' of 'sqlite3.Cursor' objects}
+        1    0.001    0.001   29.458   29.458 claims.py:1768(reviewer_queue_tasks)
+        2    0.001    0.000    0.001    0.000 decoder.py:344(raw_decode)
+      506    0.000    0.000    0.000    0.000 {method 'validate_python' of 'pydantic_core._pydantic_core.SchemaValidator' objects}
+      500    0.000    0.000    0.001    0.000 enum.py:768(__contains__)
+        1    0.000    0.000   29.466   29.466 _client.py:1001(_send_single_request)
+        1    0.000    0.000   29.459   29.459 queue.py:776(list_my_queue_tasks_endpoint)
+        1    0.000    0.000    0.000    0.000 {method 'to_json' of 'pydantic_core._pydantic_core.SchemaSerializer' objects}
+2006/2004    0.000    0.000    0.000    0.000 {built-in method builtins.isinstance}
+        9    0.000    0.000    0.000    0.000 {method 'send' of '_socket.socket' objects}
+       37    0.000    0.000    0.000    0.000 {built-in method _overlapped.GetQueuedCompletionStatus}
+      501    0.000    0.000    0.001    0.000 enum.py:720(__call__)
+       28    0.000    0.000   29.471    1.053 base_events.py:1922(_run_once)
+      501    0.000    0.000    0.001    0.000 main.py:240(__init__)
+      503    0.000    0.000    0.000    0.000 __init__.py:49(parse_bool)
+      500    0.000    0.000    0.001    0.000 types.py:195(canonical_review_decision)
+        1    0.000    0.000    0.001    0.001 result.py:555(_allrows)
+        6    0.000    0.000   29.464    4.911 routing.py:109(app)
+        5    0.000    0.000    0.000    0.000 cache_key.py:929(visit_string_clauseelement_dict)
+        8    0.000    0.000    0.001    0.000 from_thread.py:291(_spawn_task_from_thread)
+       28    0.000    0.000    0.000    0.000 windows_events.py:761(_poll)
+    46/45    0.000    0.000   29.471    0.655 {method 'run' of '_contextvars.Context' objects}
+
+

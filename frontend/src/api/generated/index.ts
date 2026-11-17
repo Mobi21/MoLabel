@@ -369,6 +369,7 @@ export type {
   FieldDisagreement,
   FieldMapping,
   FirstReviewerInfo,
+  ForeignKeyViolation,
   GateResult,
   GetAgentAnalyticsData,
   GetAgentAnalyticsError,

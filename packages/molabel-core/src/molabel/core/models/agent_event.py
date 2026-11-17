@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import AgentEventType
 
 
@@ -14,10 +15,14 @@ class AgentEvent(SQLModel, table=True):
 
     __tablename__ = "agent_events"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    agent_run_id: uuid.UUID = Field(foreign_key="agent_runs.id")
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
+    agent_run_id: uuid.UUID = Field(foreign_key="agent_runs.id", sa_type=HyphenatedUuid)
     event_type: AgentEventType
-    record_id: uuid.UUID | None = Field(default=None, foreign_key="records.id")
+    record_id: uuid.UUID | None = Field(
+        default=None, foreign_key="records.id", sa_type=HyphenatedUuid
+    )
     sequence_number: int
     payload: dict | None = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

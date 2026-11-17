@@ -44,6 +44,7 @@ from molabel.core.adjudication.adjudication_service import (
     disagreements_from_reviews,
 )
 from molabel.core.agents.queue_binding import deserialize_agent_output_ids
+from molabel.core.database import hyphenated_id
 from molabel.core.types import (
     AdjudicationResolution,
     ReviewEventSource,
@@ -234,7 +235,7 @@ def _outcomes_by_record(
         resolved_labels = json_object(row[3]) if row[3] is not None else None
         outcomes.setdefault(str(row[1]), []).append(
             (
-                {str(event_id) for event_id in event_ids or []},
+                {hyphenated_id(str(event_id)) for event_id in event_ids or []},
                 AdjudicationOutcome(
                     adjudication_id=str(row[0]),
                     resolution=AdjudicationResolution(str(row[2])),

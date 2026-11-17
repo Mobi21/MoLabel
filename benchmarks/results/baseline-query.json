@@ -1,0 +1,221 @@
+{
+  "label": "baseline-query",
+  "generated_at": "2026-11-17T02:04:42.088409+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "git_rev": "7c2d894"
+  },
+  "args": {
+    "sizes": [
+      1000,
+      10000,
+      100000
+    ],
+    "paths": [
+      "query"
+    ],
+    "runs": 7,
+    "warmup": 1,
+    "max_run_seconds": 120.0,
+    "skip": [
+      "query_queues@100000"
+    ],
+    "no_seed": false
+  },
+  "synthetic": {
+    "fields": 3,
+    "raters": 2,
+    "overlap": 3,
+    "rater_disagreement": 0.2,
+    "agent_disagreement": 0.1
+  },
+  "database_bytes": {
+    "1000": 5906432,
+    "10000": 54374400,
+    "100000": 542703616
+  },
+  "wall_seconds": 662.4,
+  "notes": [
+    "query_queues n=100000: skipped on request"
+  ],
+  "profiles": [
+    "benchmarks\\results\\profile-query_datasets-100000.txt",
+    "benchmarks\\results\\profile-query_records-100000.txt",
+    "benchmarks\\results\\profile-query_queue_status-100000.txt",
+    "benchmarks\\results\\profile-query_my_tasks-100000.txt"
+  ],
+  "timings": [
+    {
+      "path": "query_datasets",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.0019,
+      "p95_s": 0.002,
+      "min_s": 0.0017,
+      "max_s": 0.002,
+      "work": 1,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_records",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.0032,
+      "p95_s": 0.004,
+      "min_s": 0.0032,
+      "max_s": 0.004,
+      "work": 200,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_queues",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.5822,
+      "p95_s": 0.6136,
+      "min_s": 0.5573,
+      "max_s": 0.6136,
+      "work": 1,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_queue_status",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.0025,
+      "p95_s": 0.0027,
+      "min_s": 0.0023,
+      "max_s": 0.0027,
+      "work": 3000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_my_tasks",
+      "size": 1000,
+      "runs": 7,
+      "median_s": 0.0693,
+      "p95_s": 0.0845,
+      "min_s": 0.0665,
+      "max_s": 0.0845,
+      "work": 500,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_datasets",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.0018,
+      "p95_s": 0.0019,
+      "min_s": 0.0017,
+      "max_s": 0.0019,
+      "work": 1,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_records",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.0087,
+      "p95_s": 0.0091,
+      "min_s": 0.0084,
+      "max_s": 0.0091,
+      "work": 200,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_queues",
+      "size": 10000,
+      "runs": 1,
+      "median_s": 168.1318,
+      "p95_s": 168.1318,
+      "min_s": 168.1318,
+      "max_s": 168.1318,
+      "work": 1,
+      "errors": 0,
+      "note": "capped: warmup run exceeded 120s"
+    },
+    {
+      "path": "query_queue_status",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 0.0054,
+      "p95_s": 0.0057,
+      "min_s": 0.005,
+      "max_s": 0.0057,
+      "work": 30000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_my_tasks",
+      "size": 10000,
+      "runs": 7,
+      "median_s": 2.7857,
+      "p95_s": 2.9888,
+      "min_s": 2.6731,
+      "max_s": 2.9888,
+      "work": 500,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_datasets",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 0.0018,
+      "p95_s": 0.0019,
+      "min_s": 0.0017,
+      "max_s": 0.0019,
+      "work": 1,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_records",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 0.0695,
+      "p95_s": 0.0888,
+      "min_s": 0.0655,
+      "max_s": 0.0888,
+      "work": 200,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_queue_status",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 0.033,
+      "p95_s": 0.0375,
+      "min_s": 0.0319,
+      "max_s": 0.0375,
+      "work": 300000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "query_my_tasks",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 29.427,
+      "p95_s": 29.7995,
+      "min_s": 29.2995,
+      "max_s": 29.7995,
+      "work": 500,
+      "errors": 0,
+      "note": ""
+    }
+  ]
+}

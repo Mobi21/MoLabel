@@ -1472,24 +1472,22 @@ def _score_macro_f1(
         for labels in predictions.values()
         if field in labels
     )
+    true_positives: Counter[str] = Counter()
+    false_positives: Counter[str] = Counter()
+    false_negatives: Counter[str] = Counter()
+    for record_id, gold_labels in gold.items():
+        gold_value = canonical_label_value(gold_labels.get(field))
+        pred_value = canonical_label_value(predictions.get(record_id, {}).get(field))
+        if pred_value == gold_value:
+            true_positives[gold_value] += 1
+        else:
+            false_positives[pred_value] += 1
+            false_negatives[gold_value] += 1
     label_scores: dict[str, float] = {}
     for label in sorted(labels):
-        tp = 0
-        fp = 0
-        fn = 0
-        for record_id, gold_labels in gold.items():
-            gold_value = canonical_label_value(gold_labels.get(field))
-            pred_value = canonical_label_value(
-                predictions.get(record_id, {}).get(field)
-            )
-            if pred_value == label and gold_value == label:
-                tp += 1
-            elif pred_value == label and gold_value != label:
-                fp += 1
-            elif pred_value != label and gold_value == label:
-                fn += 1
-        precision = _safe_ratio(tp, tp + fp)
-        recall = _safe_ratio(tp, tp + fn)
+        tp = true_positives[label]
+        precision = _safe_ratio(tp, tp + false_positives[label])
+        recall = _safe_ratio(tp, tp + false_negatives[label])
         label_scores[label] = _safe_ratio(2 * precision * recall, precision + recall)
 
     macro_f1 = _safe_ratio(sum(label_scores.values()), len(label_scores))

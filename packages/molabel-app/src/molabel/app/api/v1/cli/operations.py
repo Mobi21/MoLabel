@@ -21,6 +21,7 @@ from molabel.app.utils import get_engine
 from molabel.app.workspace_paths import glob_in_workspace, resolve_in_workspace
 from molabel.core.agents.queue_binding import deserialize_agent_output_ids
 from molabel.core.data.snapshot_service import SnapshotService
+from molabel.core.database import hyphenated_id
 from molabel.core.models import Dataset, DatasetSnapshot, Record
 from molabel.core.providers.offline_adapter import OFFLINE_MODEL_ID
 from molabel.core.types import ProviderType, canonical_review_decision
@@ -368,7 +369,10 @@ async def restore_snapshot(
     membership_data = snapshot.dataset_membership or {}
     if isinstance(membership_data, str):
         membership_data = json.loads(membership_data)
-    restored_record_states = membership_data.get("record_states", {})
+    restored_record_states = {
+        hyphenated_id(str(key)): state
+        for key, state in membership_data.get("record_states", {}).items()
+    }
     health_status = membership_data.get("health_status")
 
     with Session(engine) as session:
@@ -387,7 +391,7 @@ async def restore_snapshot(
         )
         record_lookup = {str(record.id): record for record in records}
         for record_key, state in restored_record_states.items():
-            record = record_lookup.get(str(record_key))
+            record = record_lookup.get(record_key)
             if record is None:
                 continue
             record.latest_label = state.get("latest_label")

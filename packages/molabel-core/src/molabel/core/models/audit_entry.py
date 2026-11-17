@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import AuditAction
 
 
@@ -14,12 +15,14 @@ class AuditEntry(SQLModel, table=True):
 
     __tablename__ = "audit_entries"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     action: AuditAction
     actor_type: str
     actor_id: str | None = None
     target_type: str
-    target_id: uuid.UUID
+    target_id: uuid.UUID = Field(sa_type=HyphenatedUuid)
     detail: dict | None = Field(default=None, sa_column=Column(JSON))
     file_path: str | None = None
     file_hash_before: str | None = None
@@ -28,7 +31,7 @@ class AuditEntry(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     __table_args__ = (
         Index("idx_audit_entries_action", "action"),

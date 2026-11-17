@@ -10,11 +10,10 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
-from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
 
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
+from molabel.core.database import engine_from_url
 from molabel.core.migration_runner import upgrade_database
 
 _SECRET = "quality-test-secret"
@@ -28,11 +27,7 @@ _SECRET = "quality-test-secret"
 @pytest.fixture()
 def _db():
     """In-memory SQLite engine migrated to the current schema."""
-    eng = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    eng = engine_from_url("sqlite:///:memory:")
     upgrade_database(eng)
     return eng
 

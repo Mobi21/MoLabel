@@ -1,0 +1,139 @@
+{
+  "label": "baseline-1m",
+  "generated_at": "2026-11-17T02:41:13.903497+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "git_rev": "263298d"
+  },
+  "args": {
+    "sizes": [
+      1000000
+    ],
+    "paths": [
+      "ingest",
+      "agreement",
+      "benchmark",
+      "export"
+    ],
+    "runs": 3,
+    "warmup": 1,
+    "max_run_seconds": 600.0,
+    "skip": [],
+    "no_seed": true
+  },
+  "synthetic": {
+    "fields": 3,
+    "raters": 2,
+    "overlap": 3,
+    "rater_disagreement": 0.2,
+    "agent_disagreement": 0.1
+  },
+  "database_bytes": {
+    "1000000": 4499124224
+  },
+  "wall_seconds": 1855.6,
+  "notes": [],
+  "profiles": [],
+  "timings": [
+    {
+      "path": "ingest_api_jsonl",
+      "size": 1000000,
+      "runs": 3,
+      "median_s": 135.5409,
+      "p95_s": 138.6684,
+      "min_s": 132.9465,
+      "max_s": 138.6684,
+      "work": 1000000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "ingest_loader_jsonl",
+      "size": 1000000,
+      "runs": 3,
+      "median_s": 8.8639,
+      "p95_s": 9.3693,
+      "min_s": 8.8492,
+      "max_s": 9.3693,
+      "work": 1000000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "ingest_loader_csv",
+      "size": 1000000,
+      "runs": 3,
+      "median_s": 9.288,
+      "p95_s": 9.3137,
+      "min_s": 9.1351,
+      "max_s": 9.3137,
+      "work": 1000000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_inter_annotator",
+      "size": 1000000,
+      "runs": 3,
+      "median_s": 41.4072,
+      "p95_s": 45.3924,
+      "min_s": 41.395,
+      "max_s": 45.3924,
+      "work": 3000000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_human_agent",
+      "size": 1000000,
+      "runs": 3,
+      "median_s": 171.3292,
+      "p95_s": 171.5614,
+      "min_s": 167.907,
+      "max_s": 171.5614,
+      "work": 6000000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "benchmark_clinc150",
+      "size": 1000000,
+      "runs": 3,
+      "median_s": 24.3638,
+      "p95_s": 24.5153,
+      "min_s": 24.2906,
+      "max_s": 24.5153,
+      "work": 1000000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "benchmark_banking77",
+      "size": 1000000,
+      "runs": 3,
+      "median_s": 53.262,
+      "p95_s": 53.7789,
+      "min_s": 53.082,
+      "max_s": 53.7789,
+      "work": 1000000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "export_orchestrator_jsonl",
+      "size": 1000000,
+      "runs": 3,
+      "median_s": 9.2035,
+      "p95_s": 9.3164,
+      "min_s": 9.0729,
+      "max_s": 9.3164,
+      "work": 1000000,
+      "errors": 0,
+      "note": ""
+    }
+  ]
+}

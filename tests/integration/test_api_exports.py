@@ -9,11 +9,10 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
-from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
 
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
+from molabel.core.database import engine_from_url
 
 _SECRET = "export-test-secret"
 
@@ -25,11 +24,7 @@ _SECRET = "export-test-secret"
 
 @pytest.fixture()
 def _db():
-    eng = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    eng = engine_from_url("sqlite:///:memory:")
     with eng.connect() as conn:
         conn.execute(
             text(

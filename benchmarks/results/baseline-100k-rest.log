@@ -1,0 +1,39 @@
+  from starlette.testclient import TestClient as TestClient  # noqa
+machine: {'platform': 'Windows-11-10.0.26300-SP0', 'cpu': 'AMD Ryzen 7 7800X3D 8-Core Processor', 'logical_cpus': 16, 'python': '3.12.14', 'sqlite': '3.53.1', 'git_rev': '7c2d894'}
+sizes=[100000] runs=7 warmup=1 paths=['agreement', 'benchmark', 'export']
+seeded reviewed dataset n=100000 in 28.3s
+  agreement_service_inter_annotator  n=100000   median=   4.1448s p95=   4.3095s work=300000 errors=0
+  profile -> benchmarks\results\profile-agreement_service_inter_annotator-100000.txt
+  agreement_service_human_agent      n=100000   median=  17.6229s p95=  18.0383s work=600000 errors=0
+  profile -> benchmarks\results\profile-agreement_service_human_agent-100000.txt
+  note: agreement_api n=100000: HTTP 500 Internal Server Error
+  note: agreement_api n=100000: HTTP 500 Internal Server Error
+  note: agreement_api n=100000: HTTP 500 Internal Server Error
+  note: agreement_api n=100000: HTTP 500 Internal Server Error
+  note: agreement_api n=100000: HTTP 500 Internal Server Error
+  note: agreement_api n=100000: HTTP 500 Internal Server Error
+  note: agreement_api n=100000: HTTP 500 Internal Server Error
+  note: agreement_api n=100000: HTTP 500 Internal Server Error
+  agreement_api                      n=100000   median=   5.3882s p95=   5.4591s work=0 errors=7
+  note: agreement_api n=100000: HTTP 500 Internal Server Error
+  profile -> benchmarks\results\profile-agreement_api-100000.txt
+  benchmark_clinc150                 n=100000   median=   2.0732s p95=   2.0908s work=100000 errors=0
+  profile -> benchmarks\results\profile-benchmark_clinc150-100000.txt
+  benchmark_banking77                n=100000   median=   4.6045s p95=   4.8359s work=100000 errors=0
+  profile -> benchmarks\results\profile-benchmark_banking77-100000.txt
+  export_orchestrator_jsonl          n=100000   median=   0.8376s p95=   0.8827s work=100000 errors=0
+  profile -> benchmarks\results\profile-export_orchestrator_jsonl-100000.txt
+  export_workflow_step               n=100000   median=  10.0500s p95=  10.2806s work=100000 errors=0
+  profile -> benchmarks\results\profile-export_workflow_step-100000.txt
+wrote benchmarks\results\baseline-100k-rest.json (491.5s wall)
+| path | n | runs | median s | p95 s | work | errors |
+|---|---:|---:|---:|---:|---:|---:|
+| agreement_service_inter_annotator | 100000 | 7 | 4.1448 | 4.3095 | 300000 | 0 |
+| agreement_service_human_agent | 100000 | 7 | 17.6229 | 18.0383 | 600000 | 0 |
+| agreement_api | 100000 | 7 | 5.3882 | 5.4591 | 0 | 7 |
+| benchmark_clinc150 | 100000 | 7 | 2.0732 | 2.0908 | 100000 | 0 |
+| benchmark_banking77 | 100000 | 7 | 4.6045 | 4.8359 | 100000 | 0 |
+| export_orchestrator_jsonl | 100000 | 7 | 0.8376 | 0.8827 | 100000 | 0 |
+| export_workflow_step | 100000 | 7 | 10.05 | 10.2806 | 100000 | 0 |
+
+[exited with code 0]

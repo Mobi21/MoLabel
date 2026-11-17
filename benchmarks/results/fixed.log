@@ -1,0 +1,120 @@
+machine: {'platform': 'Windows-11-10.0.26300-SP0', 'cpu': 'AMD Ryzen 7 7800X3D 8-Core Processor', 'logical_cpus': 16, 'python': '3.12.14', 'sqlite': '3.53.1', 'git_rev': '66ef77c'}
+sizes=[1000, 10000] runs=7 warmup=1 paths=['ingest', 'agreement', 'benchmark', 'export']
+seeded reviewed dataset n=1000 in 0.3s
+  ingest_api_jsonl                   n=1000     median=   0.0994s p95=   0.1114s work=1000 errors=0
+  ingest_loader_jsonl                n=1000     median=   0.0047s p95=   0.0074s work=1000 errors=0
+  ingest_loader_csv                  n=1000     median=   0.0071s p95=   0.0080s work=1000 errors=0
+  agreement_service_inter_annotator  n=1000     median=   0.0209s p95=   0.0898s work=3000 errors=0
+  agreement_service_human_agent      n=1000     median=   0.0950s p95=   0.1595s work=6000 errors=0
+  agreement_api                      n=1000     median=   0.2293s p95=   0.2524s work=1000 errors=0
+  benchmark_clinc150                 n=1000     median=   0.0291s p95=   0.0295s work=1000 errors=0
+  benchmark_banking77                n=1000     median=   0.0181s p95=   0.0204s work=1000 errors=0
+  export_orchestrator_jsonl          n=1000     median=   0.0114s p95=   0.0117s work=1000 errors=0
+  export_workflow_step               n=1000     median=   0.0089s p95=   0.0101s work=1000 errors=0
+seeded reviewed dataset n=10000 in 1.8s
+  ingest_api_jsonl                   n=10000    median=   0.7005s p95=   0.9185s work=10000 errors=0
+  ingest_loader_jsonl                n=10000    median=   0.1352s p95=   0.1411s work=10000 errors=0
+  ingest_loader_csv                  n=10000    median=   0.1337s p95=   0.1406s work=10000 errors=0
+  agreement_service_inter_annotator  n=10000    median=   0.3162s p95=   0.3364s work=30000 errors=0
+  agreement_service_human_agent      n=10000    median=   1.2089s p95=   1.3080s work=60000 errors=0
+  agreement_api                      n=10000    median=   2.0306s p95=   2.9633s work=10000 errors=0
+  benchmark_clinc150                 n=10000    median=   0.1753s p95=   0.1849s work=10000 errors=0
+  benchmark_banking77                n=10000    median=   0.1148s p95=   0.1204s work=10000 errors=0
+  export_orchestrator_jsonl          n=10000    median=   0.0715s p95=   0.0768s work=10000 errors=0
+  export_workflow_step               n=10000    median=   0.1158s p95=   0.1794s work=10000 errors=0
+wrote benchmarks\results\fixed-1k-10k.json (51.1s wall)
+| path | n | runs | median s | p95 s | work | errors |
+|---|---:|---:|---:|---:|---:|---:|
+| ingest_api_jsonl | 1000 | 7 | 0.0994 | 0.1114 | 1000 | 0 |
+| ingest_loader_jsonl | 1000 | 7 | 0.0047 | 0.0074 | 1000 | 0 |
+| ingest_loader_csv | 1000 | 7 | 0.0071 | 0.008 | 1000 | 0 |
+| agreement_service_inter_annotator | 1000 | 7 | 0.0209 | 0.0898 | 3000 | 0 |
+| agreement_service_human_agent | 1000 | 7 | 0.095 | 0.1595 | 6000 | 0 |
+| agreement_api | 1000 | 7 | 0.2293 | 0.2524 | 1000 | 0 |
+| benchmark_clinc150 | 1000 | 7 | 0.0291 | 0.0295 | 1000 | 0 |
+| benchmark_banking77 | 1000 | 7 | 0.0181 | 0.0204 | 1000 | 0 |
+| export_orchestrator_jsonl | 1000 | 7 | 0.0114 | 0.0117 | 1000 | 0 |
+| export_workflow_step | 1000 | 7 | 0.0089 | 0.0101 | 1000 | 0 |
+| ingest_api_jsonl | 10000 | 7 | 0.7005 | 0.9185 | 10000 | 0 |
+| ingest_loader_jsonl | 10000 | 7 | 0.1352 | 0.1411 | 10000 | 0 |
+| ingest_loader_csv | 10000 | 7 | 0.1337 | 0.1406 | 10000 | 0 |
+| agreement_service_inter_annotator | 10000 | 7 | 0.3162 | 0.3364 | 30000 | 0 |
+| agreement_service_human_agent | 10000 | 7 | 1.2089 | 1.308 | 60000 | 0 |
+| agreement_api | 10000 | 7 | 2.0306 | 2.9633 | 10000 | 0 |
+| benchmark_clinc150 | 10000 | 7 | 0.1753 | 0.1849 | 10000 | 0 |
+| benchmark_banking77 | 10000 | 7 | 0.1148 | 0.1204 | 10000 | 0 |
+| export_orchestrator_jsonl | 10000 | 7 | 0.0715 | 0.0768 | 10000 | 0 |
+| export_workflow_step | 10000 | 7 | 0.1158 | 0.1794 | 10000 | 0 |
+machine: {'platform': 'Windows-11-10.0.26300-SP0', 'cpu': 'AMD Ryzen 7 7800X3D 8-Core Processor', 'logical_cpus': 16, 'python': '3.12.14', 'sqlite': '3.53.1', 'git_rev': '66ef77c'}
+sizes=[1000, 10000, 100000] runs=7 warmup=1 paths=['query']
+seeded reviewed dataset n=1000 in 0.2s
+  query_datasets                     n=1000     median=   0.0018s p95=   0.0019s work=1 errors=0
+  query_records                      n=1000     median=   0.0031s p95=   0.0041s work=200 errors=0
+  query_queues                       n=1000     median=   0.1840s p95=   0.2127s work=1 errors=0
+  query_queue_status                 n=1000     median=   0.0025s p95=   0.0028s work=3000 errors=0
+  query_my_tasks                     n=1000     median=   0.0077s p95=   0.0091s work=500 errors=0
+seeded reviewed dataset n=10000 in 1.3s
+  query_datasets                     n=10000    median=   0.0021s p95=   0.0022s work=1 errors=0
+  query_records                      n=10000    median=   0.0040s p95=   0.0044s work=200 errors=0
+Error in claim expiry task
+  query_queues                       n=10000    median=  18.2263s p95=  18.4042s work=1 errors=0
+  query_queue_status                 n=10000    median=   0.0053s p95=   0.0061s work=30000 errors=0
+  query_my_tasks                     n=10000    median=   0.0246s p95=   0.0327s work=500 errors=0
+seeded reviewed dataset n=100000 in 21.2s
+  query_datasets                     n=100000   median=   0.0018s p95=   0.0021s work=1 errors=0
+  query_records                      n=100000   median=   0.0030s p95=   0.0034s work=200 errors=0
+Error in claim expiry task
+  query_queues                       n=100000   median=2910.9777s p95=2910.9777s work=1 errors=0
+  query_queue_status                 n=100000   median=   0.0325s p95=   0.0480s work=300000 errors=0
+  query_my_tasks                     n=100000   median=   0.4554s p95=   0.4727s work=500 errors=0
+wrote benchmarks\results\fixed-query.json (5993.5s wall)
+| path | n | runs | median s | p95 s | work | errors |
+|---|---:|---:|---:|---:|---:|---:|
+| query_datasets | 1000 | 7 | 0.0018 | 0.0019 | 1 | 0 |
+| query_records | 1000 | 7 | 0.0031 | 0.0041 | 200 | 0 |
+| query_queues | 1000 | 7 | 0.184 | 0.2127 | 1 | 0 |
+| query_queue_status | 1000 | 7 | 0.0025 | 0.0028 | 3000 | 0 |
+| query_my_tasks | 1000 | 7 | 0.0077 | 0.0091 | 500 | 0 |
+| query_datasets | 10000 | 7 | 0.0021 | 0.0022 | 1 | 0 |
+| query_records | 10000 | 7 | 0.004 | 0.0044 | 200 | 0 |
+| query_queues | 10000 | 7 | 18.2263 | 18.4042 | 1 | 0 |
+| query_queue_status | 10000 | 7 | 0.0053 | 0.0061 | 30000 | 0 |
+| query_my_tasks | 10000 | 7 | 0.0246 | 0.0327 | 500 | 0 |
+| query_datasets | 100000 | 7 | 0.0018 | 0.0021 | 1 | 0 |
+| query_records | 100000 | 7 | 0.003 | 0.0034 | 200 | 0 |
+| query_queues | 100000 | 1 | 2910.9777 | 2910.9777 | 1 | 0 |
+| query_queue_status | 100000 | 7 | 0.0325 | 0.048 | 300000 | 0 |
+| query_my_tasks | 100000 | 7 | 0.4554 | 0.4727 | 500 | 0 |
+machine: {'platform': 'Windows-11-10.0.26300-SP0', 'cpu': 'AMD Ryzen 7 7800X3D 8-Core Processor', 'logical_cpus': 16, 'python': '3.12.14', 'sqlite': '3.53.1', 'git_rev': '66ef77c'}
+sizes=[100000] runs=7 warmup=1 paths=['agreement', 'benchmark', 'export']
+seeded reviewed dataset n=100000 in 21.4s
+  agreement_service_inter_annotator  n=100000   median=   2.7482s p95=   3.1935s work=300000 errors=0
+  agreement_service_human_agent      n=100000   median=  11.6225s p95=  12.0843s work=600000 errors=0
+  agreement_api                      n=100000   median=  25.1796s p95=  25.6688s work=100000 errors=0
+  benchmark_clinc150                 n=100000   median=   2.0545s p95=   2.2928s work=100000 errors=0
+  benchmark_banking77                n=100000   median=   1.3834s p95=   1.4298s work=100000 errors=0
+  export_orchestrator_jsonl          n=100000   median=   0.8524s p95=   1.1125s work=100000 errors=0
+  export_workflow_step               n=100000   median=   1.3066s p95=   1.5181s work=100000 errors=0
+wrote benchmarks\results\fixed-100k-rest.json (390.4s wall)
+| path | n | runs | median s | p95 s | work | errors |
+|---|---:|---:|---:|---:|---:|---:|
+| agreement_service_inter_annotator | 100000 | 7 | 2.7482 | 3.1935 | 300000 | 0 |
+| agreement_service_human_agent | 100000 | 7 | 11.6225 | 12.0843 | 600000 | 0 |
+| agreement_api | 100000 | 7 | 25.1796 | 25.6688 | 100000 | 0 |
+| benchmark_clinc150 | 100000 | 7 | 2.0545 | 2.2928 | 100000 | 0 |
+| benchmark_banking77 | 100000 | 7 | 1.3834 | 1.4298 | 100000 | 0 |
+| export_orchestrator_jsonl | 100000 | 7 | 0.8524 | 1.1125 | 100000 | 0 |
+| export_workflow_step | 100000 | 7 | 1.3066 | 1.5181 | 100000 | 0 |
+machine: {'platform': 'Windows-11-10.0.26300-SP0', 'cpu': 'AMD Ryzen 7 7800X3D 8-Core Processor', 'logical_cpus': 16, 'python': '3.12.14', 'sqlite': '3.53.1', 'git_rev': '66ef77c'}
+sizes=[100000] runs=7 warmup=1 paths=['ingest']
+  ingest_api_jsonl                   n=100000   median=   6.6828s p95=  15.9430s work=100000 errors=0
+  ingest_loader_jsonl                n=100000   median=   0.8794s p95=   0.9756s work=100000 errors=0
+  ingest_loader_csv                  n=100000   median=   0.9060s p95=   1.0372s work=100000 errors=0
+wrote benchmarks\results\fixed-100k-ingest.json (86.2s wall)
+| path | n | runs | median s | p95 s | work | errors |
+|---|---:|---:|---:|---:|---:|---:|
+| ingest_api_jsonl | 100000 | 7 | 6.6828 | 15.943 | 100000 | 0 |
+| ingest_loader_jsonl | 100000 | 7 | 0.8794 | 0.9756 | 100000 | 0 |
+| ingest_loader_csv | 100000 | 7 | 0.906 | 1.0372 | 100000 | 0 |
+
+[exited with code 0]

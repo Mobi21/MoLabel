@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
+from molabel.core.database import HyphenatedUuid
+
 if TYPE_CHECKING:
     from molabel.core.models.workspace import Workspace
 
@@ -21,7 +23,9 @@ class ReviewerProfile(SQLModel, table=True):
 
     __tablename__ = "reviewer_profiles"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     display_name: str
     avatar_color: str | None = None
     is_operator: bool = Field(default=False)
@@ -31,7 +35,7 @@ class ReviewerProfile(SQLModel, table=True):
     last_active_at: datetime | None = None
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     # -- relationships --
     workspace: "Workspace" = Relationship(back_populates="reviewer_profiles")

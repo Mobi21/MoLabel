@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
+from molabel.core.database import HyphenatedUuid
+
 if TYPE_CHECKING:
     from molabel.core.models.dataset import Dataset
 
@@ -16,16 +18,18 @@ class DatasetSnapshot(SQLModel, table=True):
 
     __tablename__ = "dataset_snapshots"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    dataset_id: uuid.UUID = Field(foreign_key="datasets.id")
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
+    dataset_id: uuid.UUID = Field(foreign_key="datasets.id", sa_type=HyphenatedUuid)
     workflow_step_execution_id: uuid.UUID | None = Field(
-        default=None, foreign_key="workflow_step_executions.id"
+        default=None, foreign_key="workflow_step_executions.id", sa_type=HyphenatedUuid
     )
     name: str
     description: str | None = None
     snapshot_type: str  # "full" or "delta"
     parent_snapshot_id: uuid.UUID | None = Field(
-        default=None, foreign_key="dataset_snapshots.id"
+        default=None, foreign_key="dataset_snapshots.id", sa_type=HyphenatedUuid
     )
     record_count: int
     labeled_count: int
@@ -39,7 +43,7 @@ class DatasetSnapshot(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     # -- relationships --
     dataset: "Dataset" = Relationship(back_populates="dataset_snapshots")

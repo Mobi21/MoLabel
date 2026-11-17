@@ -18,6 +18,9 @@ import httpx
 
 from tests.e2e.infrastructure.logging_config import TestContext
 
+SHARED_WORKSPACE_ID = "00000000-0000-0000-0000-000000000001"
+"""The pre-populated workspace that tests marked SHARED_WORKSPACE use as is."""
+
 
 class E2EClient:
     """Async test client wrapping httpx + ASGI transport.
@@ -29,22 +32,16 @@ class E2EClient:
 
     def __init__(self, db_url: str = "sqlite:///:memory:") -> None:
         os.environ["MOLABEL_DB_URL"] = db_url
-        from sqlalchemy import create_engine
-        from sqlalchemy.pool import StaticPool
-
         from molabel.app.main import create_app
         from molabel.app.services.session import get_or_create_app_secret
+        from molabel.core.database import engine_from_url
         from molabel.core.migration_runner import upgrade_database
 
         self.app = create_app()
 
         # httpx ASGITransport does not fire ASGI lifespan events, so we
         # bootstrap the app state (engine + secret) manually here.
-        engine = create_engine(
-            db_url,
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
+        engine = engine_from_url(db_url)
         upgrade_database(engine)
         self.app.state.engine = engine
         self.app.state.app_secret = get_or_create_app_secret()
@@ -56,6 +53,30 @@ class E2EClient:
         )
         self._session_cookie: str | None = None
         self._workspace_dirs = tempfile.TemporaryDirectory(prefix="molabel-e2e-")
+        self._seed_shared_workspace()
+
+    def _seed_shared_workspace(self) -> None:
+        from datetime import UTC, datetime
+
+        from sqlalchemy import text
+
+        now = datetime.now(UTC).isoformat()
+        root = self.workspace_dir("shared")
+        with self.app.state.engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO workspaces (id, workspace_name, workspace_slug, "
+                    "core_version, root_path, manifest_path, created_at, "
+                    "updated_at) VALUES (:id, 'Shared E2E Workspace', 'shared-e2e', "
+                    "'0.1.0', :root, :manifest, :now, :now)"
+                ),
+                {
+                    "id": SHARED_WORKSPACE_ID,
+                    "root": root,
+                    "manifest": str(Path(root) / "workbench.project.yaml"),
+                    "now": now,
+                },
+            )
 
     async def login(self, reviewer_id: str) -> None:
         """Switch the active session to the given reviewer profile."""

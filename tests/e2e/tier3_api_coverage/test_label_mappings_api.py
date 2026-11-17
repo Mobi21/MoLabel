@@ -6,7 +6,11 @@ Tests:
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime
+
 import pytest
+from sqlalchemy import text
 
 from tests.e2e.infrastructure.assertions import checkpoint
 from tests.e2e.infrastructure.client import InstrumentedClient
@@ -36,6 +40,24 @@ async def _setup(client: InstrumentedClient) -> str:
     return ws.json()["workspace_id"]
 
 
+def _seed_task_schema(client: InstrumentedClient, workspace_id: str) -> str:
+    """A task schema row the mapping can reference, in the test's workspace."""
+    task_schema_id = str(uuid.uuid4())
+    now = datetime.now(UTC).isoformat()
+    with client.app.state.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO task_schemas (id, task_schema_slug, version, task_type, "
+                "title, label_fields, blind_review_policy, is_active, is_frozen, "
+                "created_at, updated_at, workspace_id) VALUES (:id, 'legacy-v1', 1, "
+                "'classification', 'Legacy', '[]', 'show_agent_outputs', 1, 0, "
+                ":now, :now, :wid)"
+            ),
+            {"id": task_schema_id, "now": now, "wid": workspace_id},
+        )
+    return task_schema_id
+
+
 @SHARED_WORKSPACE
 @pytest.mark.asyncio
 @pytest.mark.e2e
@@ -47,7 +69,7 @@ async def test_label_mappings_preview_and_save(
     """T3-22: Preview label mapping and save it."""
 
     workspace_id = await _setup(client)
-    task_schema_id = "00000000-0000-0000-0000-7as7schema001"
+    task_schema_id = _seed_task_schema(client, workspace_id)
 
     sample_records = [
         {"raw_label": "POSITIVE", "text": "I love this!"},

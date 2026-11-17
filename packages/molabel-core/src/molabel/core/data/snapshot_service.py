@@ -20,7 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from molabel.core.database import get_session
+from molabel.core.database import get_session, hyphenated_id
 
 logger = logging.getLogger(__name__)
 
@@ -397,7 +397,10 @@ class SnapshotService:
                 session.add(dataset)
 
             # 2. Restore per-record state from snapshot.
-            record_states = (membership or {}).get("record_states", {})
+            record_states = {
+                hyphenated_id(key): state
+                for key, state in (membership or {}).get("record_states", {}).items()
+            }
             if record_states:
                 from sqlmodel import select
 

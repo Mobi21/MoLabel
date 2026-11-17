@@ -12,11 +12,10 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
-from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
 
 from molabel.app.api.v1.agent_runs import router as agent_runs_router
 from molabel.app.main import create_app
+from molabel.core.database import engine_from_url
 from molabel.core.migration_runner import upgrade_database
 
 
@@ -26,11 +25,7 @@ def app(tmp_path):
     application = create_app()
     # Register the router under the v1 prefix so it's reachable.
     application.include_router(agent_runs_router, prefix="/api/v1")
-    engine = create_engine(
-        f"sqlite:///{tmp_path / 'agent-runs.db'}",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = engine_from_url(f"sqlite:///{tmp_path / 'agent-runs.db'}")
     upgrade_database(engine)
     application.state.engine = engine
     application.state.app_secret = "agent-runs-test-secret"

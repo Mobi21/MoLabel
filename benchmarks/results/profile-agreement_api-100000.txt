@@ -1,0 +1,71 @@
+# cProfile of one agreement_api run at n=100000, not counted in timings
+
+## top 25 by cumulative time
+         109536384 function calls (109536319 primitive calls) in 40.658 seconds
+
+   Ordered by: cumulative time
+   List reduced from 787 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       27    0.000    0.000   84.325    3.123 base_events.py:1922(_run_once)
+    40/39    0.000    0.000   84.323    2.162 events.py:86(_run)
+    40/39    0.000    0.000   84.323    2.162 {method 'run' of '_contextvars.Context' objects}
+        8    0.000    0.000   42.162    5.270 from_thread.py:459(start_task_soon)
+       13    0.000    0.000   42.161    3.243 _tasks.py:322(_run_coro)
+       13    0.000    0.000   42.161    3.243 from_thread.py:242(_call_func)
+        3    0.000    0.000   42.160   14.053 testclient.py:362(run_app)
+        3    0.000    0.000   42.160   14.053 applications.py:1157(__call__)
+        3    0.000    0.000   42.160   14.053 applications.py:92(__call__)
+        3    0.000    0.000   42.160   14.053 errors.py:149(__call__)
+        3    0.000    0.000   42.160   14.053 cors.py:77(__call__)
+        3    0.000    0.000   42.160   14.053 cors.py:147(simple_response)
+        3    0.000    0.000   42.160   14.053 exceptions.py:47(__call__)
+      6/3    0.000    0.000   42.160   14.053 _exception_handler.py:31(wrapped_app)
+        3    0.000    0.000   42.160   14.053 asyncexitstack.py:15(__call__)
+        3    0.000    0.000   42.160   14.053 routing.py:679(__call__)
+        3    0.000    0.000   42.160   14.053 routing.py:685(app)
+        3    0.000    0.000   42.160   14.053 routing.py:280(handle)
+        3    0.000    0.000   42.160   14.053 routing.py:106(app)
+        3    0.000    0.000   42.160   14.053 routing.py:109(app)
+        1    0.000    0.000   42.160   42.160 routing.py:378(app)
+        1    0.246    0.246   42.158   42.158 routing.py:316(run_endpoint_function)
+        1    0.379    0.379   41.913   41.913 quality.py:178(get_agreement_metrics)
+        2    0.020    0.010   30.706   15.353 agreement_metrics.py:299(analyze)
+        3    0.290    0.097   21.328    7.109 agreement_metrics.py:250(_summarize_fields)
+
+
+
+## top 25 by own time
+         109536384 function calls (109536319 primitive calls) in 40.658 seconds
+
+   Ordered by: internal time
+   List reduced from 787 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+  3000000    6.102    0.000    9.779    0.000 agreement_metrics.py:79(_tally)
+      203    2.930    0.014    2.930    0.014 {method 'fetchall' of 'sqlite3.Cursor' objects}
+       12    2.805    0.234    5.039    0.420 agreement_metrics.py:127(_cohen_kappa)
+  1413052    2.662    0.000    3.731    0.000 main.py:240(__init__)
+        1    2.127    2.127    8.055    8.055 agreement_metrics.py:396(_compute_human_agent_breakdown)
+ 18733377    1.840    0.000    1.840    0.000 {method 'get' of 'dict' objects}
+       24    1.790    0.075    2.875    0.120 agreement_metrics.py:86(_totals)
+  3000108    1.765    0.000    3.613    0.000 {built-in method builtins.sum}
+       12    1.640    0.137   21.038    1.753 agreement_metrics.py:218(_summarize)
+  3486980    1.116    0.000    2.555    0.000 main.py:1028(__setattr__)
+  1413068    1.069    0.000    1.069    0.000 {method 'validate_python' of 'pydantic_core._pydantic_core.SchemaValidator' objects}
+   600003    0.970    0.000    1.658    0.000 decoder.py:333(decode)
+  3486980    0.783    0.000    1.095    0.000 main.py:94(_model_field_setattr_handler)
+       24    0.620    0.026    1.321    0.055 {built-in method _collections._count_elements}
+  1500000    0.584    0.000    0.893    0.000 canonical.py:14(canonical_label_value)
+10200828/10200827    0.574    0.000    0.574    0.000 {built-in method builtins.len}
+  6572598    0.523    0.000    0.523    0.000 agreement_metrics.py:83(<genexpr>)
+      205    0.516    0.003    0.516    0.003 {method 'execute' of 'sqlite3.Cursor' objects}
+        3    0.507    0.169    1.271    0.424 agreement_metrics.py:377(_units)
+  1500000    0.490    0.000    1.651    0.000 agreement_metrics.py:162(value)
+  6000460    0.488    0.000    0.488    0.000 {method 'items' of 'dict' objects}
+6301504/6301502    0.452    0.000    0.452    0.000 {built-in method builtins.isinstance}
+   300003    0.412    0.000    0.616    0.000 uuid.py:139(__init__)
+  3000012    0.408    0.000    0.408    0.000 agreement_metrics.py:146(<genexpr>)
+        1    0.390    0.390    3.026    3.026 review_agreement.py:79(agreement_records_from_reviews)
+
+

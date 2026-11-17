@@ -6,13 +6,17 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
+from molabel.core.database import HyphenatedUuid
+
 
 class PromptTemplate(SQLModel, table=True):
     """A versioned prompt template for agent-driven labelling."""
 
     __tablename__ = "prompt_templates"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     prompt_slug: str
     version: str
     name: str
@@ -23,15 +27,17 @@ class PromptTemplate(SQLModel, table=True):
     instruction_patches: list | None = Field(default=None, sa_column=Column(JSON))
     output_schema: dict | None = Field(default=None, sa_column=Column(JSON))
     parent_version_id: uuid.UUID | None = Field(
-        default=None, foreign_key="prompt_templates.id"
+        default=None, foreign_key="prompt_templates.id", sa_type=HyphenatedUuid
     )
-    refinement_source_batch_id: uuid.UUID | None = None
+    refinement_source_batch_id: uuid.UUID | None = Field(
+        default=None, sa_type=HyphenatedUuid
+    )
     is_frozen: bool = Field(default=False)
     file_path: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     __table_args__ = (
         Index("idx_prompt_templates_slug", "prompt_slug"),

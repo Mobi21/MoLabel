@@ -1,0 +1,11 @@
+=== wal bench ===
+  round 0 DELETE writer   1.976s (151.8 w/s) reads=62 median=117.23ms p95=343.04ms errors w=0 r=0
+  round 0 WAL    writer   0.398s (752.9 w/s) reads=32 median=59.77ms p95=111.64ms errors w=0 r=0
+  round 1 WAL    writer   0.407s (736.3 w/s) reads=32 median=60.23ms p95=115.19ms errors w=0 r=0
+  round 1 DELETE writer   2.101s (142.8 w/s) reads=64 median=117.6ms p95=265.51ms errors w=0 r=0
+  round 2 DELETE writer   2.519s (119.1 w/s) reads=86 median=108.85ms p95=270.51ms errors w=0 r=0
+  round 2 WAL    writer   0.411s (730.7 w/s) reads=32 median=59.09ms p95=116.48ms errors w=0 r=0
+wrote benchmarks\results\wal-concurrency.json
+| journal | writes/s (median of rounds) | read median ms | read p95 ms | read errors |
+|---|---:|---:|---:|---:|
+| DELETE | 142.8 | 117.23 | 270.51 | 0 |

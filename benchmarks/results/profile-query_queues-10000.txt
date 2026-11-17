@@ -1,0 +1,71 @@
+# cProfile of one query_queues run at n=10000, not counted in timings
+
+## top 25 by cumulative time
+         5883 function calls (5854 primitive calls) in 166.375 seconds
+
+   Ordered by: cumulative time
+   List reduced from 668 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       39    0.000    0.000  332.746    8.532 events.py:86(_run)
+       39    0.000    0.000  332.745    8.532 {method 'run' of '_contextvars.Context' objects}
+      2/1    0.000    0.000  166.375  166.375 bench_hot_paths.py:638(list_queues)
+        1    0.000    0.000  166.375  166.375 bench_hot_paths.py:623(get)
+        1    0.000    0.000  166.375  166.375 _client.py:1036(get)
+        1    0.000    0.000  166.375  166.375 testclient.py:493(request)
+        1    0.000    0.000  166.374  166.374 _client.py:771(request)
+        1    0.000    0.000  166.374  166.374 _client.py:879(send)
+        1    0.000    0.000  166.374  166.374 _client.py:930(_send_handling_auth)
+        1    0.000    0.000  166.374  166.374 _client.py:964(_send_handling_redirects)
+       25    0.000    0.000  166.374    6.655 base_events.py:1922(_run_once)
+        1    0.000    0.000  166.374  166.374 _client.py:1001(_send_single_request)
+        1    0.000    0.000  166.373  166.373 testclient.py:234(handle_request)
+        8    0.000    0.000  166.373   20.797 from_thread.py:459(start_task_soon)
+        8    0.000    0.000  166.373   20.797 from_thread.py:291(_spawn_task_from_thread)
+       13    0.000    0.000  166.372   12.798 _tasks.py:322(_run_coro)
+       13    0.000    0.000  166.372   12.798 from_thread.py:242(_call_func)
+        3    0.000    0.000  166.372   55.457 testclient.py:362(run_app)
+        3    0.000    0.000  166.372   55.457 applications.py:1157(__call__)
+        3    0.000    0.000  166.372   55.457 applications.py:92(__call__)
+        3    0.000    0.000  166.372   55.457 errors.py:149(__call__)
+        3    0.000    0.000  166.372   55.457 cors.py:77(__call__)
+        3    0.000    0.000  166.372   55.457 cors.py:147(simple_response)
+        3    0.000    0.000  166.372   55.457 exceptions.py:47(__call__)
+      6/3    0.000    0.000  166.372   55.457 _exception_handler.py:31(wrapped_app)
+
+
+
+## top 25 by own time
+         5883 function calls (5854 primitive calls) in 166.375 seconds
+
+   Ordered by: internal time
+   List reduced from 668 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        3  166.367   55.456  166.367   55.456 {method 'execute' of 'sqlite3.Cursor' objects}
+        1    0.002    0.002    0.002    0.002 {method 'commit' of 'sqlite3.Connection' objects}
+        1    0.001    0.001    0.001    0.001 {method 'fetchall' of 'sqlite3.Cursor' objects}
+        1    0.000    0.000  166.373  166.373 testclient.py:234(handle_request)
+       33    0.000    0.000    0.000    0.000 {built-in method _overlapped.GetQueuedCompletionStatus}
+        8    0.000    0.000  166.373   20.797 from_thread.py:291(_spawn_task_from_thread)
+       25    0.000    0.000  166.374    6.655 base_events.py:1922(_run_once)
+        8    0.000    0.000    0.000    0.000 {method 'send' of '_socket.socket' objects}
+        4    0.000    0.000    0.000    0.000 {method 'sub' of 're.Pattern' objects}
+       39    0.000    0.000  332.745    8.532 {method 'run' of '_contextvars.Context' objects}
+       25    0.000    0.000    0.000    0.000 windows_events.py:761(_poll)
+  397/395    0.000    0.000    0.000    0.000 {built-in method builtins.isinstance}
+        3    0.000    0.000  166.372   55.457 routing.py:685(app)
+        3    0.000    0.000    0.000    0.000 _urlparse.py:213(urlparse)
+        8    0.000    0.000    0.000    0.000 _asyncio.py:886(_spawn)
+       18    0.000    0.000    0.000    0.000 {method 'acquire' of '_thread.lock' objects}
+        8    0.000    0.000    0.000    0.000 {method 'WSARecv' of '_overlapped.Overlapped' objects}
+       15    0.000    0.000    0.000    0.000 _base.py:428(result)
+      2/1    0.000    0.000    0.006    0.006 utils.py:595(solve_dependencies)
+       76    0.000    0.000    0.000    0.000 routing.py:251(matches)
+       13    0.000    0.000  166.372   12.798 from_thread.py:242(_call_func)
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+      104    0.000    0.000    0.000    0.000 {built-in method builtins.getattr}
+       13    0.000    0.000  166.372   12.798 _tasks.py:322(_run_coro)
+        1    0.000    0.000  166.374  166.374 _client.py:1001(_send_single_request)
+
+

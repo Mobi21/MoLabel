@@ -40,6 +40,8 @@ This is a uv workspace monorepo with three Python packages, a TypeScript CLI, an
 - **Gold sets are files.** Released gold sets will be files too (planned, P8). Raw input data, exports, benchmark authority material, and release outputs are already files in the workspace tree.
 - **Review state is SQLite.** Dataset records, queues, review events and drafts, agent runs, claims, sessions, and audit events live only in SQLite. For the review in progress, SQLite is the canonical record.
 - **The server database lives in the per-user data directory**, never in the workspace or in the folder the server was launched from: `$XDG_DATA_HOME/molabel` or `~/.local/share/molabel` on Linux, `~/Library/Application Support/MoLabel` on macOS, `%LOCALAPPDATA%\MoLabel` on Windows. `MOLABEL_DATA_DIR` moves it and `MOLABEL_DB_URL` overrides the database.
+- **The server database runs with WAL and foreign keys on.** `molabel.core.database.engine_from_url` builds every engine and sets `journal_mode=WAL` and `foreign_keys=ON` on each connection, so readers never block the writer and a row whose foreign key points nowhere is refused. Rows written before enforcement that dangle are kept; `molabel doctor` lists them.
+- **UUIDs are stored hyphenated.** Every UUID column uses `molabel.core.database.HyphenatedUuid`, which stores `str(uuid)`, the form raw SQL writes, so a row the ORM wrote and a row a route wrote reference each other. Revision 005 rewrote the hex values older databases held. Revision 006 rewrote the ids that JSON and text columns copy, and an id read from JSON goes through `molabel.core.database.hyphenated_id` before a lookup.
 - Never silently overwrite human-authored files.
 
 `docs/guides/how-molabel-works-today.md` section 4 has the details.

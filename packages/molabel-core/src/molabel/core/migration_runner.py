@@ -22,6 +22,8 @@ from alembic.script import ScriptDirectory
 from filelock import FileLock
 from sqlalchemy import Connection, Engine, create_engine, inspect
 
+from molabel.core.database import foreign_key_violations
+
 logger = logging.getLogger(__name__)
 
 _MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
@@ -122,7 +124,8 @@ def upgrade_database(engine: Engine) -> None:
     Processes sharing a SQLite file migrate one at a time; each re-reads the
     revision once it holds the lock. Raises :class:`IncompleteBaselineError`,
     and changes nothing, when a database without ``alembic_version`` is
-    missing tables or columns of the baseline revision.
+    missing tables or columns of the baseline revision. Rows whose foreign
+    keys dangle are logged after the upgrade, never changed.
     """
     cfg = _alembic_config(engine)
     head = ScriptDirectory.from_config(cfg).get_current_head()
@@ -141,12 +144,34 @@ def upgrade_database(engine: Engine) -> None:
         if tables and db_path is not None:
             _backup(db_path)
 
-        with engine.begin() as conn:
-            cfg.attributes["connection"] = conn
-            if pre_alembic:
-                logger.info(
-                    "Stamping pre-Alembic database at baseline %s", BASELINE_REVISION
-                )
-                alembic_command.stamp(cfg, BASELINE_REVISION)
-            alembic_command.upgrade(cfg, "head")
+        with engine.connect() as conn:
+            # Alembic's batch mode copies and drops tables, which the foreign
+            # keys of other tables refuse, so they are off for the migration.
+            # The pragma takes effect only outside a transaction, so it goes
+            # to the DBAPI connection before the migration's transaction.
+            sqlite = engine.dialect.name == "sqlite"
+            if sqlite:
+                conn.connection.dbapi_connection.execute("PRAGMA foreign_keys=OFF")
+            try:
+                with conn.begin():
+                    cfg.attributes["connection"] = conn
+                    if pre_alembic:
+                        logger.info(
+                            "Stamping pre-Alembic database at baseline %s",
+                            BASELINE_REVISION,
+                        )
+                        alembic_command.stamp(cfg, BASELINE_REVISION)
+                    alembic_command.upgrade(cfg, "head")
+            finally:
+                if sqlite:
+                    conn.connection.dbapi_connection.execute("PRAGMA foreign_keys=ON")
+    for violation in foreign_key_violations(engine):
+        logger.warning(
+            "DANGLING FOREIGN KEYS: %d rows of %s point at missing %s rows. They "
+            "were written before foreign keys were enforced and are kept; "
+            "molabel doctor lists them.",
+            violation.rows,
+            violation.table,
+            violation.parent,
+        )
     logger.info("Database schema is at revision %s", head)

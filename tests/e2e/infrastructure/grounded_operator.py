@@ -18,11 +18,12 @@ from typing import Any
 
 import uvicorn
 import yaml
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 import molabel.core.workflow.engine as workflow_engine
 from molabel.app.main import create_app
 from molabel.app.services.session import get_or_create_app_secret
+from molabel.core.database import engine_from_url
 from molabel.core.migration_runner import upgrade_database
 from molabel.core.providers.anthropic_adapter import AnthropicAdapter
 from molabel.core.providers.model_defaults import MINIMAX_M27_HIGHSPEED
@@ -227,10 +228,7 @@ class GroundedBackendServer:
         self._original_signal_alarm = workflow_engine.signal.alarm
 
         app = create_app()
-        engine = create_engine(
-            f"sqlite:///{self.db_path}",
-            connect_args={"check_same_thread": False},
-        )
+        engine = engine_from_url(f"sqlite:///{self.db_path}")
         upgrade_database(engine)
         app.state.engine = engine
         app.state.app_secret = get_or_create_app_secret(self.workbench_root)
