@@ -440,7 +440,7 @@ def test_downgrading_past_the_id_rewrites_warns_that_they_are_one_way(
     assert [w.split()[1] for w in warnings] == ["006", "005"]
     for warning in warnings:
         assert "one-way" in warning
-        assert "molabel.backup.<timestamp>.sqlite" in warning
+        assert "<database name>.backup.<timestamp>.sqlite" in warning
 
 
 def test_a_snapshot_restores_on_a_migrated_mixed_format_database(
