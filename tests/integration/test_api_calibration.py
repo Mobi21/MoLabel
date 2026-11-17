@@ -258,6 +258,56 @@ async def test_a_calibration_queue_never_feeds_gold(client, app, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_a_calibration_queue_cannot_be_adjudicated(client, app, tmp_path):
+    _, tokens, _, queue = await _gold_and_calibration_queue(client, app, tmp_path)
+    queue_id = queue["queue_id"]
+    await _label_all(client, queue_id, tokens[0], GOLD_SENTIMENT)
+    await _label_all(
+        client, queue_id, tokens[1], dict.fromkeys(GOLD_SENTIMENT, "negative")
+    )
+    before = _latest_labels(app)
+    record_id = _external_ids(app)["r1"]
+    with app.state.engine.connect() as conn:
+        event_ids = [
+            str(r[0])
+            for r in conn.execute(
+                text(
+                    "SELECT e.id FROM review_events e "
+                    "JOIN review_tasks t ON t.id = e.review_task_id "
+                    "WHERE t.queue_id = :q AND e.record_id = :r"
+                ),
+                {"q": queue_id, "r": record_id},
+            )
+        ]
+    assert len(event_ids) == 2
+    base = f"/api/v1/adjudication/queues/{queue_id}/disagreements"
+
+    resolved = await client.post(
+        f"{base}/{record_id}/resolve",
+        json={
+            "resolved_labels": {"sentiment": "neutral"},
+            "review_event_ids": event_ids,
+        },
+        headers=_as(tokens[0]),
+    )
+
+    assert _latest_labels(app) == before
+    for resp in [
+        resolved,
+        await client.get(base, headers=_as(tokens[0])),
+        await client.get(f"{base}/{record_id}", headers=_as(tokens[0])),
+    ]:
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["error"]["code"] == "CALIBRATION_QUEUE_NOT_ADJUDICABLE"
+    with app.state.engine.connect() as conn:
+        adjudications = conn.execute(
+            text("SELECT count(*) FROM adjudications WHERE record_id = :r"),
+            {"r": record_id},
+        ).scalar()
+    assert adjudications == 0
+
+
+@pytest.mark.asyncio
 async def test_a_review_queue_has_no_calibration_report(client, app, tmp_path):
     _, tokens, review_queue, _ = await _gold_and_calibration_queue(
         client, app, tmp_path

@@ -253,20 +253,13 @@ def queue_source(conn: Any, queue_id: str, workspace_id: uuid.UUID) -> QueueSour
         ),
         {"q": queue_id},
     ).first()
-    calibration = conn.execute(
-        text(
-            "SELECT 1 FROM review_tasks WHERE queue_id = :q AND is_calibration = 1 "
-            "LIMIT 1"
-        ),
-        {"q": queue_id},
-    ).first()
     return QueueSource(
         queue_id=queue.queue_id,
         workspace_id=queue.workspace_id,
         task_schema_id=queue.task_schema_id,
         workflow_execution_id=str(made_by[0]) if made_by else None,
         workflow=str(made_by[1]) if made_by and made_by[1] else None,
-        calibration=calibration is not None,
+        calibration=queue.calibration,
     )
 
 

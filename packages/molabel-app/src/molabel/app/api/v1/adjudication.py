@@ -15,8 +15,9 @@ own review of the record is in. Closing a queue's copies, through
 leaves the claimed ones open.
 
 Every endpoint reads only a queue of the caller's workspace, and answers 404
-for a queue of any other. The GUI and the CLI's ``molabel adjudication``
-commands both use these endpoints.
+for a queue of any other. A calibration queue answers 409: gold is the answer
+to its items, so it has no disagreement to resolve. The GUI and the CLI's
+``molabel adjudication`` commands both use these endpoints.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import bindparam, text
 
+from molabel.app.errors import ApiError
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.services.claims import (
     load_task_schema_version,
@@ -165,6 +167,8 @@ class ReviewQueue:
     queue_id: str
     workspace_id: str
     task_schema_id: str
+    calibration: bool = False
+    """A ``human_calibration`` queue, whose answers are scored against gold."""
 
 
 def workspace_review_queue(
@@ -172,14 +176,32 @@ def workspace_review_queue(
 ) -> ReviewQueue:
     row = conn.execute(
         text(
-            "SELECT workspace_id, task_schema_id FROM review_tasks "
+            "SELECT workspace_id, task_schema_id, is_calibration FROM review_tasks "
             "WHERE queue_id = :q AND workspace_id = :w LIMIT 1"
         ),
         {"q": queue_id, "w": str(workspace_id)},
     ).first()
     if row is None:
         raise HTTPException(status_code=404, detail="Review queue not found")
-    return ReviewQueue(queue_id, str(row[0]), str(row[1]))
+    return ReviewQueue(queue_id, str(row[0]), str(row[1]), parse_bool(row[2]))
+
+
+def adjudicable_queue(conn: Any, queue_id: str, workspace_id: uuid.UUID) -> ReviewQueue:
+    """The queue of this workspace, or 404; a calibration queue answers 409.
+
+    Gold is the answer to a calibration item, so its reviewers' differences
+    are scores, not disagreements, and no resolution may label the record.
+    """
+    queue = workspace_review_queue(conn, queue_id, workspace_id)
+    if queue.calibration:
+        raise ApiError(
+            409,
+            "CALIBRATION_QUEUE_NOT_ADJUDICABLE",
+            f"Queue '{queue_id}' is a calibration queue. Its answers are scored "
+            "against gold in the calibration report, not adjudicated.",
+            {"queue_id": queue_id},
+        )
+    return queue
 
 
 @dataclass(frozen=True)
@@ -414,7 +436,7 @@ async def list_queue_disagreements(
     submitted, skipped, or closed.
     """
     with get_engine(request).connect() as conn:
-        queue = workspace_review_queue(conn, queue_id, reviewer.workspace_id)
+        queue = adjudicable_queue(conn, queue_id, reviewer.workspace_id)
         disagreements = queue_disagreements(conn, queue)
     items = [DisagreementSummary(**d.summary()) for d in disagreements]
     return DisagreementQueue(
@@ -437,7 +459,7 @@ async def get_queue_disagreement(
 ) -> DisagreementDetail:
     """Show a disagreement side by side: the record and each reviewer's labels."""
     with get_engine(request).connect() as conn:
-        queue = workspace_review_queue(conn, queue_id, reviewer.workspace_id)
+        queue = adjudicable_queue(conn, queue_id, reviewer.workspace_id)
         return _detail(conn, queue, _find(conn, queue, record_id))
 
 
@@ -464,7 +486,7 @@ async def resolve_queue_disagreement(
         raise HTTPException(status_code=422, detail="resolve needs resolved_labels")
 
     with get_engine(request).begin() as conn:
-        queue = workspace_review_queue(conn, queue_id, reviewer.workspace_id)
+        queue = adjudicable_queue(conn, queue_id, reviewer.workspace_id)
         disagreement = _find_or_none(conn, queue, record_id)
         if disagreement is None or disagreement.event_ids != set(body.review_event_ids):
             raise HTTPException(

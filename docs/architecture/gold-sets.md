@@ -119,7 +119,9 @@ dataset slug and `external_id` on a database that imported the data again.
 Each item gets `min_reviewers` copies. The tasks are marked `is_calibration`.
 A reviewer never sees the expected label. A reviewer sees an agent proposal
 only when the step sets `show_ai_proposal: true`. A calibration answer never
-becomes the record's latest label.
+becomes the record's latest label. Gold is the answer to each item, so a
+calibration queue has nothing to adjudicate: its adjudication list, detail
+and resolve answer `409 CALIBRATION_QUEUE_NOT_ADJUDICABLE`.
 
 The calibration report scores each reviewer against gold, per field and
 pooled. It gives `accuracy`, the share of compared values that match.
