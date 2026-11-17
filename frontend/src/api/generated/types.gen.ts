@@ -1397,6 +1397,10 @@ export type CliStatusResponse = {
    */
   foreign_key_violations?: Array<ForeignKeyViolation>
   /**
+   * Workspace Roots Not Allowed
+   */
+  workspace_roots_not_allowed?: Array<WorkspaceRootNotAllowed>
+  /**
    * Checked At
    */
   checked_at?: string
@@ -6808,6 +6812,17 @@ export type RoleCost = {
 }
 
 /**
+ * RootRefusal
+ *
+ * Why a folder may not be registered as a workspace root.
+ */
+export type RootRefusal =
+  | 'filesystem_root'
+  | 'home_folder'
+  | 'allowed_parent'
+  | 'outside_allowed_parents'
+
+/**
  * RuntimeProfileCreate
  *
  * Request schema for creating a runtime profile.
@@ -8617,6 +8632,31 @@ export type WorkspaceDetectResponse = {
    * Suggested Name
    */
   suggested_name?: string | null
+}
+
+/**
+ * WorkspaceRootNotAllowed
+ *
+ * A registered workspace whose root is not inside an allowed parent folder.
+ */
+export type WorkspaceRootNotAllowed = {
+  /**
+   * Workspace Id
+   */
+  workspace_id: string
+  /**
+   * Workspace Name
+   */
+  workspace_name: string
+  /**
+   * Root Path
+   */
+  root_path: string
+  reason: RootRefusal
+  /**
+   * Message
+   */
+  message: string
 }
 
 /**

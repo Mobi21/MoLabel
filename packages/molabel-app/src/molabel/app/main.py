@@ -32,6 +32,7 @@ from molabel.app.api.v1.workflows import (
     unresolved_model_error_handler,
 )
 from molabel.app.errors import ApiError, api_error_handler
+from molabel.app.middleware.origin import LocalOriginMiddleware, configured_origins
 from molabel.app.schemas import ErrorDetail, ErrorResponse, HealthResponse
 from molabel.app.server_state import (
     launch_folder_database,
@@ -57,13 +58,6 @@ MOLABEL_HOST: str = os.environ.get("MOLABEL_HOST", "127.0.0.1")
 #: Port for the API server.
 MOLABEL_PORT: int = int(os.environ.get("MOLABEL_PORT", "8000"))
 
-_DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
-    "http://127.0.0.1:5173",
-    "http://localhost:5173",
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-)
-
 
 logger = logging.getLogger(__name__)
 
@@ -86,20 +80,6 @@ def _create_engine_from_env():
     the same connection is reused across requests within a single process.
     """
     return engine_from_url(server_db_url())
-
-
-def _cors_origins_from_env() -> list[str]:
-    """Return the allowed browser origins for the API.
-
-    By default, MoLabel only permits the localhost origins used by the dev
-    server and the bundled frontend. Set ``MOLABEL_CORS_ORIGINS`` to a
-    comma-separated list to override that allowlist, or to an empty string to
-    disable cross-origin browser access entirely.
-    """
-    raw = os.environ.get("MOLABEL_CORS_ORIGINS")
-    if raw is None:
-        return list(_DEFAULT_CORS_ORIGINS)
-    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 @asynccontextmanager
@@ -157,13 +137,17 @@ def create_app() -> FastAPI:
     )
 
     # ----- middleware -----
+    # The Origin check runs first, so CORS only ever answers an allowed origin.
+    # The server's own origins are same-origin and need no CORS headers.
+    origins = configured_origins()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_cors_origins_from_env(),
+        allow_origins=list(origins),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(LocalOriginMiddleware, configured=origins)
 
     # ----- routers -----
     app.include_router(v1_router)

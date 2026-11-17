@@ -41,8 +41,11 @@ from molabel.app.workspace_config import (
 )
 from molabel.app.workspace_paths import (
     WorkspacePathError,
+    WorkspaceRootNotAllowed,
+    absolute_path,
     new_workspace_root,
     resolve_in_workspace,
+    roots_not_allowed,
 )
 from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 from molabel.core.database import ForeignKeyViolation, foreign_key_violations
@@ -74,6 +77,9 @@ class CLIStatusResponse(BaseModel):
     workspace_count: int = 0
     legacy_databases: list[LegacyDatabase] = Field(default_factory=list)
     foreign_key_violations: list[ForeignKeyViolation] = Field(default_factory=list)
+    workspace_roots_not_allowed: list[WorkspaceRootNotAllowed] = Field(
+        default_factory=list
+    )
     checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -173,20 +179,23 @@ async def status(
     workspace_count = int(workspace_count_row[0]) if workspace_count_row else 0
     legacy = legacy_databases(engine, [launch_folder_database()])
     violations = foreign_key_violations(engine)
+    disallowed = roots_not_allowed(engine)
 
     if path is None:
         return CLIStatusResponse(
             workspace_count=workspace_count,
             legacy_databases=legacy,
             foreign_key_violations=violations,
+            workspace_roots_not_allowed=disallowed,
         )
 
-    workspace_path = new_workspace_root(path)
+    workspace_path = absolute_path(path)
     if not workspace_path.exists():
         return CLIStatusResponse(
             workspace_count=workspace_count,
             legacy_databases=legacy,
             foreign_key_violations=violations,
+            workspace_roots_not_allowed=disallowed,
             workspace_detected=False,
             workspace_root=str(workspace_path),
         )
@@ -196,6 +205,7 @@ async def status(
         workspace_count=workspace_count,
         legacy_databases=legacy,
         foreign_key_violations=violations,
+        workspace_roots_not_allowed=disallowed,
         workspace_detected=bool(detection.is_project),
         workspace_name=detection.suggested_name,
         workspace_root=str(workspace_path),
@@ -209,7 +219,7 @@ async def detect_workspace(
     body: WorkspaceDetectRequest,
 ) -> WorkspaceDetectResponse:
     """Detect whether a path contains a MoLabel workspace."""
-    workspace_path = new_workspace_root(body.path)
+    workspace_path = absolute_path(body.path)
     if not workspace_path.exists():
         raise HTTPException(status_code=404, detail="Workspace path not found")
 

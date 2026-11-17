@@ -454,7 +454,9 @@ export const listWorkspaces = <ThrowOnError extends boolean = false>(
  * No authentication required — this is the entry point for a fresh install.
  * Creates the workspace, auto-creates the first reviewer profile (defaulting
  * to "Reviewer 1"), and sets the molabel_session cookie so the caller is
- * immediately logged in.
+ * immediately logged in. The path must resolve to a folder inside an allowed
+ * parent folder, the home folder unless MOLABEL_ALLOWED_WORKSPACE_ROOTS is
+ * set, or the request fails with 403 WORKSPACE_ROOT_NOT_ALLOWED.
  */
 export const createWorkspace = <ThrowOnError extends boolean = false>(
   options: Options<CreateWorkspaceData, ThrowOnError>,

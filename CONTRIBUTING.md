@@ -33,6 +33,12 @@ Backend-only CLI development:
 uv run python -m uvicorn molabel.app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+The API refuses browser requests from any origin but its own, and the Vite
+proxy passes the page's origin through. To run `npm run dev` in `frontend/`
+against a backend you started yourself, start it with
+`MOLABEL_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`.
+`molabel-dev` sets this for you.
+
 Current status:
 
 - CLI and backend are the main development surfaces today.

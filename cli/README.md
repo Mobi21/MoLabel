@@ -208,6 +208,18 @@ and under `database.foreign_key_violations` the rows of the server database
 whose foreign keys point at missing rows, per table and parent. The server
 refuses new ones; rows written before it enforced foreign keys are kept and
 listed here.
+
+`molabel workspace bootstrap` registers a folder only when it resolves, links
+and junctions followed, to a folder inside an allowed parent: the home folder,
+or the folders in `MOLABEL_ALLOWED_WORKSPACE_ROOTS` (separated by `:`, or `;`
+on Windows) when the server has it set. A drive or share root, the home folder
+and an allowed parent itself are refused too. A refused bootstrap exits 1 with
+`HTTP_403`, `details.error.code` is `WORKSPACE_ROOT_NOT_ALLOWED`, and
+`details.error.details` has the `reason` and the `allowed_parents`. A workspace
+registered earlier outside the allowed parents keeps working. `molabel doctor`
+lists it under `database.workspace_roots_not_allowed` and `molabel status`
+under `backend.workspace_roots_not_allowed`, each with a `message` that says
+how to move it.
 `scripts/smoke_no_key.py` runs the full flow with no key against a real
 backend, and CI runs it in the `smoke-no-key` job. It ends with a
 two-reviewer adjudication driven by the CLI alone: `reviewer create`,

@@ -614,44 +614,6 @@ class TestNetworkBinding:
             assert main_mod.MOLABEL_PORT == 9999
 
 
-class TestCorsConfiguration:
-    """Tests for the browser origin allowlist."""
-
-    def test_default_origins_are_local_only(self) -> None:
-        from molabel.app.main import _cors_origins_from_env
-
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("MOLABEL_CORS_ORIGINS", None)
-            origins = _cors_origins_from_env()
-
-        assert "http://localhost:5173" in origins
-        assert "http://127.0.0.1:5173" in origins
-        assert "*" not in origins
-
-    def test_custom_origins_from_env(self) -> None:
-        from molabel.app.main import _cors_origins_from_env
-
-        with patch.dict(
-            os.environ,
-            {
-                "MOLABEL_CORS_ORIGINS": (
-                    "https://review.example.com, https://ops.example.com "
-                )
-            },
-            clear=False,
-        ):
-            assert _cors_origins_from_env() == [
-                "https://review.example.com",
-                "https://ops.example.com",
-            ]
-
-    def test_empty_origin_override_disables_cross_origin_access(self) -> None:
-        from molabel.app.main import _cors_origins_from_env
-
-        with patch.dict(os.environ, {"MOLABEL_CORS_ORIGINS": ""}, clear=False):
-            assert _cors_origins_from_env() == []
-
-
 # ===================================================================
 # Health check (smoke test)
 # ===================================================================
