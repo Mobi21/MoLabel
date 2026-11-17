@@ -1,6 +1,9 @@
 import shutil
 import subprocess
 import sys
+import threading
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -41,6 +44,45 @@ def test_the_workspace_lock_leaves_git_status_clean(tmp_path: Path) -> None:
             text=True,
         ).stdout
 
+    assert status == ""
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
+def test_writers_racing_for_the_lock_all_get_it_and_leave_git_status_clean(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    ignore = workspace / ".molabel" / ".gitignore"
+    ignore.parent.mkdir(parents=True)
+    ignore.write_bytes(b"")
+    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+    writers, turns = 16, 100
+    start = threading.Barrier(writers)
+
+    def take_turns() -> list[Exception]:
+        start.wait()
+        errors = []
+        for _ in range(turns):
+            try:
+                with workspace_lock(workspace):
+                    pass
+            except Exception as exc:
+                errors.append(exc)
+        return errors
+
+    with ThreadPoolExecutor(writers) as pool:
+        results = [pool.submit(take_turns) for _ in range(writers)]
+    failed = Counter(type(e).__name__ for r in results for e in r.result())
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=workspace,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+    assert failed == {}, f"{failed.total()} of {writers * turns} turns raised"
+    assert ignore.read_bytes() == b"*\n"
     assert status == ""
 
 
