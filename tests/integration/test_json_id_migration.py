@@ -177,6 +177,7 @@ HASH = hashlib.md5(b"a payload, not an id").hexdigest()
 
 STEP_SUMMARY = {
     "dataset_id": "id:C",
+    "task_schema_id": HASH,
     "agent_run_ids": ["id:E"],
     "per_model_results": [{"agent_run_id": "id:E", "model": HASH}],
     "snapshot_id": "id:G",

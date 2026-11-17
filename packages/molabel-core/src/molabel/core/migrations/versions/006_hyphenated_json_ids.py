@@ -48,14 +48,17 @@ Path = tuple[str, ...]
 
 _STEP_SUMMARY_IDS: tuple[Path, ...] = (
     ("dataset_id",),
-    ("task_schema_id",),
     ("snapshot_id",),
     ("bundle_id",),
     ("agent_run_id",),
     ("agent_run_ids", EACH),
     ("per_model_results", EACH, "agent_run_id"),
 )
-"""Where a workflow step's summary names a row."""
+"""Where a workflow step's summary names a row.
+
+``task_schema_id`` is left out: a step summary copies the configured
+selector, which may be a slug, and no lookup reads it back.
+"""
 
 ID_POSITIONS: dict[tuple[str, str], tuple[Path, ...]] = {
     ("workflow_executions", "context"): (
