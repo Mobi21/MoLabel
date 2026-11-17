@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from molabel.app.api.v1.model_profiles import SHARED_PROFILE_WORKSPACE
 from molabel.app.middleware.session import CurrentReviewer
@@ -1945,6 +1945,10 @@ def _get_structured_output_enforcer() -> Any:
     return StructuredOutputEnforcer()
 
 
+IN_LIST_CHUNK = 500
+"""Ids per IN list, well under SQLite's 32,766 bound variables."""
+
+
 class _WorkflowExporter:
     def __init__(self, conn: Any, *, workspace_root: Path) -> None:
         self._conn = conn
@@ -1967,25 +1971,29 @@ class _WorkflowExporter:
         destination_dir.mkdir(parents=True, exist_ok=True)
         output_path = destination_dir / f"{bundle_id}.jsonl"
 
+        select_records = text(
+            "SELECT id, external_id, payload, latest_label "
+            "FROM records WHERE id IN :ids"
+        ).bindparams(bindparam("ids", expanding=True))
+        by_id: dict[str, Any] = {}
+        for start in range(0, len(record_ids), IN_LIST_CHUNK):
+            chunk = record_ids[start : start + IN_LIST_CHUNK]
+            for row in self._conn.execute(select_records, {"ids": chunk}).fetchall():
+                by_id[str(row[0])] = row
+
         rows: list[str] = []
         for record_id in record_ids:
-            row = self._conn.execute(
-                text(
-                    "SELECT external_id, payload, latest_label "
-                    "FROM records WHERE id = :record_id LIMIT 1"
-                ),
-                {"record_id": record_id},
-            ).first()
+            row = by_id.get(record_id)
             if row is None:
                 continue
-            payload = _json_loads(row[1])
-            latest_label = _json_loads(row[2])
+            payload = _json_loads(row[2])
+            latest_label = _json_loads(row[3])
             payload_dict = payload if isinstance(payload, dict) else {"value": payload}
             rows.append(
                 json.dumps(
                     {
                         "record_id": record_id,
-                        "external_id": str(row[0]) if row[0] else None,
+                        "external_id": str(row[1]) if row[1] else None,
                         **payload_dict,
                         "labels": latest_label,
                     }
