@@ -10,6 +10,7 @@ import pytest
 
 from molabel.core.gold.calibration import score_against_gold
 from molabel.core.gold.model import (
+    GoldConflictLog,
     GoldFileError,
     GoldInputRef,
     GoldItem,
@@ -325,6 +326,143 @@ class TestDedupe:
         assert [(c.gold.expected, c.other.expected) for c in deduped.conflicts] == [
             ({"intent": "bug"}, {"intent": "refund"})
         ]
+
+
+def conflicts_of(held: GoldItem, *incoming: GoldItem) -> tuple:
+    return merge([held], incoming).conflicts
+
+
+class TestConflictLog:
+    def test_a_conflict_is_one_lf_line_with_both_labels_and_where_it_came_from(self):
+        held = item("refund me", "refund")
+        incoming = item("refund me", "other", record="r2")
+
+        log = GoldConflictLog.read(b"").recorded(
+            [held], conflicts_of(held, incoming), now=NOW
+        )
+
+        assert log.data.endswith(b"}\n") and b"\r" not in log.data
+        (line,) = [json.loads(raw) for raw in log.data.splitlines()]
+        assert list(line) == [
+            "item_id",
+            "input_hash",
+            "input_ref",
+            "fields",
+            "existing",
+            "incoming",
+            "provenance",
+            "detected_at",
+        ]
+        assert line["item_id"] == held.item_id
+        assert line["input_hash"] == held.input_hash
+        assert line["input_ref"]["record_id"] == "r2"
+        assert line["fields"] == ["intent"]
+        assert line["existing"] == {"intent": "refund"}
+        assert line["incoming"] == {"intent": "other"}
+        assert line["provenance"]["queue_id"] == "q1"
+        assert line["provenance"]["source"] == "reviewer_agreement"
+        assert line["detected_at"] == NOW
+        assert [c.incoming for c in log.open([held])] == [{"intent": "other"}]
+
+    def test_no_conflict_leaves_no_file(self):
+        held = item("refund me", "refund")
+        assert GoldConflictLog.read(b"").recorded([held], (), now=NOW).data == b""
+
+    @pytest.mark.parametrize("separator", ["\x85", " ", " "])
+    def test_a_unicode_line_separator_in_labels_stays_on_one_line(self, separator):
+        held = item("refund me", "refund")
+        incoming = item("refund me", f"oth{separator}er", record="r2")
+
+        log = GoldConflictLog.read(b"").recorded(
+            [held], conflicts_of(held, incoming), now=NOW
+        )
+
+        assert len(log.data.decode("utf-8").splitlines()) == 1
+        assert GoldConflictLog.read(log.data).open([held])[0].incoming == {
+            "intent": f"oth{separator}er"
+        }
+
+    def test_the_same_incoming_conflict_again_adds_no_line(self):
+        held = item("refund me", "refund")
+        first = GoldConflictLog.read(b"").recorded(
+            [held], conflicts_of(held, item("refund me", "other", record="r2")), now=NOW
+        )
+
+        again = GoldConflictLog.read(first.data).recorded(
+            [held],
+            conflicts_of(held, item("refund me", "other", record="r3")),
+            now="2026-11-18T00:00:00+00:00",
+        )
+
+        assert again.data == first.data
+
+    def test_other_incoming_labels_or_another_source_append_after_the_bytes(self):
+        held = item("refund me", "refund")
+        first = GoldConflictLog.read(b"").recorded(
+            [held], conflicts_of(held, item("refund me", "other", record="r2")), now=NOW
+        )
+        adjudicated = GoldItem.build(
+            task_schema=SCHEMA,
+            input={"text": "refund me"},
+            expected={"intent": "other"},
+            input_ref=GoldInputRef(record_id="r4"),
+            provenance=provenance(source="adjudication"),
+        )
+
+        later = GoldConflictLog.read(first.data).recorded(
+            [held],
+            conflicts_of(held, item("refund me", "bug", record="r3"), adjudicated),
+            now=NOW,
+        )
+
+        assert later.data.startswith(first.data)
+        assert [(c.incoming, c.provenance.source) for c in later.open([held])] == [
+            ({"intent": "other"}, "reviewer_agreement"),
+            ({"intent": "bug"}, "reviewer_agreement"),
+            ({"intent": "other"}, "adjudication"),
+        ]
+
+    def test_a_conflict_the_gold_now_settles_is_not_open_and_the_next_write_drops_it(
+        self,
+    ):
+        held = item("refund me", "refund")
+        kept = item("ship it", "shipping", record="r5")
+        log = GoldConflictLog.read(b"").recorded(
+            [held, kept],
+            (
+                *conflicts_of(held, item("refund me", "other", record="r2")),
+                *conflicts_of(kept, item("ship it", "bug", record="r6")),
+            ),
+            now=NOW,
+        )
+        edited = item("refund me", "other")
+
+        assert [c.item_id for c in log.open([edited, kept])] == [kept.item_id]
+        assert [c.item_id for c in log.open([kept])] == [kept.item_id]
+        pruned = log.recorded([edited, kept], (), now=NOW)
+        assert pruned.data == log.data.splitlines(keepends=True)[1]
+
+    def test_a_hand_edit_to_gold_that_still_conflicts_refreshes_existing(self):
+        held = item("refund me", "refund")
+        log = GoldConflictLog.read(b"").recorded(
+            [held], conflicts_of(held, item("refund me", "other", record="r2")), now=NOW
+        )
+        edited = item("refund me", "bug")
+
+        (shown,) = log.open([edited])
+        assert (shown.existing, shown.incoming) == (
+            {"intent": "bug"},
+            {"intent": "other"},
+        )
+        refreshed = log.recorded([edited], (), now="2026-11-18T00:00:00+00:00")
+        (line,) = [json.loads(raw) for raw in refreshed.data.splitlines()]
+        assert line["existing"] == {"intent": "bug"}
+        assert line["detected_at"] == NOW
+
+    def test_a_line_that_does_not_parse_names_its_line(self):
+        with pytest.raises(GoldFileError) as raised:
+            GoldConflictLog.read(b"\n{not json\n")
+        assert raised.value.line == 2
 
 
 def review(
