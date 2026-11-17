@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { readSeed, type Seed } from './env'
@@ -252,6 +252,33 @@ test('the resolved record is promoted to gold by keyboard, once', async ({
     'Nothing added to Ticket triage gold; it stays at version 2.',
   )
 
+  const goldPath = join(folder, 'gold.jsonl')
+  const promoted = JSON.parse(readFileSync(goldPath, 'utf8')) as {
+    expected: { intent: string }
+  }
+  const handLabel = INTENTS.find((i) => i !== promoted.expected.intent) ?? ''
+  writeFileSync(
+    goldPath,
+    `${JSON.stringify({ ...promoted, expected: { ...promoted.expected, intent: handLabel } })}\n`,
+  )
+  await page.keyboard.press('g')
+  await expect(panel.getByTestId('promote-conflict')).toContainText(
+    `gold has ${handLabel}`,
+  )
+  const conflicts = readFileSync(join(folder, 'conflicts.jsonl'), 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map(
+      (line) =>
+        JSON.parse(line) as {
+          existing: { intent: string }
+          incoming: { intent: string }
+        },
+    )
+  expect(conflicts.map((c) => [c.existing.intent, c.incoming.intent])).toEqual([
+    [handLabel, promoted.expected.intent],
+  ])
+
   await page.goto('/gold')
   await expect(
     page.getByRole('heading', { name: 'Ticket triage gold' }),
@@ -260,6 +287,12 @@ test('the resolved record is promoted to gold by keyboard, once', async ({
   await expect(page.getByTestId('gold-item')).toContainText(
     resolved.record_external_id,
   )
+  const open = page
+    .getByRole('table', { name: 'Open conflicts' })
+    .getByTestId('gold-open-conflict')
+  await expect(open).toContainText(resolved.record_external_id)
+  await expect(open).toContainText(`intent ${handLabel}`)
+  await expect(open).toContainText(`intent ${promoted.expected.intent}`)
   await snap(page, 'gold-set')
 })
 

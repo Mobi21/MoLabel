@@ -3173,6 +3173,12 @@ export type GoldDedupeReport = {
    * Conflicts
    */
   conflicts: Array<GoldConflict>
+  /**
+   * Open Conflicts
+   *
+   * The conflicts in conflicts.jsonl that gold.jsonl has not settled, oldest first: other labels for an input the set holds, which a promotion or append found and did not add
+   */
+  open_conflicts: Array<GoldOpenConflict>
 }
 
 /**
@@ -3366,6 +3372,57 @@ export type GoldModelFailure = {
    * Failed Fields
    */
   failed_fields: Array<string>
+  [key: string]: unknown
+}
+
+/**
+ * GoldOpenConflict
+ *
+ * A line of ``conflicts.jsonl``: labels for an input the set holds otherwise.
+ */
+export type GoldOpenConflict = {
+  /**
+   * Item Id
+   */
+  item_id: string
+  /**
+   * Input Hash
+   */
+  input_hash: string
+  /**
+   * The record the incoming labels are for
+   */
+  input_ref: GoldInputRef
+  /**
+   * Fields
+   *
+   * The fields whose labels differ
+   */
+  fields: Array<string>
+  /**
+   * Existing
+   *
+   * The labels gold.jsonl holds
+   */
+  existing: {
+    [key: string]: unknown
+  }
+  /**
+   * Incoming
+   *
+   * The labels that were not added
+   */
+  incoming: {
+    [key: string]: unknown
+  }
+  /**
+   * Where the incoming labels came from
+   */
+  provenance: GoldProvenance
+  /**
+   * Detected At
+   */
+  detected_at: string
   [key: string]: unknown
 }
 
@@ -3579,9 +3636,15 @@ export type GoldSetDetail = {
   /**
    * Conflicts
    *
-   * Items with one input and different labels, left for a person
+   * Items of gold.jsonl with one input and different labels
    */
   conflicts: Array<GoldConflict>
+  /**
+   * Open Conflicts
+   *
+   * The conflicts in conflicts.jsonl that gold.jsonl has not settled, oldest first: other labels for an input the set holds, which a promotion or append found and did not add
+   */
+  open_conflicts: Array<GoldOpenConflict>
 }
 
 /**
@@ -3739,7 +3802,7 @@ export type GoldWriteReport = {
   /**
    * Written
    *
-   * False when the files did not change
+   * False when gold.jsonl and gold.yaml did not change
    */
   written: boolean
   counts: GoldWriteCounts
@@ -3759,12 +3822,20 @@ export type GoldWriteReport = {
   duplicates: Array<GoldItemRef>
   /**
    * Conflicts
+   *
+   * This write's candidates with other labels than gold holds
    */
   conflicts: Array<GoldConflict>
   /**
    * Skipped
    */
   skipped: Array<Skipped>
+  /**
+   * Open Conflicts
+   *
+   * The conflicts in conflicts.jsonl that gold.jsonl has not settled, oldest first: other labels for an input the set holds, which a promotion or append found and did not add
+   */
+  open_conflicts: Array<GoldOpenConflict>
 }
 
 /**
