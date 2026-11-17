@@ -141,8 +141,11 @@ marks it `single_reviewer`. `--record <id>` limits it to records of
 `--queue`. `append` takes only the records whose human label contradicts the
 agent proposal. Both report `added`, `duplicates`, `conflicts` and `skipped`,
 and say why each skipped record was left out. A second run adds nothing and
-writes nothing. Other labels for an input the set holds are a conflict,
-which is reported and never overwrites the item. `export` prints the JSONL
+writes nothing to `gold.jsonl`. Other labels for an input the set holds
+are a conflict, which never overwrites the item. The report lists it, and
+`gold/<slug>/conflicts.jsonl` keeps it until `gold.jsonl` holds the incoming
+labels or the line is deleted. `show`, and every promote, append and dedupe
+report, list the open ones under `open_conflicts`. `export` prints the JSONL
 inside its JSON result, prints the lines alone with `--raw`, or writes them
 to a workspace path with `--out`. A set of another workspace fails with
 `HTTP_404`.

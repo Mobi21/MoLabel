@@ -473,13 +473,13 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       name: 'gold show',
       group: 'gold',
       description:
-        'Show a gold set: version, item count, newest items, duplicates and conflicts',
+        'Show a gold set: version, item count, newest items, duplicates, and the open conflicts in conflicts.jsonl',
     },
     {
       name: 'gold promote',
       group: 'gold',
       description:
-        'Promote the adjudicated and agreed records of a queue or workflow execution; a second promotion changes nothing, and other labels for a promoted input are a reported conflict',
+        'Promote the adjudicated and agreed records of a queue or workflow execution; a second promotion changes nothing, and other labels for a promoted input are a conflict, kept in conflicts.jsonl',
       flags: [
         { name: '--queue', description: 'A review queue' },
         {
@@ -516,7 +516,7 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       name: 'gold dedupe',
       group: 'gold',
       description:
-        'Remove exact repeats from a gold set and report the conflicts left for a person',
+        'Remove exact repeats from a gold set and report the conflicts left for a person, with the open ones in conflicts.jsonl',
     },
     {
       name: 'gold export',

@@ -74,7 +74,7 @@ export function registerGoldCommands(
   gold
     .command('show <slug>')
     .description(
-      'Show a gold set: version, item count, newest items, duplicates and conflicts',
+      'Show a gold set: version, item count, newest items, duplicates, and the open conflicts in conflicts.jsonl',
     )
     .action(async (slug: string) => {
       const options = getRuntimeOptions(program, runtime)
@@ -125,7 +125,7 @@ export function registerGoldCommands(
   gold
     .command('dedupe <slug>')
     .description(
-      'Remove exact repeats from a gold set and report the conflicts left in it',
+      'Remove exact repeats from a gold set and report the conflicts left in it and in conflicts.jsonl',
     )
     .action(async (slug: string) => {
       const options = getRuntimeOptions(program, runtime)
