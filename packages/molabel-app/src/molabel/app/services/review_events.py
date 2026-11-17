@@ -67,10 +67,12 @@ IN_LIST_CHUNK = 500
 """Ids per IN list, well under SQLite's 32,766 bound variables."""
 
 
-def _proposals(conn: Any, where: str, values: list[str]) -> list[AgentProposal]:
+def _proposals(conn: Any, where: str, values: Sequence[str]) -> list[AgentProposal]:
+    """Each output matching one of ``values`` once, however often a value repeats."""
     statement = text(
         f"SELECT record_id, agent_run_id, labels FROM agent_outputs WHERE {where}"
     ).bindparams(bindparam("values", expanding=True))
+    values = list(dict.fromkeys(values))
     rows = [
         row
         for start in range(0, len(values), IN_LIST_CHUNK)
@@ -90,7 +92,7 @@ def _proposals(conn: Any, where: str, values: list[str]) -> list[AgentProposal]:
 
 def run_agent_proposals(conn: Any, agent_run_ids: Sequence[str]) -> list[AgentProposal]:
     """Every output of these agent runs."""
-    return _proposals(conn, "agent_run_id IN :values", list(agent_run_ids))
+    return _proposals(conn, "agent_run_id IN :values", agent_run_ids)
 
 
 def queue_agent_proposals(conn: Any, queue_ids: Sequence[str]) -> list[AgentProposal]:
