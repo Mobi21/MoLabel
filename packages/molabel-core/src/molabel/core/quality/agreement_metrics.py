@@ -1,9 +1,9 @@
 """Agreement metrics for grouped annotations.
 
 A unit is one field of one record, and its values are the canonical labels the
-annotations in scope gave that field. An annotation without the field is a
-missing value. A unit with fewer than two values cannot be paired and is left
-out. Values are compared as nominal categories.
+annotations in scope gave that field. An annotation without the field, or with
+a null label, is a missing value. A unit with fewer than two values cannot be
+paired and is left out. Values are compared as nominal categories.
 
 ``comparisons`` and ``agreements`` count value pairs within units, and
 ``percent_agreement`` is their ratio. The chance-corrected coefficients are:
@@ -13,13 +13,16 @@ out. Values are compared as nominal categories.
 - ``fleiss_kappa``. Fleiss' kappa (Fleiss 1971), defined only when every unit
   holds the same number of values.
 - ``cohen_kappa``. Cohen's kappa (Cohen 1960) for exactly two raters, each with
-  its own marginals. Raters are told apart by annotation source, so it needs one
-  value from each of the same two sources in every unit.
+  its own marginals. An annotation's rater is its ``rater_id``, or its source
+  when it has none, so it needs one value from each of the same two raters
+  in every unit.
 
-The ``human_agent`` summary pairs each human value in a unit with each agent
-value. Every pair is a two-rater unit, with the human side and the agent as
-the raters. A metric the data leave undefined is None, and ``null_reasons``
-says why. ``docs/guides/agreement-metrics.md`` gives the formulas.
+Each scope reports one summary per field in ``fields`` and a summary pooled
+over every field in ``overall``. The ``human_agent`` summary pairs each human
+value in a unit with each agent value. Every pair is a two-rater unit, with
+the human side and the agent as the raters. A metric the data leave undefined
+is None, and ``null_reasons`` says why. ``docs/guides/agreement-metrics.md``
+gives the formulas.
 """
 
 from __future__ import annotations
@@ -34,16 +37,19 @@ from pydantic import BaseModel, Field
 from molabel.core.utils.canonical import canonical_label_value as _canonical_label
 
 Rating = tuple[str, str]
-"""A (rater, canonical value) pair. The rater is the annotation source."""
+"""A (rater, canonical value) pair. See ``AgreementAnnotation.rater``."""
+
+UnitsByField = dict[str, list[list[Rating]]]
 
 NO_PAIRABLE_VALUES = "No unit has two or more values to compare."
 SINGLE_CATEGORY = (
     "Every compared value is the same label, so chance alone predicts full "
     "agreement and the coefficient is 0/0."
 )
-SHARED_SOURCE = (
+SHARED_RATER = (
     "Cohen's kappa needs one value from each of two raters per unit. Raters are "
-    "told apart by annotation source, and a unit holds two values from one source."
+    "told apart by rater_id, or by source when an annotation has no rater_id, "
+    "and a unit holds two values from one rater."
 )
 
 
@@ -107,12 +113,12 @@ def _cohen_kappa(units: Sequence[Sequence[Rating]]) -> float | _Undefined:
     """(p_o - p_e) / (1 - p_e), with p_e from each rater's own marginals."""
     for unit in units:
         if len({rater for rater, _ in unit}) < len(unit):
-            return _Undefined(SHARED_SOURCE)
+            return _Undefined(SHARED_RATER)
     raters = sorted({rater for unit in units for rater, _ in unit})
     if len(raters) != 2:
         return _Undefined(
             "Cohen's kappa is defined for exactly two raters, and the values come "
-            f"from {len(raters)} sources ({', '.join(raters)}). Use fleiss_kappa "
+            f"from {len(raters)} raters ({', '.join(raters)}). Use fleiss_kappa "
             "or krippendorff_alpha."
         )
     first, second = raters
@@ -131,7 +137,16 @@ class AgreementAnnotation(BaseModel):
     """A single label assignment for a record."""
 
     source: str
+    rater_id: str | None = None
     labels: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def rater(self) -> str:
+        return self.rater_id or self.source
+
+    def value(self, field: str) -> str | None:
+        label = self.labels.get(field)
+        return None if label is None else _canonical_label(label)
 
 
 class AgreementRecord(BaseModel):
@@ -219,12 +234,25 @@ def _summarize(units: Sequence[Sequence[Rating]]) -> AgreementMetricSummary:
     )
 
 
+def _summarize_fields(
+    units_by_field: UnitsByField,
+) -> tuple[AgreementMetricSummary, dict[str, AgreementMetricSummary]]:
+    pooled = _summarize([unit for units in units_by_field.values() for unit in units])
+    return pooled, {field: _summarize(units) for field, units in units_by_field.items()}
+
+
 class AgreementAnalysisResult(BaseModel):
-    """Full agreement analysis output."""
+    """Full agreement analysis output.
+
+    ``overall`` and ``human_agent`` pool the units of every field into one
+    variable. ``fields`` and ``human_agent_fields`` hold one summary per field.
+    """
 
     analysis_type: str
     overall: AgreementMetricSummary
+    fields: dict[str, AgreementMetricSummary] = Field(default_factory=dict)
     human_agent: AgreementMetricSummary | None = None
+    human_agent_fields: dict[str, AgreementMetricSummary] = Field(default_factory=dict)
     human_agent_by_field: dict[str, AgreementFieldBreakdown] = Field(
         default_factory=dict
     )
@@ -234,7 +262,11 @@ class AgreementAnalysisResult(BaseModel):
 
 @runtime_checkable
 class AgreementRecordSource(Protocol):
-    """Protocol for services that load grouped agreement records."""
+    """Protocol for services that load grouped agreement records.
+
+    A source built on review events sets each annotation's ``rater_id`` to the
+    event's ``reviewer_id``, so two reviewers are two raters.
+    """
 
     def load_agreement_records(
         self,
@@ -263,48 +295,38 @@ class AgreementMetricsService:
         field_names = self._resolve_fields(normalized_records, fields)
         warnings: list[str] = []
 
-        overall_source_filter = self._overall_source_filter(analysis_type)
-        if analysis_type == "human_agent":
-            overall, human_agent_by_field, confusion_matrix = (
-                self._compute_human_agent_breakdown(normalized_records, field_names)
-            )
-            human_agent_summary = overall
-            if overall.comparisons == 0:
-                warnings.append("No human-agent comparisons were available.")
-            return AgreementAnalysisResult(
-                analysis_type=analysis_type,
-                overall=overall,
-                human_agent=human_agent_summary,
-                human_agent_by_field=human_agent_by_field,
-                confusion_matrix=confusion_matrix,
-                warnings=warnings,
-            )
-
-        overall = _summarize(
-            self._units(
-                normalized_records,
-                field_names,
-                source_filter=overall_source_filter,
-            )
+        with_human_agent = analysis_type in {"human_agent", "both"}
+        human_agent_units, human_agent_by_field, confusion_matrix = (
+            self._compute_human_agent_breakdown(normalized_records, field_names)
+            if with_human_agent
+            else ({}, {}, {})
         )
+        if analysis_type == "human_agent":
+            overall_units = human_agent_units
+        else:
+            source_filter = self._overall_source_filter(analysis_type)
+            overall_units = {
+                field: self._units(
+                    normalized_records, field, source_filter=source_filter
+                )
+                for field in field_names
+            }
 
-        human_agent_summary: AgreementMetricSummary | None = None
-        human_agent_by_field: dict[str, AgreementFieldBreakdown] = {}
-        confusion_matrix: dict[str, dict[str, int]] = {}
-        if analysis_type in {"human_agent", "both"}:
-            human_agent_summary, human_agent_by_field, confusion_matrix = (
-                self._compute_human_agent_breakdown(normalized_records, field_names)
-            )
-            if human_agent_summary.comparisons == 0:
-                warnings.append("No human-agent comparisons were available.")
-
-        if overall.comparisons == 0:
+        overall, overall_fields = _summarize_fields(overall_units)
+        human_agent, human_agent_fields = (
+            _summarize_fields(human_agent_units) if with_human_agent else (None, {})
+        )
+        if human_agent is not None and human_agent.comparisons == 0:
+            warnings.append("No human-agent comparisons were available.")
+        if analysis_type != "human_agent" and overall.comparisons == 0:
             warnings.append("No comparable annotations were available.")
 
         return AgreementAnalysisResult(
             analysis_type=analysis_type,
             overall=overall,
-            human_agent=human_agent_summary,
+            fields=overall_fields,
+            human_agent=human_agent,
+            human_agent_fields=human_agent_fields,
             human_agent_by_field=human_agent_by_field,
             confusion_matrix=confusion_matrix,
             warnings=warnings,
@@ -342,21 +364,20 @@ class AgreementMetricsService:
     @staticmethod
     def _units(
         records: Sequence[AgreementRecord],
-        fields: Sequence[str],
+        field: str,
         *,
         source_filter: set[str] | None,
     ) -> list[list[Rating]]:
         units: list[list[Rating]] = []
         for record in records:
-            for field in fields:
-                unit = [
-                    (annotation.source, _canonical_label(annotation.labels[field]))
-                    for annotation in record.annotations
-                    if field in annotation.labels
-                    and (source_filter is None or annotation.source in source_filter)
-                ]
-                if len(unit) >= 2:
-                    units.append(unit)
+            unit = [
+                (annotation.rater, value)
+                for annotation in record.annotations
+                if (source_filter is None or annotation.source in source_filter)
+                and (value := annotation.value(field)) is not None
+            ]
+            if len(unit) >= 2:
+                units.append(unit)
         return units
 
     def _compute_human_agent_breakdown(
@@ -364,27 +385,27 @@ class AgreementMetricsService:
         records: Sequence[AgreementRecord],
         fields: Sequence[str],
     ) -> tuple[
-        AgreementMetricSummary,
+        UnitsByField,
         dict[str, AgreementFieldBreakdown],
         dict[str, dict[str, int]],
     ]:
-        pair_units: list[list[Rating]] = []
+        pair_units: UnitsByField = {field: [] for field in fields}
         field_breakdowns: dict[str, AgreementFieldBreakdown] = {}
         confusion_matrix: dict[str, dict[str, int]] = {}
 
         for record in records:
             for field in fields:
                 human_values = [
-                    _canonical_label(annotation.labels[field])
+                    value
                     for annotation in record.annotations
-                    if field in annotation.labels
-                    and _is_human_source(annotation.source)
+                    if _is_human_source(annotation.source)
+                    and (value := annotation.value(field)) is not None
                 ]
                 agent_values = [
-                    _canonical_label(annotation.labels[field])
+                    value
                     for annotation in record.annotations
-                    if field in annotation.labels
-                    and _is_agent_source(annotation.source)
+                    if _is_agent_source(annotation.source)
+                    and (value := annotation.value(field)) is not None
                 ]
                 if not human_values or not agent_values:
                     continue
@@ -396,7 +417,7 @@ class AgreementMetricsService:
 
                 for human_value in human_values:
                     for agent_value in agent_values:
-                        pair_units.append(
+                        pair_units[field].append(
                             [("human", human_value), ("agent", agent_value)]
                         )
                         breakdown.comparisons += 1
@@ -441,4 +462,4 @@ class AgreementMetricsService:
                         value_breakdown.agreements / value_breakdown.comparisons
                     )
 
-        return _summarize(pair_units), field_breakdowns, confusion_matrix
+        return pair_units, field_breakdowns, confusion_matrix

@@ -2166,6 +2166,54 @@ class ReviewerAgreement(BaseModel):
     avg_review_time: float | None
 ```
 
+Until this endpoint computes metrics, read them from the `summary` of an
+`agreement_analysis` step's result. Every metric is computed once per label
+field and once pooled over all fields. A pooled coefficient is not an average
+of the per-field ones.
+
+```python
+class AgreementAnalysisSummary:                      # agreement_analysis step summary
+    analysis_type: str                               # "both" | "inter_annotator" | "human_agent"
+    pooled: AgreementMetricSummary                   # every field pooled into one variable
+    fields: dict[str, AgreementMetricSummary]        # field -> that field alone
+    human_agent: AgreementMetricSummary | None       # human-agent pairs, pooled
+    human_agent_fields: dict[str, AgreementMetricSummary]
+    human_agent_by_field: dict[str, dict[str, Any]]  # field -> human-agent rates per label value
+    confusion_matrix: dict[str, dict[str, int]]      # human value -> agent value -> pairs, pooled
+    warnings: list[str]
+    # Pooled values under their earlier names, kept for compatibility
+    overall: AgreementMetricSummary                  # same as pooled
+    kappa: float | None                              # pooled.cohen_kappa
+    percent_agreement: float | None                  # pooled.percent_agreement
+    fleiss_kappa: float | None                       # pooled.fleiss_kappa
+    krippendorff_alpha: float | None                 # pooled.krippendorff_alpha
+    human_agent_agreement: float | None              # human_agent.percent_agreement
+
+class AgreementMetricSummary(BaseModel):
+    comparisons: int
+    agreements: int
+    percent_agreement: float | None
+    cohen_kappa: float | None
+    fleiss_kappa: float | None
+    krippendorff_alpha: float | None
+    null_reasons: dict[str, str]                     # null metric -> why it is null
+```
+
+A `quality_check` step with `min_agreement` adds this entry to its summary's
+`details`. It fails when any field's Krippendorff's alpha is below the
+threshold or null, even when the pooled alpha passes.
+
+```python
+class MinAgreementCheck:
+    check: str                                       # "min_agreement"
+    metric: str                                      # "krippendorff_alpha"
+    threshold: float
+    actual: float                                    # lowest field alpha, null read as 0.0
+    passed: bool
+    fields: dict[str, float | None]                  # field -> alpha
+    failing_fields: dict[str, float | None]          # fields below threshold or null
+```
+
 ---
 
 #### `GET /quality/drift`
