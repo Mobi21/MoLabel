@@ -566,3 +566,27 @@ async def test_another_workspace_sees_and_touches_none_of_it(client, app, tmp_pa
         assert resp.json()["error"]["code"] == "NOT_FOUND"
     assert _items_path(tmp_path).read_bytes() == items
     assert _items_path(tmp_path / "other").read_bytes() == b""
+
+
+@pytest.mark.asyncio
+async def test_a_promotion_that_adds_nothing_leaves_a_hand_edited_file_alone(
+    client, app, tmp_path
+):
+    _, tokens, queue_id, _ = await _reviewed_and_adjudicated(client, app, tmp_path)
+    await _create(client, tokens[0])
+    await _promote(client, tokens[0], {"queue_id": queue_id})
+    path = _items_path(tmp_path)
+    lines = path.read_text("utf-8").splitlines()
+    edited = json.loads(lines[1])
+    edited["expected"] = {"sentiment": "positive"}
+    path.write_bytes(
+        ("\n".join([lines[0], json.dumps(edited), *lines[2:]]) + "\n").encode()
+    )
+    hand_edited = path.read_bytes()
+
+    report = await _promote(client, tokens[0], {"queue_id": queue_id})
+
+    assert report["written"] is False
+    assert report["counts"]["conflicts"] == 1
+    assert path.read_bytes() == hand_edited
+    assert _header(tmp_path)["version"] == 2
