@@ -65,7 +65,7 @@ Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 - If a migration fails, the user can restore from the backup via the Settings screen
 
 ### One-way revisions
-Revisions 005 and 006 rewrite ids in place and keep no copy of the old spelling, so they are one-way. Their `downgrade()` changes nothing and logs a warning that says so. To return to the data from before the upgrade, stop the server and restore the backup that `upgrade_database` wrote beside the database before it ran. The server database is `molabel.db`, so the backup is `molabel.backup.<timestamp>.sqlite`.
+Revisions 005 and 006 rewrite ids in place and keep no copy of the old spelling, so they are one-way. Their `downgrade()` changes nothing and logs a warning that says so. To return to the data from before the upgrade, stop the server and restore the backup that `upgrade_database` wrote beside the database before it ran. The backup takes the database file's own name: `<database name>.backup.<timestamp>.sqlite`, so `molabel.backup.<timestamp>.sqlite` for the default `molabel.db`, and `custom-name.backup.<timestamp>.sqlite` for a database set through `MOLABEL_DB_URL` as `custom-name.db`.
 
 ## Multi-Skip Upgrades
 - Alembic handles multi-version jumps natively (runs all pending migrations in sequence)

@@ -48,6 +48,14 @@ uv run python benchmarks/explain_query_plans.py --sizes 1000,3000
 uv run python benchmarks/render_results.py benchmarks/results/baseline-*.json
 ```
 
+`--profile` dumps only the largest size a command runs, and the query
+command skips `query_queues` at 100k. To regenerate the 10k query profiles,
+including the queue listing, run:
+
+```sh
+uv run python benchmarks/bench_hot_paths.py --sizes 10000 --runs 7 --profile --paths query --label profile-query-10k
+```
+
 The results and logs of those runs are in
 [`benchmarks/results/`](../benchmarks/results/). The raw cProfile dumps are
 not committed. Each command above with `--profile` writes them there again,

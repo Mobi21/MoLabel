@@ -177,6 +177,7 @@ def downgrade() -> None:
     logging.getLogger("molabel.core.migrations").warning(
         "Revision 005 is one-way. Downgrading it leaves every UUID hyphenated. "
         "To return to the data from before the upgrade, restore the "
-        "molabel.backup.<timestamp>.sqlite file that the upgrade wrote beside "
-        "the database."
+        "<database name>.backup.<timestamp>.sqlite file that the upgrade wrote "
+        "beside the database (molabel.backup.<timestamp>.sqlite for the default "
+        "molabel.db)."
     )
