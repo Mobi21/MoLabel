@@ -6,8 +6,9 @@ import uuid
 from pathlib import Path
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, TextClause, text
 from sqlalchemy.exc import IntegrityError
 
 from molabel.app.main import create_app
@@ -71,6 +72,54 @@ def test_a_write_to_a_missing_workspace_answers_409(
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "CONFLICT"
     assert "FOREIGN KEY" in resp.json()["error"]["message"]
+
+
+WORKSPACE = text(
+    "INSERT INTO workspaces (id, workspace_name, workspace_slug, core_version, "
+    "root_path, manifest_path, created_at, updated_at) VALUES (:id, :name, 'w', "
+    "'0.1.0', '/w', '/w/m.yaml', '2026-01-01T00:00:00', '2026-01-01T00:00:00')"
+)
+
+
+def _workspace(name: str | None) -> dict[str, str | None]:
+    return {"id": str(uuid.uuid4()), "name": name}
+
+
+REFUSED_WRITES: dict[str, list[tuple[TextClause, dict[str, str | None]]]] = {
+    "FOREIGN KEY": [(ORPHAN_EVENT, _orphan())],
+    "UNIQUE": [(WORKSPACE, _workspace("first")), (WORKSPACE, _workspace("second"))],
+    "NOT NULL": [(WORKSPACE, _workspace(None))],
+    "CHECK": [
+        (text("CREATE TABLE check_probe (k INTEGER CHECK (k > 0))"), {}),
+        (text("INSERT INTO check_probe VALUES (0)"), {}),
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("kind", "status"),
+    [("FOREIGN KEY", 409), ("UNIQUE", 409), ("NOT NULL", 500), ("CHECK", 500)],
+)
+def test_only_a_missing_or_repeated_key_answers_409(
+    kind: str, status: int, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = tmp_path / "server.db"
+    monkeypatch.setenv("MOLABEL_DB_URL", f"sqlite:///{db_path.as_posix()}")
+    app = create_app()
+
+    @app.post("/refused-write")
+    def refused_write(request: Request) -> None:
+        with request.app.state.engine.begin() as conn:
+            for statement, params in REFUSED_WRITES[kind]:
+                conn.execute(statement, params)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.post("/refused-write")
+
+    assert resp.status_code == status
+    if status == 409:
+        assert resp.json()["error"]["code"] == "CONFLICT"
+        assert f"{kind} constraint failed" in resp.json()["error"]["message"]
 
 
 def test_a_row_whose_foreign_key_points_nowhere_is_refused(tmp_path: Path) -> None:

@@ -66,6 +66,16 @@ _DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
 
 logger = logging.getLogger(__name__)
 
+#: SQLite's extended codes for a write that conflicts with rows already
+#: stored. A repeated primary key reports "UNIQUE constraint failed" too.
+_CONFLICT_ERRORS = frozenset(
+    {
+        "SQLITE_CONSTRAINT_FOREIGNKEY",
+        "SQLITE_CONSTRAINT_UNIQUE",
+        "SQLITE_CONSTRAINT_PRIMARYKEY",
+    }
+)
+
 
 def _create_engine_from_env():
     """The server's engine for ``server_db_url()``, from the shared factory.
@@ -184,7 +194,13 @@ def create_app() -> FastAPI:
     async def integrity_error_handler(
         _request: Request, exc: IntegrityError
     ) -> JSONResponse:
-        """A write the database refused: a key to a missing row, or a repeated key."""
+        """A key to a missing row, or a repeated key, conflicts with the data.
+
+        Any other refused write, such as a NOT NULL or CHECK failure, is a bug
+        in the server, so it propagates as a 500 with its traceback.
+        """
+        if getattr(exc.orig, "sqlite_errorname", None) not in _CONFLICT_ERRORS:
+            raise exc
         return JSONResponse(
             status_code=409,
             content=ErrorResponse(

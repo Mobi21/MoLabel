@@ -404,7 +404,10 @@ Alembic-only schema changes from P2 are unchanged.
 written, so enforcement refuses new dangling rows and leaves old ones in
 place. The API answers such a refusal with `409 CONFLICT` and the database's
 message ("FOREIGN KEY constraint failed") instead of a 500; before #16 the
-same request silently wrote the orphan. Alembic's batch mode copies and
+same request silently wrote the orphan. A repeated unique or primary key gets
+the same 409. Any other refused write, such as a NOT NULL or CHECK failure,
+is a server bug, so it stays a 500 with its traceback in the server log.
+Alembic's batch mode copies and
 drops tables, which other tables' foreign keys would refuse, so
 `upgrade_database` turns the pragma off on the migration's connection,
 outside the transaction where the pragma takes effect, and back on after.
@@ -512,7 +515,8 @@ because the readers run until the writer finishes.
 and asserts a fresh pooled connection reports `wal` and `foreign_keys = 1`,
 that a review event whose keys point nowhere is refused with
 `IntegrityError`, that a write to a missing workspace through the API
-answers 409, that an in-memory URL shares one connection with foreign keys
+answers 409, that only a foreign key or unique failure answers 409 while a
+NOT NULL or CHECK failure answers 500, that an in-memory URL shares one connection with foreign keys
 on, and that rows written before enforcement are counted by
 `foreign_key_violations` and kept. `tests/integration/test_cli_status_integrity.py`
 asserts `GET /api/v1/cli/status` lists them per table and parent, and
