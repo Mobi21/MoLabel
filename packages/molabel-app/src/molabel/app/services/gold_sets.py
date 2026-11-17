@@ -97,8 +97,21 @@ def _invalid(entry: GoldSetManifestEntry, message: str, **details: Any) -> ApiEr
     )
 
 
-def _read_header(folder: WorkspaceFolder, entry: GoldSetManifestEntry) -> GoldSetHeader:
-    path = resolve_in_workspace(folder.path, entry.definition_path)
+def _header_path(folder: WorkspaceFolder, entry: GoldSetManifestEntry) -> str:
+    """The set's header, relative to the workspace, ``/``-separated, links resolved.
+
+    A path written on Windows splits at ``\\`` on every platform. The set's
+    other files are read and written beside this path, where
+    ``write_gold_set`` writes ``gold.jsonl``.
+    """
+    path = resolve_in_workspace(folder.path, entry.definition_path.replace("\\", "/"))
+    return path.relative_to(folder.path).as_posix()
+
+
+def _read_header(
+    folder: WorkspaceFolder, entry: GoldSetManifestEntry, header_path: str
+) -> GoldSetHeader:
+    path = resolve_in_workspace(folder.path, header_path)
     try:
         return GoldSetHeader.model_validate(
             yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -109,31 +122,30 @@ def _read_header(folder: WorkspaceFolder, entry: GoldSetManifestEntry) -> GoldSe
         raise _invalid(entry, f"its header does not parse: {exc}") from exc
 
 
-def _beside_header(definition_path: str, filename: str) -> str:
-    return posixpath.join(posixpath.dirname(definition_path), filename)
+def _beside_header(header_path: str, filename: str) -> str:
+    return posixpath.join(posixpath.dirname(header_path), filename)
 
 
-def _set_file(folder: WorkspaceFolder, definition_path: str, filename: str) -> bytes:
-    path = resolve_in_workspace(folder.path, _beside_header(definition_path, filename))
+def _set_file(folder: WorkspaceFolder, header_path: str, filename: str) -> bytes:
+    path = resolve_in_workspace(folder.path, _beside_header(header_path, filename))
     return path.read_bytes() if path.is_file() else b""
-
-
-def _items_data(folder: WorkspaceFolder, entry: GoldSetManifestEntry) -> bytes:
-    return _set_file(folder, entry.definition_path, ITEMS_FILENAME)
 
 
 def list_gold_sets(
     folder: WorkspaceFolder,
 ) -> list[tuple[str, GoldSetHeader, str]]:
     """Each listed set's header path, header and items file hash, in order."""
-    return [
-        (
-            entry.definition_path,
-            _read_header(folder, entry),
-            file_hash(_items_data(folder, entry)),
+    listed = []
+    for entry in _entries(folder):
+        header_path = _header_path(folder, entry)
+        listed.append(
+            (
+                header_path,
+                _read_header(folder, entry, header_path),
+                file_hash(_set_file(folder, header_path, ITEMS_FILENAME)),
+            )
         )
-        for entry in _entries(folder)
-    ]
+    return listed
 
 
 @dataclass(frozen=True)
@@ -160,20 +172,19 @@ def read_gold_set(folder: WorkspaceFolder, slug: str) -> StoredGoldSet:
             f"No gold set '{slug}' in this workspace",
             {"gold_set_id": slug},
         )
-    header = _read_header(folder, entry)
+    header_path = _header_path(folder, entry)
+    header = _read_header(folder, entry, header_path)
     try:
-        gold = GoldSet.read(header, _items_data(folder, entry))
+        gold = GoldSet.read(header, _set_file(folder, header_path, ITEMS_FILENAME))
     except GoldFileError as exc:
         raise _invalid(entry, f"{ITEMS_FILENAME} {exc}", line=exc.line) from exc
     try:
         conflicts = GoldConflictLog.read(
-            _set_file(folder, entry.definition_path, CONFLICTS_FILENAME)
+            _set_file(folder, header_path, CONFLICTS_FILENAME)
         )
     except GoldFileError as exc:
         raise _invalid(entry, f"{CONFLICTS_FILENAME} {exc}", line=exc.line) from exc
-    return StoredGoldSet(
-        gold=gold, definition_path=entry.definition_path, conflicts=conflicts
-    )
+    return StoredGoldSet(gold=gold, definition_path=header_path, conflicts=conflicts)
 
 
 def _write(

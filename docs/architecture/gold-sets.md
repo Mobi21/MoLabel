@@ -15,7 +15,9 @@ gold/<slug>/conflicts.jsonl  one open conflict per line, once there is one
 ```
 
 `workbench.project.yaml` lists each set under `gold_sets`, with its
-`gold_set_id` (the slug) and `definition_path` (the header). The header holds
+`gold_set_id` (the slug) and `definition_path` (the header). The set's other
+files are the ones beside the header, in the folder its path resolves to, and
+a path written with `\` separators works on every platform. The header holds
 the slug, `name`, `task_schema` (the task schema's slug, the file-canonical
 id), `format_version`, `version`, `item_count`, `content_hash`,
 `previous_hash`, `sources`, `created_at` and `updated_at`. `sources` lists each
