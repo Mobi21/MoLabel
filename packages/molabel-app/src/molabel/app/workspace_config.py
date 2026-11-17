@@ -14,6 +14,7 @@ from __future__ import annotations
 import errno
 import os
 import stat
+import sys
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -348,9 +349,16 @@ def workspace_lock(root: Path) -> Iterator[None]:
     order and a rollback in ``workspace_files`` can only undo its own writes.
     The lock file lives in the workspace, so every writer shares it whatever
     its data directory, under ``.molabel/``, which ignores itself in git.
+
+    On Windows the lock file stays after release. Resolving a path whose file
+    another writer deletes meanwhile can return it with a ``\\\\?\\`` prefix,
+    which the path guard refuses as outside the workspace. Elsewhere keeping
+    it would stop filelock falling back to a soft lock where ``flock`` is
+    missing.
     """
     _state_dir(root, "locks")
-    with FileLock(_state_path(root, "locks", "workspace.lock")):
+    lock_file = _state_path(root, "locks", "workspace.lock")
+    with FileLock(lock_file, preserve_lock_file=sys.platform == "win32"):
         _ignore_state_dir(root)
         yield
 
