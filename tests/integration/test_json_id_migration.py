@@ -11,16 +11,28 @@ from pathlib import Path
 import pytest
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
+from sqlalchemy import text
 from sqlmodel import SQLModel
 
 import molabel.core
 import molabel.core.models  # noqa: F401
+from molabel.core.data.snapshot_service import SnapshotService
 from molabel.core.database import HyphenatedUuid, get_engine
 from molabel.core.migration_runner import upgrade_database
-from tests.integration.review_flow import _as, review_app, review_client
+from tests.integration.review_flow import (
+    _as,
+    _review_all,
+    _review_both,
+    _start_review,
+    review_app,
+    review_client,
+)
 from tests.integration.test_api_workflows import (
+    OFFLINE_SENTIMENT,
+    SENTIMENT_RECORDS,
     _insert_workflow,
     _seed_reviewer,
+    _seed_task_schema,
     _seed_workspace,
     _write_demo_reviews,
 )
@@ -116,16 +128,20 @@ async def _paused_at_gate(client, app, tmp_path):
     return workflow_id, started.json()["execution_id"], token
 
 
-async def _resume_into_export(client, tmp_path, workflow_id, execution_id, token):
-    resumed = await client.post(
+async def _advance(client, workflow_id, execution_id, step_id, token) -> dict:
+    advanced = await client.post(
         f"/api/v1/workflows/{workflow_id}/executions/{execution_id}/"
-        "steps/approve/advance",
+        f"steps/{step_id}/advance",
         json={},
         headers=_as(token),
     )
-    assert resumed.status_code == 200, resumed.text
-    assert resumed.json()["status"] == "completed", resumed.text
-    (bundle_id,) = resumed.json()["context"]["export_bundle_ids"]
+    assert advanced.status_code == 200, advanced.text
+    return advanced.json()
+
+
+def _exported(tmp_path: Path, execution: dict) -> list[dict]:
+    assert execution["status"] == "completed", execution["error_summary"]
+    (bundle_id,) = execution["context"]["export_bundle_ids"]
     export = tmp_path / "workbench" / "exports" / "resumed" / f"{bundle_id}.jsonl"
     return [json.loads(line) for line in export.read_text().splitlines()]
 
@@ -147,9 +163,9 @@ async def test_a_paused_workflow_exports_every_record_after_the_migration(tmp_pa
         )
 
         upgrade_database(app.state.engine)
-        rows = await _resume_into_export(
-            client, tmp_path, workflow_id, execution_id, token
-        )
+        resumed = await _advance(client, workflow_id, execution_id, "approve", token)
+
+    rows = _exported(tmp_path, resumed)
 
     assert len(record_ids) == 3
     assert [row["record_id"] for row in rows] == record_ids
@@ -393,3 +409,239 @@ def test_downgrading_to_005_and_upgrading_again_changes_nothing(tmp_path):
     assert migrated["workflow context"] == _spelled(
         CONTAINERS["workflow context"][2], str
     )
+
+
+AGENT_REVIEW_AGREEMENT_EXPORT = [
+    INGEST_GATE_EXPORT[0],
+    INGEST_GATE_EXPORT[1],
+    {
+        "step_id": "agent_label",
+        "step_type": "agent_run",
+        "config": {"provider_type": "offline", "prompt_ref": "prompts/default.yaml"},
+    },
+    {"step_id": "check", "step_type": "gate", "config": {}},
+    {"step_id": "review", "step_type": "human_review", "config": {}},
+    {
+        "step_id": "agreement",
+        "step_type": "agreement_analysis",
+        "config": {"analysis_type": "human_agent"},
+    },
+    INGEST_GATE_EXPORT[2],
+]
+
+
+@pytest.mark.asyncio
+async def test_hex_ids_left_in_a_context_reach_every_later_step(tmp_path):
+    app = review_app(tmp_path)
+    engine = app.state.engine
+    db_path = _db_path(app)
+    workspace_id = _seed_workspace(engine, tmp_path)
+    token = _seed_reviewer(engine, workspace_id)
+    _seed_task_schema(engine, workspace_id)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "reviews.jsonl").write_text(
+        "".join(
+            json.dumps({"id": record_id, "text": SENTIMENT_RECORDS[record_id]}) + "\n"
+            for record_id in ("r1", "r2", "r3")
+        )
+    )
+    workflow_id = _insert_workflow(engine, workspace_id, AGENT_REVIEW_AGREEMENT_EXPORT)
+    async with review_client(app) as client:
+        started = await client.post(
+            f"/api/v1/workflows/{workflow_id}/execute", json={}, headers=_as(token)
+        )
+        execution_id = started.json()["execution_id"]
+        context = _context(db_path, execution_id)
+        _set_context(db_path, execution_id, _with_hex_database_ids(context))
+
+        labelled = await _advance(client, workflow_id, execution_id, "approve", token)
+        assert labelled["current_step_id"] == "check", labelled["error_summary"]
+        context = _context(db_path, execution_id)
+        agent_run_ids = [_hex(run_id) for run_id in context["agent_run_ids"]]
+        _set_context(db_path, execution_id, {**context, "agent_run_ids": agent_run_ids})
+        reviewing = await _advance(client, workflow_id, execution_id, "check", token)
+        assert reviewing["current_step_id"] == "review", reviewing["error_summary"]
+        (queue_id,) = reviewing["context"]["review_queue_ids"]
+        await _review_all(client, queue_id, token, OFFLINE_SENTIMENT)
+        done = await _advance(client, workflow_id, execution_id, "review", token)
+        report = await client.get(
+            "/api/v1/quality/agreement",
+            params={"workspace_id": str(workspace_id), "queue_id": queue_id},
+            headers=_as(token),
+        )
+
+    results = {state["step_id"]: state["result"] for state in done["step_states"]}
+    sentiment = results["agreement"]["summary"]["fields"]["sentiment"]
+    assert (sentiment["comparisons"], sentiment["agreements"]) == (3, 3)
+    bound = report.json()["human_agent"]["fields"]["sentiment"]
+    assert (bound["comparisons"], bound["agreements"]) == (3, 3)
+    rows = _exported(tmp_path, done)
+    assert [row["external_id"] for row in rows] == ["r1", "r2", "r3"]
+    assert all(row["labels"] is not None for row in rows)
+
+
+async def _imported_dataset(client, workspace_id, token) -> str:
+    created = await client.post(
+        "/api/v1/datasets",
+        json={
+            "workspace_id": str(workspace_id),
+            "dataset_name": "Imported reviews",
+            "source_type": "jsonl",
+        },
+        headers=_as(token),
+    )
+    assert created.status_code == 201, created.text
+    dataset_id = created.json()["dataset_id"]
+    imported = await client.post(
+        f"/api/v1/datasets/{dataset_id}/import",
+        json={
+            "records": [{"id": "r1", "text": "Fast."}, {"id": "r2", "text": "Slow."}]
+        },
+        headers=_as(token),
+    )
+    assert imported.status_code == 202, imported.text
+    return dataset_id
+
+
+@pytest.mark.asyncio
+async def test_a_workflow_may_name_its_dataset_and_task_schema_by_hex_id(tmp_path):
+    app = review_app(tmp_path)
+    engine = app.state.engine
+    workspace_id = _seed_workspace(engine, tmp_path)
+    token = _seed_reviewer(engine, workspace_id)
+    other_schema_id = _seed_task_schema(engine, workspace_id)
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE task_schemas SET task_schema_slug = 'other' WHERE id = :id"),
+            {"id": str(other_schema_id)},
+        )
+    schema_id = _seed_task_schema(engine, workspace_id)
+    async with review_client(app) as client:
+        dataset_id = await _imported_dataset(client, workspace_id, token)
+        workflow_id = _insert_workflow(
+            engine,
+            workspace_id,
+            [
+                {
+                    "step_id": "ingest",
+                    "step_type": "data_ingest",
+                    "config": {"dataset_id": _hex(dataset_id)},
+                },
+                {
+                    "step_id": "review",
+                    "step_type": "human_review",
+                    "config": {"task_schema_id": schema_id.hex},
+                },
+            ],
+        )
+        started = await client.post(
+            f"/api/v1/workflows/{workflow_id}/execute", json={}, headers=_as(token)
+        )
+
+    assert started.json()["current_step_id"] == "review", started.text
+    with engine.connect() as conn:
+        queued = conn.execute(text("SELECT task_schema_id FROM review_tasks")).all()
+    assert [row[0] for row in queued] == [str(schema_id)] * 2
+
+
+@pytest.mark.asyncio
+async def test_a_resolution_stored_with_hex_event_ids_stays_resolved(tmp_path):
+    app = review_app(tmp_path)
+    async with review_client(app) as client:
+        _, tokens, queue = await _start_review(client, app, tmp_path)
+        await _review_both(client, queue["queue_id"], tokens)
+        base = f"/api/v1/adjudication/queues/{queue['queue_id']}/disagreements"
+        (item,) = (await client.get(base, headers=_as(tokens[0]))).json()["items"]
+        path = f"{base}/{item['record_id']}"
+        shown = (await client.get(path, headers=_as(tokens[0]))).json()
+        resolved = await client.post(
+            f"{path}/resolve",
+            json={
+                "resolved_labels": {"sentiment": "neutral"},
+                "rationale": "Hedged.",
+                "review_event_ids": [
+                    labels["review_event_id"] for labels in shown["reviewer_labels"]
+                ],
+            },
+            headers=_as(tokens[0]),
+        )
+        assert resolved.status_code == 200, resolved.text
+        with sqlite3.connect(_db_path(app)) as conn:
+            (raw,) = conn.execute(
+                "SELECT conflicting_event_ids FROM adjudications"
+            ).fetchone()
+            hex_ids = [_hex(event_id) for event_id in json.loads(raw)]
+            conn.execute(
+                "UPDATE adjudications SET conflicting_event_ids = ?",
+                (json.dumps(hex_ids),),
+            )
+
+        listed = (await client.get(base, headers=_as(tokens[1]))).json()
+
+    assert (listed["unresolved"], listed["items"][0]["status"]) == (0, "resolved")
+
+
+def _set_labels(db_path: Path, labels: dict) -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE records SET latest_label = ?, label_count = 1",
+            (json.dumps(labels),),
+        )
+
+
+def _labels(db_path: Path) -> list:
+    with sqlite3.connect(db_path) as conn:
+        return [
+            json.loads(raw)
+            for (raw,) in conn.execute("SELECT latest_label FROM records").fetchall()
+        ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("restorer", ["cli route", "snapshot service"])
+async def test_a_snapshot_keyed_by_hex_record_ids_restores_its_records(
+    tmp_path, restorer
+):
+    app = review_app(tmp_path)
+    engine = app.state.engine
+    db_path = _db_path(app)
+    workspace_id = _seed_workspace(engine, tmp_path)
+    token = _seed_reviewer(engine, workspace_id)
+    async with review_client(app) as client:
+        dataset_id = await _imported_dataset(client, workspace_id, token)
+        _set_labels(db_path, {"sentiment": "positive"})
+        snapshot = SnapshotService().create_snapshot(
+            engine,
+            workspace_id=workspace_id,
+            dataset_id=uuid.UUID(dataset_id),
+            name="Before",
+        )
+        snapshot_id = str(snapshot.snapshot_id)
+        with sqlite3.connect(db_path) as conn:
+            (raw,) = conn.execute(
+                "SELECT dataset_membership FROM dataset_snapshots WHERE id = ?",
+                (snapshot_id,),
+            ).fetchone()
+            membership = json.loads(raw)
+            membership["record_states"] = {
+                _hex(key): state for key, state in membership["record_states"].items()
+            }
+            conn.execute(
+                "UPDATE dataset_snapshots SET dataset_membership = ? WHERE id = ?",
+                (json.dumps(membership), snapshot_id),
+            )
+        _set_labels(db_path, {"sentiment": "negative"})
+
+        if restorer == "cli route":
+            restored = await client.post(
+                f"/api/v1/cli/datasets/{dataset_id}/snapshots/{snapshot_id}/restore",
+                headers={"X-MoLabel-Session": token},
+            )
+            assert restored.status_code == 200, restored.text
+        else:
+            SnapshotService().restore_snapshot(
+                engine, workspace_id=workspace_id, snapshot_id=snapshot.snapshot_id
+            )
+
+    assert len(membership["record_states"]) == 2
+    assert _labels(db_path) == [{"sentiment": "positive"}] * 2

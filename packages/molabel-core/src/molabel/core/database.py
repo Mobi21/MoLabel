@@ -68,6 +68,19 @@ class HyphenatedUuid(Uuid[uuid.UUID]):
         return process
 
 
+def hyphenated_id(value: str) -> str:
+    """``value`` as a UUID column stores it, or ``value`` if it is not a UUID.
+
+    An id read from JSON can be in any spelling ``uuid.UUID`` reads, such as
+    the 32-hex form written before revision 005, and a lookup on a UUID
+    column matches only the hyphenated form.
+    """
+    try:
+        return str(uuid.UUID(value))
+    except ValueError:
+        return value
+
+
 def _set_sqlite_pragmas(dbapi_connection: Any, _connection_record: Any) -> None:
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
