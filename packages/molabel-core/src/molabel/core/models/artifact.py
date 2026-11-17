@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
+from molabel.core.database import HyphenatedUuid
+
 if TYPE_CHECKING:
     from molabel.core.models.dataset import Dataset
     from molabel.core.models.workspace import Workspace
@@ -16,7 +18,9 @@ class Artifact(SQLModel, table=True):
 
     __tablename__ = "artifacts"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     file_path: str
     file_hash: str
     file_size_bytes: int
@@ -29,8 +33,10 @@ class Artifact(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
-    dataset_id: uuid.UUID | None = Field(default=None, foreign_key="datasets.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
+    dataset_id: uuid.UUID | None = Field(
+        default=None, foreign_key="datasets.id", sa_type=HyphenatedUuid
+    )
 
     # -- relationships --
     workspace: "Workspace" = Relationship(back_populates="artifacts")

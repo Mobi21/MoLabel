@@ -457,14 +457,20 @@ orphan on its own:
   header is switched to WAL mode by the connect pragma, and its tables and
   rows are untouched.
 - Five integration tests write a dataset through the SQLModel ORM and
-  reference a workspace written by a route. They are marked expected
-  failures, because they found a split that is not P7's to fix: the ORM
-  stores UUIDs as 32-character hex (`sa.Uuid` on SQLite) while every route
-  stores them as 36-character hyphenated strings, so the two never match,
-  neither in a foreign key nor in `session.get`. Only one production route
-  uses the ORM (`restore_snapshot`), and it only updates rows, so no route
-  breaks today. Unifying the storage format needs a decision and a data
-  migration.
+  reference a workspace written by a route. They found a split that
+  predates P7 (#29): the ORM stored UUIDs as 32-character hex (`sa.Uuid`
+  on SQLite) while every route stores them as 36-character hyphenated
+  strings, so the two never matched, neither in a foreign key nor in
+  `session.get`. The hyphenated form is now canonical, because every route
+  already wrote it. Every UUID column uses
+  `molabel.core.database.HyphenatedUuid`, which binds `str(uuid)` and reads
+  either form, and revision 005 rewrites the hex values an existing
+  database holds, in every UUID column, with foreign keys off and the
+  check run afterwards. A value that is not 32 hex characters is left
+  alone, so the rewrite is a no-op on hyphenated data and on a second run.
+  `tests/integration/test_schema_migrations.py` migrates a populated
+  mixed-format database, runs the rewrite twice, and restores a snapshot
+  on it.
 
 **Concurrency.** The baseline runs showed the cost of the rollback journal:
 while a 168 s queue listing held the database, the claim-expiry background

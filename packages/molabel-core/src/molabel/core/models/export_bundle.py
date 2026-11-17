@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import ExportBundleStatus, ExportFormat
 
 
@@ -14,11 +15,15 @@ class ExportBundle(SQLModel, table=True):
 
     __tablename__ = "export_bundles"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    dataset_id: uuid.UUID = Field(foreign_key="datasets.id")
-    task_schema_id: uuid.UUID = Field(foreign_key="task_schemas.id")
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
+    dataset_id: uuid.UUID = Field(foreign_key="datasets.id", sa_type=HyphenatedUuid)
+    task_schema_id: uuid.UUID = Field(
+        foreign_key="task_schemas.id", sa_type=HyphenatedUuid
+    )
     workflow_step_execution_id: uuid.UUID | None = Field(
-        default=None, foreign_key="workflow_step_executions.id"
+        default=None, foreign_key="workflow_step_executions.id", sa_type=HyphenatedUuid
     )
     export_slug: str
     status: ExportBundleStatus
@@ -31,14 +36,14 @@ class ExportBundle(SQLModel, table=True):
     file_hash: str | None = None
     file_size_bytes: int | None = None
     source_snapshot_id: uuid.UUID | None = Field(
-        default=None, foreign_key="dataset_snapshots.id"
+        default=None, foreign_key="dataset_snapshots.id", sa_type=HyphenatedUuid
     )
-    validation_run_id: uuid.UUID | None = None
+    validation_run_id: uuid.UUID | None = Field(default=None, sa_type=HyphenatedUuid)
     packager_plugin: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     __table_args__ = (
         Index("idx_export_bundles_dataset_id", "dataset_id"),

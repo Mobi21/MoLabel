@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import ReviewTaskStatus
 
 
@@ -14,15 +15,19 @@ class ReviewTask(SQLModel, table=True):
 
     __tablename__ = "review_tasks"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     queue_id: str
-    record_id: uuid.UUID = Field(foreign_key="records.id")
-    task_schema_id: uuid.UUID = Field(foreign_key="task_schemas.id")
+    record_id: uuid.UUID = Field(foreign_key="records.id", sa_type=HyphenatedUuid)
+    task_schema_id: uuid.UUID = Field(
+        foreign_key="task_schemas.id", sa_type=HyphenatedUuid
+    )
     status: ReviewTaskStatus
     priority: int
     priority_reason: str | None = None
     claimed_by: uuid.UUID | None = Field(
-        default=None, foreign_key="reviewer_profiles.id"
+        default=None, foreign_key="reviewer_profiles.id", sa_type=HyphenatedUuid
     )
     claimed_at: datetime | None = None
     claim_expired_count: int = Field(default=0)
@@ -31,7 +36,9 @@ class ReviewTask(SQLModel, table=True):
     draft_labels: dict | None = Field(default=None, sa_column=Column(JSON))
     agent_output_ids: str | None = Field(default=None)
     # The agent output the last claim or reveal showed the claimant, if any.
-    shown_agent_output_id: uuid.UUID | None = None
+    shown_agent_output_id: uuid.UUID | None = Field(
+        default=None, sa_type=HyphenatedUuid
+    )
     ai_revealed: bool = Field(default=False)
     ai_revealed_at: datetime | None = None
     submitted_at: datetime | None = None
@@ -39,8 +46,8 @@ class ReviewTask(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
-    dataset_id: uuid.UUID = Field(foreign_key="datasets.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
+    dataset_id: uuid.UUID = Field(foreign_key="datasets.id", sa_type=HyphenatedUuid)
 
     __table_args__ = (
         Index("idx_review_tasks_queue_status", "queue_id", "status"),

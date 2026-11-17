@@ -6,20 +6,66 @@ so readers never block the writer, and ``foreign_keys=ON``, so a row whose
 foreign key points nowhere is refused. SQLite checks a foreign key when a row
 is written, not when the pragma is turned on, so rows written before the
 pragma can still dangle; :func:`foreign_key_violations` finds them.
+
+:class:`HyphenatedUuid` is the column type of every UUID in the models. It
+stores the 36-character hyphenated form, the one every route writes through
+raw SQL, so rows from the two paths reference each other.
 """
 
 from __future__ import annotations
 
+import uuid
 from collections import Counter
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import Engine, event, make_url
+from sqlalchemy import Dialect, Engine, Uuid, event, make_url
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, create_engine
+
+
+class HyphenatedUuid(Uuid[uuid.UUID]):
+    """A UUID column that stores the hyphenated form, ``str(uuid)``.
+
+    ``sa.Uuid`` stores ``uuid.hex`` on SQLite, while every route writes
+    ``str(uuid)`` through raw SQL, so a row from one path never matched a
+    row from the other, neither in a foreign key nor in ``session.get``
+    (#29). This type binds the hyphenated form and accepts a string spelling
+    too. Reading is inherited: ``uuid.UUID`` parses either form. The DDL is
+    inherited as well, ``CHAR(32)`` on SQLite, which every existing database
+    declares; SQLite does not enforce the length.
+    """
+
+    def bind_processor(
+        self, dialect: Dialect
+    ) -> Callable[[uuid.UUID | str | None], Any] | None:
+        if dialect.supports_native_uuid and self.native_uuid:
+            return super().bind_processor(dialect)
+
+        def process(value: uuid.UUID | str | None) -> str | None:
+            if value is None:
+                return None
+            if not isinstance(value, uuid.UUID):
+                value = uuid.UUID(str(value))
+            return str(value)
+
+        return process
+
+    def literal_processor(
+        self, dialect: Dialect
+    ) -> Callable[[uuid.UUID | str], str] | None:
+        if dialect.supports_native_uuid and self.native_uuid:
+            return super().literal_processor(dialect)
+        bind = self.bind_processor(dialect)
+        assert bind is not None
+
+        def process(value: uuid.UUID | str) -> str:
+            return f"'{bind(value)}'"
+
+        return process
 
 
 def _set_sqlite_pragmas(dbapi_connection: Any, _connection_record: Any) -> None:

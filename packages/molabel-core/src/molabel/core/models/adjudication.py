@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import AdjudicationResolution
 
 
@@ -14,13 +15,19 @@ class Adjudication(SQLModel, table=True):
 
     __tablename__ = "adjudications"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    record_id: uuid.UUID = Field(foreign_key="records.id")
-    dataset_id: uuid.UUID = Field(foreign_key="datasets.id")
-    task_schema_id: uuid.UUID = Field(foreign_key="task_schemas.id")
-    adjudicator_id: uuid.UUID = Field(foreign_key="reviewer_profiles.id")
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
+    record_id: uuid.UUID = Field(foreign_key="records.id", sa_type=HyphenatedUuid)
+    dataset_id: uuid.UUID = Field(foreign_key="datasets.id", sa_type=HyphenatedUuid)
+    task_schema_id: uuid.UUID = Field(
+        foreign_key="task_schemas.id", sa_type=HyphenatedUuid
+    )
+    adjudicator_id: uuid.UUID = Field(
+        foreign_key="reviewer_profiles.id", sa_type=HyphenatedUuid
+    )
     workflow_step_execution_id: uuid.UUID | None = Field(
-        default=None, foreign_key="workflow_step_executions.id"
+        default=None, foreign_key="workflow_step_executions.id", sa_type=HyphenatedUuid
     )
     conflicting_event_ids: list = Field(sa_column=Column(JSON, nullable=False))
     resolution: AdjudicationResolution
@@ -31,7 +38,7 @@ class Adjudication(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     __table_args__ = (
         Index("idx_adjudications_record_id", "record_id"),

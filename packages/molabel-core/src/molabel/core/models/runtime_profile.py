@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
+from molabel.core.database import HyphenatedUuid
+
 if TYPE_CHECKING:
     from molabel.core.models.model_profile import ModelProfile
     from molabel.core.models.workspace import Workspace
@@ -17,11 +19,13 @@ class RuntimeProfile(SQLModel, table=True):
 
     __tablename__ = "runtime_profiles"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     runtime_profile_slug: str
     mode: str
     fallback_model_profile_id: uuid.UUID | None = Field(
-        default=None, foreign_key="model_profiles.id"
+        default=None, foreign_key="model_profiles.id", sa_type=HyphenatedUuid
     )
     provider_priority: list | None = Field(default=None, sa_column=Column(JSON))
     max_concurrent_requests: int | None = None
@@ -31,7 +35,7 @@ class RuntimeProfile(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     # -- relationships --
     workspace: "Workspace" = Relationship(back_populates="runtime_profiles")

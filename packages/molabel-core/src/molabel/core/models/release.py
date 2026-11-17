@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import ReleaseStatus
 
 
@@ -14,7 +15,9 @@ class Release(SQLModel, table=True):
 
     __tablename__ = "releases"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     release_slug: str
     version: str
     name: str
@@ -23,11 +26,11 @@ class Release(SQLModel, table=True):
     export_bundle_ids: list = Field(sa_column=Column(JSON, nullable=False))
     validation_run_ids: list | None = Field(default=None, sa_column=Column(JSON))
     dataset_snapshot_id: uuid.UUID | None = Field(
-        default=None, foreign_key="dataset_snapshots.id"
+        default=None, foreign_key="dataset_snapshots.id", sa_type=HyphenatedUuid
     )
     quality_summary: dict | None = Field(default=None, sa_column=Column(JSON))
     signed_off_by: uuid.UUID | None = Field(
-        default=None, foreign_key="reviewer_profiles.id"
+        default=None, foreign_key="reviewer_profiles.id", sa_type=HyphenatedUuid
     )
     signed_off_at: datetime | None = None
     release_metadata: dict | None = Field(default=None, sa_column=Column(JSON))
@@ -37,7 +40,7 @@ class Release(SQLModel, table=True):
     revoked_at: datetime | None = None
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     __table_args__ = (
         Index("idx_releases_release_slug", "release_slug"),

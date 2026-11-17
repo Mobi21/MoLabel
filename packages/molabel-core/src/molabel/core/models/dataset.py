@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import DatasetHealthStatus
 
 if TYPE_CHECKING:
@@ -21,7 +22,9 @@ class Dataset(SQLModel, table=True):
 
     __tablename__ = "datasets"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     dataset_name: str
     dataset_slug: str
     description: str | None = None
@@ -40,7 +43,7 @@ class Dataset(SQLModel, table=True):
     last_indexed_at: datetime | None = None
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     # -- relationships --
     workspace: "Workspace" = Relationship(back_populates="datasets")

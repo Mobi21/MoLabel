@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import BlindReviewPolicy
 
 if TYPE_CHECKING:
@@ -18,7 +19,9 @@ class TaskSchema(SQLModel, table=True):
 
     __tablename__ = "task_schemas"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     task_schema_slug: str
     version: int
     task_type: str
@@ -33,7 +36,7 @@ class TaskSchema(SQLModel, table=True):
     adjudication_policy: dict | None = Field(default=None, sa_column=Column(JSON))
     supported_agent_roles: list | None = Field(default=None, sa_column=Column(JSON))
     default_model_profile_id: uuid.UUID | None = Field(
-        default=None, foreign_key="model_profiles.id"
+        default=None, foreign_key="model_profiles.id", sa_type=HyphenatedUuid
     )
     export_mapping: dict | None = Field(default=None, sa_column=Column(JSON))
     is_active: bool = True
@@ -43,7 +46,7 @@ class TaskSchema(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     # -- relationships --
     workspace: "Workspace" = Relationship(back_populates="task_schemas")

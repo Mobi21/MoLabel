@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import WorkflowStepExecutionStatus, WorkflowStepType
 
 
@@ -14,15 +15,19 @@ class WorkflowStepExecution(SQLModel, table=True):
 
     __tablename__ = "workflow_step_executions"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    workflow_execution_id: uuid.UUID = Field(foreign_key="workflow_executions.id")
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
+    workflow_execution_id: uuid.UUID = Field(
+        foreign_key="workflow_executions.id", sa_type=HyphenatedUuid
+    )
     step_id: str
     step_type: WorkflowStepType
     step_config: dict = Field(sa_column=Column(JSON, nullable=False))
     status: WorkflowStepExecutionStatus
     iteration: int = Field(default=0)
     parent_step_execution_id: uuid.UUID | None = Field(
-        default=None, foreign_key="workflow_step_executions.id"
+        default=None, foreign_key="workflow_step_executions.id", sa_type=HyphenatedUuid
     )
     result: dict | None = Field(default=None, sa_column=Column(JSON))
     error_summary: str | None = None
@@ -32,7 +37,7 @@ class WorkflowStepExecution(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     __table_args__ = (
         Index("idx_wf_step_exec_execution_id", "workflow_execution_id"),

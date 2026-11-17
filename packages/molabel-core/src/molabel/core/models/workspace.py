@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
+from molabel.core.database import HyphenatedUuid
+
 if TYPE_CHECKING:
     from molabel.core.models.artifact import Artifact
     from molabel.core.models.cost_record import CostRecord
@@ -21,7 +23,9 @@ class Workspace(SQLModel, table=True):
 
     __tablename__ = "workspaces"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     workspace_name: str
     workspace_slug: str = Field(index=True, unique=True)
     core_version: str

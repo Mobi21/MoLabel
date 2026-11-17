@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
+from molabel.core.database import HyphenatedUuid
 from molabel.core.types import ProviderType
 
 if TYPE_CHECKING:
@@ -20,7 +21,9 @@ class ModelProfile(SQLModel, table=True):
 
     __tablename__ = "model_profiles"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4, primary_key=True, sa_type=HyphenatedUuid
+    )
     model_profile_slug: str
     provider_type: ProviderType
     provider_name: str | None = None
@@ -39,7 +42,7 @@ class ModelProfile(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # -- foreign keys --
-    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id")
+    workspace_id: uuid.UUID = Field(foreign_key="workspaces.id", sa_type=HyphenatedUuid)
 
     # -- relationships --
     workspace: "Workspace" = Relationship(back_populates="model_profiles")
