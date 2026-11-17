@@ -45,6 +45,11 @@ class ReviewTask(SQLModel, table=True):
     __table_args__ = (
         Index("idx_review_tasks_queue_status", "queue_id", "status"),
         Index("idx_review_tasks_record_id", "record_id"),
-        Index("idx_review_tasks_claimed_by", "claimed_by"),
+        Index(
+            "idx_review_tasks_claimed_by_queue_record",
+            "claimed_by",
+            "queue_id",
+            "record_id",
+        ),
         Index("idx_review_tasks_workspace_id", "workspace_id"),
     )

@@ -42,6 +42,7 @@ class Record(SQLModel, table=True):
 
     __table_args__ = (
         Index("idx_records_dataset_id", "dataset_id"),
+        Index("idx_records_dataset_created_at", "dataset_id", "created_at"),
         Index("idx_records_dataset_export", "dataset_id", "export_eligible"),
         Index("idx_records_content_hash", "content_hash"),
         Index("idx_records_composite_confidence", "dataset_id", "composite_confidence"),

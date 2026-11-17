@@ -56,5 +56,6 @@ class ReviewEvent(SQLModel, table=True):
         Index("idx_review_events_task_id", "review_task_id"),
         Index("idx_review_events_record_id", "record_id"),
         Index("idx_review_events_reviewer_id", "reviewer_id"),
+        Index("idx_review_events_supersedes_event_id", "supersedes_event_id"),
         Index("idx_review_events_workspace_id", "workspace_id"),
     )
