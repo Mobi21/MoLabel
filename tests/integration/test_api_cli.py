@@ -23,13 +23,6 @@ from molabel.core.models import Dataset, DatasetSnapshot, Record
 TEST_SECRET = "test-secret-for-cli-tests"
 
 
-MISSING_FIXTURE_PARENTS = (
-    "The fixture inserts a workflow execution, agent outputs and review events "
-    "whose workflow definition, task schema, agent run and reviewer it never "
-    "creates, which foreign keys refuse."
-)
-
-
 @pytest.fixture()
 def app(tmp_path):
     application = create_app()
@@ -74,7 +67,7 @@ def _seed_workspace(engine, root_path: Path, *, workspace_id: uuid.UUID | None =
     return wid
 
 
-def _seed_reviewer(engine, workspace_id: uuid.UUID) -> str:
+def _seed_reviewer_profile(engine, workspace_id: uuid.UUID) -> uuid.UUID:
     reviewer_id = uuid.uuid4()
     now = datetime.now(UTC).isoformat()
     with engine.connect() as conn:
@@ -94,7 +87,67 @@ def _seed_reviewer(engine, workspace_id: uuid.UUID) -> str:
             },
         )
         conn.commit()
-    return create_session_token(reviewer_id, TEST_SECRET)
+    return reviewer_id
+
+
+def _seed_reviewer(engine, workspace_id: uuid.UUID) -> str:
+    return create_session_token(
+        _seed_reviewer_profile(engine, workspace_id), TEST_SECRET
+    )
+
+
+def _seed_workflow_definition(engine, workspace_id: uuid.UUID) -> uuid.UUID:
+    workflow_id = uuid.uuid4()
+    now = datetime.now(UTC).isoformat()
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO workflow_definitions (id, workflow_slug, version, name, "
+                "steps, is_template, file_path, is_active, workspace_id, created_at, "
+                "updated_at) VALUES (:id, 'benchmark', 1, 'Benchmark', '[]', 0, "
+                "'workbench/workflows/benchmark.yaml', 1, :wid, :now, :now)"
+            ),
+            {"id": str(workflow_id), "wid": str(workspace_id), "now": now},
+        )
+        conn.commit()
+    return workflow_id
+
+
+def _seed_agent_run(
+    engine, workspace_id: uuid.UUID, dataset_id: uuid.UUID, task_schema_id: str
+) -> uuid.UUID:
+    """A completed offline proposer run on the dataset, with its model profile."""
+    run_id = uuid.uuid4()
+    now = datetime.now(UTC).isoformat()
+    with engine.connect() as conn:
+        profile_id = str(uuid.uuid4())
+        conn.execute(
+            text(
+                "INSERT INTO model_profiles (id, model_profile_slug, provider_type, "
+                "model_identifier, transport, created_at, updated_at, workspace_id) "
+                "VALUES (:id, 'offline', 'offline', 'offline-heuristic', 'builtin', "
+                ":now, :now, :wid)"
+            ),
+            {"id": profile_id, "now": now, "wid": str(workspace_id)},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO agent_runs (id, dataset_id, task_schema_id, "
+                "model_profile_id, agent_role, status, retry_count, created_at, "
+                "updated_at, workspace_id) VALUES (:id, :did, :sid, :pid, "
+                "'proposer', 'completed', 0, :now, :now, :wid)"
+            ),
+            {
+                "id": str(run_id),
+                "did": str(dataset_id),
+                "sid": task_schema_id,
+                "pid": profile_id,
+                "now": now,
+                "wid": str(workspace_id),
+            },
+        )
+        conn.commit()
+    return run_id
 
 
 @pytest.mark.asyncio
@@ -494,7 +547,6 @@ async def test_template_with_bound_inputs_needs_no_workspace_dataset(
     ],
     ids=["canonical", "legacy-accept-ai", "legacy-edit-reject", "legacy-correct-skip"],
 )
-@pytest.mark.xfail(strict=True, reason=MISSING_FIXTURE_PARENTS)
 async def test_benchmark_run_facts_returns_persisted_queue_counts(
     client,
     app,
@@ -505,11 +557,16 @@ async def test_benchmark_run_facts_returns_persisted_queue_counts(
 ):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     token = _seed_reviewer(app.state.engine, workspace_id)
+    reviewer_ids = [
+        _seed_reviewer_profile(app.state.engine, workspace_id) for _ in range(2)
+    ]
     queue_id = str(uuid.uuid4())
     workflow_execution_id = uuid.uuid4()
-    workflow_definition_id = uuid.uuid4()
+    workflow_definition_id = _seed_workflow_definition(app.state.engine, workspace_id)
     dataset_id = uuid.uuid4()
-    task_schema_id = uuid.uuid4()
+    _, (task_schema_id,) = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=0, task_schemas=1
+    )
     record_ids = [uuid.uuid4() for _ in range(3)]
     task_ids = [uuid.uuid4() for _ in range(3)]
     now = datetime.now(UTC).isoformat()
@@ -561,6 +618,9 @@ async def test_benchmark_run_facts_returns_persisted_queue_counts(
                 )
             )
         session.commit()
+    agent_run_id = _seed_agent_run(
+        app.state.engine, workspace_id, dataset_id, task_schema_id
+    )
 
     with app.state.engine.connect() as conn:
         conn.execute(
@@ -609,7 +669,7 @@ async def test_benchmark_run_facts_returns_persisted_queue_counts(
                     ),
                     {
                         "id": str(agent_output_id),
-                        "agent_run_id": str(uuid.uuid4()),
+                        "agent_run_id": str(agent_run_id),
                         "record_id": str(record_id),
                         "task_schema_id": str(task_schema_id),
                         "labels": json.dumps(
@@ -650,8 +710,8 @@ async def test_benchmark_run_facts_returns_persisted_queue_counts(
                     "dataset_id": str(dataset_id),
                 },
             )
-        for task_id, record_id, decision in zip(
-            task_ids, record_ids, stored_decisions, strict=False
+        for task_id, record_id, decision, reviewer_id in zip(
+            task_ids, record_ids, stored_decisions, reviewer_ids, strict=False
         ):
             conn.execute(
                 text(
@@ -673,7 +733,7 @@ async def test_benchmark_run_facts_returns_persisted_queue_counts(
                     "review_task_id": str(task_id),
                     "record_id": str(record_id),
                     "task_schema_id": str(task_schema_id),
-                    "reviewer_id": str(uuid.uuid4()),
+                    "reviewer_id": str(reviewer_id),
                     "decision": decision,
                     "labels": json.dumps({"stance_label": "normal"}),
                     "created_at": now,
