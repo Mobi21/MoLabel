@@ -105,10 +105,24 @@ def _read_header(folder: WorkspaceFolder, entry: GoldSetManifestEntry) -> GoldSe
         raise _invalid(entry, f"its header does not parse: {exc}") from exc
 
 
-def list_gold_sets(folder: WorkspaceFolder) -> list[tuple[str, GoldSetHeader]]:
-    """Each listed set's header path and header, in manifest order."""
+def _items_data(folder: WorkspaceFolder, entry: GoldSetManifestEntry) -> bytes:
+    header_path = resolve_in_workspace(folder.path, entry.definition_path)
+    items_path = resolve_in_workspace(
+        folder.path, f"{header_path.parent.as_posix()}/{ITEMS_FILENAME}"
+    )
+    return items_path.read_bytes() if items_path.is_file() else b""
+
+
+def list_gold_sets(
+    folder: WorkspaceFolder,
+) -> list[tuple[str, GoldSetHeader, str]]:
+    """Each listed set's header path, header and items file hash, in order."""
     return [
-        (entry.definition_path, _read_header(folder, entry))
+        (
+            entry.definition_path,
+            _read_header(folder, entry),
+            file_hash(_items_data(folder, entry)),
+        )
         for entry in _entries(folder)
     ]
 
@@ -132,11 +146,7 @@ def read_gold_set(folder: WorkspaceFolder, slug: str) -> StoredGoldSet:
             {"gold_set_id": slug},
         )
     header = _read_header(folder, entry)
-    header_path = resolve_in_workspace(folder.path, entry.definition_path)
-    items_path = resolve_in_workspace(
-        folder.path, f"{header_path.parent.as_posix()}/{ITEMS_FILENAME}"
-    )
-    data = items_path.read_bytes() if items_path.is_file() else b""
+    data = _items_data(folder, entry)
     try:
         items = parse_items(header.task_schema, data)
     except GoldFileError as exc:

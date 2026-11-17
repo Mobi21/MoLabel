@@ -3194,6 +3194,12 @@ export type GoldExport = {
    */
   content_hash: string
   /**
+   * Content Hash Matches
+   *
+   * False when gold.jsonl is not the file the header describes: it was edited outside MoLabel, or a write stopped between gold.jsonl and gold.yaml. The header's version, item_count and content_hash then describe the previous file
+   */
+  content_hash_matches: boolean
+  /**
    * Path
    */
   path?: string | null
@@ -3519,15 +3525,15 @@ export type GoldSetDetail = {
    */
   path: string
   /**
+   * Content Hash Matches
+   *
+   * False when gold.jsonl is not the file the header describes: it was edited outside MoLabel, or a write stopped between gold.jsonl and gold.yaml. The header's version, item_count and content_hash then describe the previous file
+   */
+  content_hash_matches: boolean
+  /**
    * Sources
    */
   sources: Array<GoldSetSource>
-  /**
-   * Content Hash Matches
-   *
-   * False when gold.jsonl was edited outside MoLabel
-   */
-  content_hash_matches: boolean
   /**
    * Recent Additions
    *
@@ -3623,6 +3629,12 @@ export type GoldSetSummary = {
    * The header file, relative to the workspace
    */
   path: string
+  /**
+   * Content Hash Matches
+   *
+   * False when gold.jsonl is not the file the header describes: it was edited outside MoLabel, or a write stopped between gold.jsonl and gold.yaml. The header's version, item_count and content_hash then describe the previous file
+   */
+  content_hash_matches: boolean
 }
 
 /**

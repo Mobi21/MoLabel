@@ -45,6 +45,7 @@ function goldSet(id: string, name: string, schema: string, version = 1) {
     previous_hash: null,
     updated_at: '2026-11-17T00:00:00Z',
     path: `gold/${id}/gold.yaml`,
+    content_hash_matches: true,
   }
 }
 
@@ -523,7 +524,7 @@ describe('GoldSetsPage', () => {
       await screen.findByRole('heading', { name: 'Topics gold' }),
     ).toBeVisible()
     expect(screen.getByRole('status')).toHaveTextContent(
-      'gold.jsonl changed outside MoLabel',
+      'gold.jsonl is not the file version 2 describes',
     )
     expect(calls.map((c) => c.path)).toContain('/api/v1/gold-sets/topics-gold')
   })

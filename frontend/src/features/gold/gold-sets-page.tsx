@@ -136,8 +136,9 @@ function GoldSet({ goldSetId }: { goldSetId: string }) {
         </p>
         {!set.content_hash_matches && (
           <p role="status" className="mt-2 text-sm text-signal">
-            gold.jsonl changed outside MoLabel since version {set.version}. The
-            next promotion or dedupe records the current file as the previous
+            gold.jsonl is not the file version {set.version} describes. It was
+            edited outside MoLabel, or a write stopped partway. The next
+            promotion or dedupe records the current file as the previous
             version.
           </p>
         )}

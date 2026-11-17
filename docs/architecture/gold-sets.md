@@ -27,7 +27,10 @@ schema. Promotion from a queue of another schema answers
 
 Every write goes through `workspace_files`. It takes the workspace lock, checks
 each path with the `workspace_paths` guard, and restores both files if the
-write fails. The header goes through `dump_yaml`, which keeps a person's
+write fails. It replaces `gold.jsonl` before `gold.yaml`, so the header's
+`content_hash` and `item_count` always describe a file already on disk. A
+process killed between the two leaves the previous header beside the new
+items, and every read reports that, as below. The header goes through `dump_yaml`, which keeps a person's
 comments and key order. Both files are UTF-8 with LF line ends. Items keep the
 order they were added in, so an append is lines added at the end. Within an
 item the fields keep a fixed order and free-form objects (`input`, `expected`)
@@ -69,8 +72,12 @@ A write that changes `gold.jsonl` increments `version`. It sets
 hash of the new file. Create writes version 1 with no items. A promotion
 that adds no item, or a dedupe that removes none, writes nothing and keeps the
 version, so promoting the same records twice changes no file. A `content_hash` that does
-not match the file means someone edited it outside MoLabel, and `gold show`
-reports it.
+not match the file means someone edited it outside MoLabel, or a write stopped
+between the two files. Every summary of the set reports it as
+`content_hash_matches: false`: `gold list`, `gold show`, `gold export`, and the
+reports of promote, append and dedupe. The header's version and item count
+then describe the previous file. The next write that changes the items
+records the file as it is as the previous version.
 
 Create never adopts or overwrites files it did not list. If `gold/<slug>/`
 holds any file, such as a `gold.jsonl` left behind, and the manifest lists no

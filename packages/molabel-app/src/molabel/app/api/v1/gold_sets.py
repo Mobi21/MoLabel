@@ -44,6 +44,11 @@ from molabel.core.gold.promotion import Skipped
 router = APIRouter(prefix="/gold-sets", tags=["gold-sets"])
 
 RECENT_ADDITIONS = 10
+CONTENT_HASH_MATCHES = (
+    "False when gold.jsonl is not the file the header describes: it was edited "
+    "outside MoLabel, or a write stopped between gold.jsonl and gold.yaml. The "
+    "header's version, item_count and content_hash then describe the previous file"
+)
 
 
 class GoldSetSummary(BaseModel):
@@ -58,11 +63,14 @@ class GoldSetSummary(BaseModel):
     previous_hash: str | None = None
     updated_at: str
     path: str = Field(description="The header file, relative to the workspace")
+    content_hash_matches: bool = Field(description=CONTENT_HASH_MATCHES)
 
 
-def _summary(path: str, header: GoldSetHeader) -> GoldSetSummary:
+def _summary(path: str, header: GoldSetHeader, items_hash: str) -> GoldSetSummary:
     return GoldSetSummary(
-        **header.model_dump(include=set(GoldSetSummary.model_fields)), path=path
+        **header.model_dump(include=set(GoldSetSummary.model_fields)),
+        path=path,
+        content_hash_matches=header.content_hash == items_hash,
     )
 
 
@@ -74,9 +82,6 @@ class GoldSetDetail(GoldSetSummary):
     """A gold set with its sources, latest items, and the repeats it holds."""
 
     sources: list[GoldSetSource]
-    content_hash_matches: bool = Field(
-        description="False when gold.jsonl was edited outside MoLabel"
-    )
     recent_additions: list[GoldItem] = Field(description="Newest first")
     duplicates: list[GoldItemRef] = Field(
         description="Exact repeats, which gold dedupe removes"
@@ -90,9 +95,8 @@ def _detail(stored: StoredGoldSet) -> GoldSetDetail:
     gold = stored.gold
     found = dedupe(gold.items)
     return GoldSetDetail(
-        **_summary(stored.definition_path, gold.header).model_dump(),
+        **_summary(stored.definition_path, gold.header, gold.file_hash).model_dump(),
         sources=gold.header.sources,
-        content_hash_matches=gold.content_hash_matches,
         recent_additions=list(reversed(gold.items[-RECENT_ADDITIONS:])),
         duplicates=list(found.removed),
         conflicts=list(found.conflicts),
@@ -169,6 +173,7 @@ class GoldExport(BaseModel):
     format: Literal["jsonl"]
     item_count: int
     content_hash: str
+    content_hash_matches: bool = Field(description=CONTENT_HASH_MATCHES)
     path: str | None = None
     content: str | None = None
 
@@ -184,8 +189,8 @@ async def list_gold_sets_endpoint(
     """List the gold sets of the session's workspace, in manifest order."""
     return GoldSetList(
         items=[
-            _summary(path, header)
-            for path, header in list_gold_sets(_folder(request, reviewer))
+            _summary(path, header, items_hash)
+            for path, header, items_hash in list_gold_sets(_folder(request, reviewer))
         ]
     )
 
@@ -240,7 +245,9 @@ def _write_report(request, gold_set_id, body, reviewer, *, failures_only):
         failures_only=failures_only,
     )
     return GoldWriteReport(
-        gold_set=_summary(write.definition_path, write.gold.header),
+        gold_set=_summary(
+            write.definition_path, write.gold.header, write.gold.file_hash
+        ),
         written=write.written,
         counts=GoldWriteCounts(
             added=len(write.added),
@@ -296,7 +303,9 @@ async def dedupe_gold_set_endpoint(
     """Remove exact repeats, keeping the first, and report the conflicts left."""
     result = dedupe_gold_set(get_engine(request), reviewer.workspace_id, gold_set_id)
     return GoldDedupeReport(
-        gold_set=_summary(result.definition_path, result.gold.header),
+        gold_set=_summary(
+            result.definition_path, result.gold.header, result.gold.file_hash
+        ),
         written=result.written,
         removed=list(result.removed),
         conflicts=list(result.conflicts),
@@ -319,6 +328,7 @@ async def export_gold_set_content(
         format=format,
         item_count=len(gold.items),
         content_hash=file_hash(data),
+        content_hash_matches=gold.content_hash_matches,
         content=data.decode("utf-8"),
     )
 
@@ -344,5 +354,6 @@ async def export_gold_set_to_path(
         format=body.format,
         item_count=len(stored.gold.items),
         content_hash=file_hash(data),
+        content_hash_matches=stored.gold.content_hash_matches,
         path=path,
     )

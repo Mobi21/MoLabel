@@ -223,6 +223,11 @@ class WorkspaceFiles:
         The header keeps the comments and layout of the one it replaces, and
         both files end lines with LF. Returns the header's path relative to
         the workspace folder.
+
+        The items go first, so the header's ``content_hash`` and
+        ``item_count`` always describe a file already on disk. A process
+        killed between the two leaves a header that names the previous file,
+        which every read reports as ``content_hash_matches: false``.
         """
         header_path = resolve_in_workspace(
             self.folder.path,

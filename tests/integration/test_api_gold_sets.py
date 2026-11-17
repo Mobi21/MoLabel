@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 import uuid
 from datetime import UTC, datetime
 
@@ -603,6 +605,64 @@ async def test_another_workspace_sees_and_touches_none_of_it(client, app, tmp_pa
         assert resp.json()["error"]["code"] == "NOT_FOUND"
     assert _items_path(tmp_path).read_bytes() == items
     assert _items_path(tmp_path / "other").read_bytes() == b""
+
+
+PROMOTE_AND_DIE_AT_HEADER = """
+import os, sys, uuid
+from molabel.app.services.gold_sets import promote_to_gold
+from molabel.core.database import get_engine
+
+replace = os.replace
+def replace_or_die(src, dst):
+    if os.path.basename(dst) == "gold.yaml":
+        os._exit(17)
+    replace(src, dst)
+os.replace = replace_or_die
+db, workspace_id, slug, reviewer_id, queue_id = sys.argv[1:]
+promote_to_gold(get_engine(db), uuid.UUID(workspace_id), slug,
+                promoted_by=uuid.UUID(reviewer_id), queue_ids=[queue_id])
+"""
+
+
+@pytest.mark.asyncio
+async def test_a_write_killed_between_the_files_is_reported_by_every_read(
+    client, app, tmp_path
+):
+    workspace_id, tokens, queue_id, _ = await _reviewed_and_adjudicated(
+        client, app, tmp_path
+    )
+    await _create(client, tokens[0])
+    header_before = (tmp_path / "gold" / GOLD / "gold.yaml").read_bytes()
+
+    killed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            PROMOTE_AND_DIE_AT_HEADER,
+            str(tmp_path / "review-gui.db"),
+            str(workspace_id),
+            GOLD,
+            _reviewer_ids(app)[0],
+            queue_id,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert killed.returncode == 17, killed.stderr
+    assert len(_lines(_items_path(tmp_path))) == 6
+    assert (tmp_path / "gold" / GOLD / "gold.yaml").read_bytes() == header_before
+    headers = _as(tokens[0])
+    listed = (await client.get("/api/v1/gold-sets", headers=headers)).json()
+    shown = (await client.get(f"/api/v1/gold-sets/{GOLD}", headers=headers)).json()
+    exported = await client.get(f"/api/v1/gold-sets/{GOLD}/export", headers=headers)
+    retried = await _promote(client, tokens[0], {"queue_id": queue_id})
+    assert listed["items"][0]["content_hash_matches"] is False
+    assert shown["content_hash_matches"] is False
+    assert exported.json()["content_hash_matches"] is False
+    assert retried["written"] is False
+    assert retried["gold_set"]["content_hash_matches"] is False
 
 
 @pytest.mark.asyncio
