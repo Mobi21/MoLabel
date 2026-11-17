@@ -355,7 +355,8 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       flags: [
         {
           name: '--workspace-id',
-          description: 'Only list queues in this workspace',
+          description:
+            "The session's workspace, the only one it lists. Any other fails with HTTP_404",
         },
       ],
     },

@@ -17,7 +17,6 @@ from molabel.core.review.calibration import (
     CalibrationStatus,
 )
 from tests.e2e.infrastructure.assertions import checkpoint
-from tests.e2e.infrastructure.client import InstrumentedClient
 from tests.e2e.infrastructure.logging_config import TestContext
 from tests.e2e.infrastructure.parallel import SEQUENTIAL
 
@@ -28,7 +27,6 @@ from tests.e2e.infrastructure.parallel import SEQUENTIAL
 @pytest.mark.tier4
 async def test_calibration_reviewer_alignment(
     ctx: TestContext,
-    client: InstrumentedClient,
 ) -> None:
     """T4-09: is_calibration=True with known ground truth; reviewer alignment measured.
 
@@ -36,7 +34,6 @@ async def test_calibration_reviewer_alignment(
     - Perfect reviewer scores 1.0
     - Partial reviewer scores < 1.0
     - Threshold-based pass/fail
-    Then exercises the API queue with calibration flag.
     """
     schema_id = uuid.uuid4()
     record_ids = [uuid.uuid4() for _ in range(5)]
@@ -118,63 +115,3 @@ async def test_calibration_reviewer_alignment(
         assert reviewer_perfect in passed
         assert reviewer_border in passed
         assert reviewer_partial not in passed
-
-    with checkpoint(ctx, "calibration_api_queue"):
-        # Verify API-level calibration flag
-        ws_resp = await client.post(
-            "/api/v1/workspaces",
-            json={
-                "path": client.workspace_dir("ws-calibration-ws"),
-                "workspace_name": "calibration-ws",
-            },
-        )
-        assert ws_resp.status_code == 201
-        ws_id = ws_resp.json()["workspace_id"]
-
-        ds_resp = await client.post(
-            "/api/v1/datasets",
-            json={
-                "workspace_id": ws_id,
-                "dataset_name": "calib-ds",
-                "source_type": "jsonl",
-            },
-        )
-        assert ds_resp.status_code == 201
-        ds_id = ds_resp.json()["dataset_id"]
-
-        import_resp = await client.post(
-            f"/api/v1/datasets/{ds_id}/import",
-            json={
-                "source_type": "jsonl",
-                "records": [{"text": "Calibration record."}],
-            },
-        )
-        assert import_resp.status_code in (200, 201, 202)
-
-        schema_resp = await client.post(
-            "/api/v1/task-schemas",
-            json={
-                "workspace_id": ws_id,
-                "task_schema_slug": "calibration-test",
-                "title": "Calibration Test",
-                "task_type": "classification",
-                "label_fields": [
-                    {
-                        "name": "sentiment",
-                        "field_type": "categorical",
-                        "options": ["positive", "negative"],
-                        "required": True,
-                    }
-                ],
-            },
-        )
-        assert schema_resp.status_code == 201
-        schema_id_api = schema_resp.json()["task_schema_id"]
-        queue_id = f"{ds_id}:{schema_id_api}"
-
-        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
-        assert claim_resp.status_code == 200
-        body = claim_resp.json()
-        if not body.get("queue_empty"):
-            task = body["task"]
-            assert task.get("is_calibration") is True

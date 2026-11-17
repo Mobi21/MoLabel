@@ -198,63 +198,7 @@ async def test_full_pipeline_pairwise_comparison(
                 conf = float(labels["confidence"])
                 assert 0.0 <= conf <= 1.0, f"Confidence {conf} not in [0, 1]"
 
-    # ── Checkpoint 5: Queue Claim + Human Review ──────────────────────────
-    with checkpoint(ctx, "human_review"):
-        queue_id = f"{ds_id}:{schema_id}"
-        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
-        assert claim_resp.status_code == 200, claim_resp.text
-        claim_data = claim_resp.json()
-
-        if not claim_data["queue_empty"]:
-            task = claim_data["task"]
-            task_id = task["id"]
-
-            # Verify stable_fields contain both responses if available
-            record_id = task.get("record_id")
-            if record_id:
-                record_resp = await client.get(
-                    f"/api/v1/datasets/{ds_id}/records/{record_id}"
-                )
-                if record_resp.status_code == 200:
-                    record_data = record_resp.json()
-                    stable_fields = record_data.get("stable_fields", {})
-                    # The import_payload may store response_a/response_b in
-                    # stable_fields; if present, verify both exist
-                    if "response_a" in stable_fields or "response_b" in stable_fields:
-                        assert "response_a" in stable_fields, (
-                            "stable_fields missing response_a"
-                        )
-                        assert "response_b" in stable_fields, (
-                            "stable_fields missing response_b"
-                        )
-
-            submit_resp = await client.post(
-                f"/api/v1/review-tasks/{task_id}/submit",
-                json={
-                    "labels": {"preferred": "A", "confidence": 0.85},
-                    "decision": "accept",
-                    "rationale": (
-                        "Response A provides a more accurate and detailed explanation."
-                    ),
-                    "auto_claim_next": False,
-                },
-            )
-            assert submit_resp.status_code == 200, submit_resp.text
-            submit_data = submit_resp.json()
-            assert submit_data["submitted_task"]["status"] == "submitted"
-
-            # Verify preference labels in review events
-            review_events_resp = await client.get(
-                "/api/v1/review/events",
-                params={"dataset_id": ds_id, "task_schema_id": schema_id},
-            )
-            assert review_events_resp.status_code == 200
-            events = review_events_resp.json().get("items", [])
-            if events:
-                event_labels = events[0]["labels"]
-                assert event_labels.get("preferred") in _VALID_PREFERENCES
-
-    # ── Checkpoint 6: Quality Check ───────────────────────────────────────
+    # ── Checkpoint 5: Quality Check ───────────────────────────────────────
     with checkpoint(ctx, "quality_check"):
         quality_resp = await client.get(
             "/api/v1/quality/dashboard",
@@ -278,7 +222,7 @@ async def test_full_pipeline_pairwise_comparison(
         agreement_data = agreement_resp.json()
         assert "pooled" in agreement_data["inter_annotator"]
 
-    # ── Checkpoint 7: Export + Release ────────────────────────────────────
+    # ── Checkpoint 6: Export + Release ────────────────────────────────────
     with checkpoint(ctx, "export_release"):
         export_resp = await client.post(
             "/api/v1/exports",

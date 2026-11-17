@@ -3290,7 +3290,9 @@ export const listQueuesEndpointQueryKey = (
 /**
  * List Queues Endpoint
  *
- * List review queues, optionally limited to one workspace.
+ * List the review queues of the caller's workspace.
+ *
+ * ``workspace_id`` names that workspace. Any other answers 404.
  */
 export const listQueuesEndpointOptions = (
   options?: Options<ListQueuesEndpointData>,

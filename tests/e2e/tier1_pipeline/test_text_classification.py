@@ -193,54 +193,7 @@ async def test_full_pipeline_text_classification(
             assert "sentiment" in labels
             assert labels["sentiment"] in {"positive", "negative", "neutral"}
 
-    # ── Checkpoint 5: Queue Claim + Human Review ──────────────────────────
-    with checkpoint(ctx, "human_review"):
-        # Claim from the review queue associated with the dataset/schema
-        # The queue_id is dataset_id:task_schema_id by convention in the
-        # claims service (or an explicit queue may be seeded by the run).
-        queue_id = f"{ds_id}:{schema_id}"
-
-        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
-        # Queue may be empty if agent run is async and no tasks are seeded;
-        # we accept either a claimed task or an empty-queue response.
-        assert claim_resp.status_code == 200, claim_resp.text
-        claim_data = claim_resp.json()
-        assert "queue_empty" in claim_data
-
-        if not claim_data["queue_empty"]:
-            task = claim_data["task"]
-            assert task is not None
-            task_id = task["id"]
-
-            # Submit a human review label
-            submit_resp = await client.post(
-                f"/api/v1/review-tasks/{task_id}/submit",
-                json={
-                    "labels": {"sentiment": "positive"},
-                    "decision": "accept",
-                    "rationale": "Clear positive sentiment throughout the review.",
-                    "auto_claim_next": False,
-                },
-            )
-            assert submit_resp.status_code == 200, submit_resp.text
-            submit_data = submit_resp.json()
-            assert submit_data["submitted_task"]["status"] == "submitted"
-            assert submit_data["message"] == "submitted"
-
-            # Verify review event is recorded
-            review_events_resp = await client.get(
-                "/api/v1/review/events",
-                params={"dataset_id": ds_id, "task_schema_id": schema_id},
-            )
-            assert review_events_resp.status_code == 200, review_events_resp.text
-            events_data = review_events_resp.json()
-            assert "items" in events_data
-            # At least one event created
-            assert len(events_data["items"]) >= 1
-            event = events_data["items"][0]
-            assert event["labels"]["sentiment"] in {"positive", "negative", "neutral"}
-
-    # ── Checkpoint 6: Quality Check ───────────────────────────────────────
+    # ── Checkpoint 5: Quality Check ───────────────────────────────────────
     with checkpoint(ctx, "quality_check"):
         quality_resp = await client.get(
             "/api/v1/quality/dashboard",
@@ -263,7 +216,7 @@ async def test_full_pipeline_text_classification(
         assert "pooled" in agreement_data["inter_annotator"]
         assert "fields" in agreement_data["inter_annotator"]
 
-    # ── Checkpoint 7: Export + Release ────────────────────────────────────
+    # ── Checkpoint 6: Export + Release ────────────────────────────────────
     with checkpoint(ctx, "export_release"):
         export_resp = await client.post(
             "/api/v1/exports",

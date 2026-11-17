@@ -1808,7 +1808,7 @@ are not all built.
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/queues?workspace_id=` | Each queue with its `kind` (`review`, `triage`, `calibrate`, `adjudicate`, or null), `task_schema_title`, `blind_review_policy`, status counts, and the caller's `my_remaining` and `my_submitted` |
+| GET | `/queues?workspace_id=` | Each queue of the caller's workspace with its `kind` (`review`, `triage`, `calibrate`, `adjudicate`, or null), `task_schema_title`, `blind_review_policy`, status counts, and the caller's `my_remaining` and `my_submitted` |
 | POST | `/queues/{queue_id}/claim` | Claim the next task, with the agent output the blind policy allows |
 | POST | `/queues/{queue_id}/close-copies` | Close every `available` copy, and return how many it `closed` and how many stay `claimed` |
 | GET | `/queues/{queue_id}/my-tasks?limit=` | The caller's latest tasks in the queue, oldest first, a held claim last |
@@ -1817,6 +1817,9 @@ are not all built.
 | POST | `/review-tasks/{task_id}/skip` | Skip the task |
 | POST | `/review-tasks/{task_id}/reveal-ai` | Reveal the agent output and record which one was shown |
 | POST | `/review-tasks/{task_id}/correct` | Append a correction to the caller's submitted review |
+| POST | `/review-tasks/{task_id}/release` | Return the caller's claim to the queue |
+| POST | `/review-tasks/{task_id}/draft` | Save draft labels on the caller's claim |
+| GET | `/queues/{queue_id}/status` | Status counts and the reviewers holding a claim |
 
 A read never reveals a blind proposal. `GET /review-tasks/{task_id}` shows only
 the output whose id the claim or reveal stored as `shown_agent_output_id`.
@@ -1827,8 +1830,11 @@ review event, so it never counts as a rater. Adjudication and the workflow's
 reviewer holds it. The queue list and `GET /queues/{queue_id}/status` count
 closed copies as `closed`.
 
-`my-tasks`, `close-copies` and `GET /review-tasks/{task_id}` read only the
-caller's workspace. A queue or task of another workspace answers 404.
+Every endpoint in this table reads and changes only the caller's workspace,
+the workspace of the session's reviewer. A queue or task of another workspace
+answers 404, as if it did not exist. `GET /queues` with no `workspace_id`
+lists the caller's workspace, and a `workspace_id` of another workspace
+answers 404.
 
 ---
 

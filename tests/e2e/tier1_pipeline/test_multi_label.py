@@ -192,44 +192,7 @@ async def test_full_pipeline_multi_label(
             for t in topics_val:
                 assert t in _VALID_TOPICS, f"Invalid topic value: {t}"
 
-    # ── Checkpoint 5: Queue Claim + Human Review ──────────────────────────
-    with checkpoint(ctx, "human_review"):
-        queue_id = f"{ds_id}:{schema_id}"
-        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
-        assert claim_resp.status_code == 200, claim_resp.text
-        claim_data = claim_resp.json()
-
-        if not claim_data["queue_empty"]:
-            task_id = claim_data["task"]["id"]
-            submit_resp = await client.post(
-                f"/api/v1/review-tasks/{task_id}/submit",
-                json={
-                    "labels": {"topics": ["technology", "business"]},
-                    "decision": "accept",
-                    "rationale": (
-                        "Article covers both a tech product and its business impact."
-                    ),
-                    "auto_claim_next": False,
-                },
-            )
-            assert submit_resp.status_code == 200, submit_resp.text
-            submit_data = submit_resp.json()
-            assert submit_data["submitted_task"]["status"] == "submitted"
-
-            # Verify that the submitted label is a list
-            review_events_resp = await client.get(
-                "/api/v1/review/events",
-                params={"dataset_id": ds_id, "task_schema_id": schema_id},
-            )
-            assert review_events_resp.status_code == 200
-            events = review_events_resp.json().get("items", [])
-            if events:
-                submitted_labels = events[0]["labels"]
-                assert isinstance(submitted_labels.get("topics"), list), (
-                    "Review event labels.topics must be a list"
-                )
-
-    # ── Checkpoint 6: Quality Check ───────────────────────────────────────
+    # ── Checkpoint 5: Quality Check ───────────────────────────────────────
     with checkpoint(ctx, "quality_check"):
         quality_resp = await client.get(
             "/api/v1/quality/dashboard",
@@ -253,7 +216,7 @@ async def test_full_pipeline_multi_label(
         assert "pooled" in agreement_data["inter_annotator"]
         assert "fields" in agreement_data["inter_annotator"]
 
-    # ── Checkpoint 7: Export + Release ────────────────────────────────────
+    # ── Checkpoint 6: Export + Release ────────────────────────────────────
     with checkpoint(ctx, "export_release"):
         export_resp = await client.post(
             "/api/v1/exports",

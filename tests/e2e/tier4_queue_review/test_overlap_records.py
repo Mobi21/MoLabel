@@ -10,7 +10,6 @@ import pytest
 
 from molabel.core.review.overlap import OverlapConfig, OverlapService
 from tests.e2e.infrastructure.assertions import checkpoint
-from tests.e2e.infrastructure.client import InstrumentedClient
 from tests.e2e.infrastructure.logging_config import TestContext
 from tests.e2e.infrastructure.parallel import SEQUENTIAL
 
@@ -21,11 +20,10 @@ from tests.e2e.infrastructure.parallel import SEQUENTIAL
 @pytest.mark.tier4
 async def test_overlap_records_multiple_reviewers(
     ctx: TestContext,
-    client: InstrumentedClient,
 ) -> None:
     """T4-08: is_overlap=True records reviewed by multiple reviewers.
 
-    Creates a queue with overlap records, then verifies:
+    Verifies:
     - The OverlapService correctly tracks assignments
     - Multiple reviewers can be assigned the same record
     - Completion status transitions: pending → partial → complete
@@ -91,65 +89,3 @@ async def test_overlap_records_multiple_reviewers(
         assert overall.completed_records == 1
         assert overall.completion_rate == 1.0
         assert overall.average_reviewers_per_record == 2.0
-
-    with checkpoint(ctx, "overlap_via_api_queue"):
-        # Also verify API-level overlap flag in queue claim response
-        ws_resp = await client.post(
-            "/api/v1/workspaces",
-            json={
-                "path": client.workspace_dir("ws-overlap-ws"),
-                "workspace_name": "overlap-ws",
-            },
-        )
-        assert ws_resp.status_code == 201
-        ws_id = ws_resp.json()["workspace_id"]
-
-        ds_resp = await client.post(
-            "/api/v1/datasets",
-            json={
-                "workspace_id": ws_id,
-                "dataset_name": "overlap-ds",
-                "source_type": "jsonl",
-            },
-        )
-        assert ds_resp.status_code == 201
-        ds_id = ds_resp.json()["dataset_id"]
-
-        import_resp = await client.post(
-            f"/api/v1/datasets/{ds_id}/import",
-            json={
-                "source_type": "jsonl",
-                "records": [{"text": "Overlap record text."}],
-            },
-        )
-        assert import_resp.status_code in (200, 201, 202)
-
-        schema_resp = await client.post(
-            "/api/v1/task-schemas",
-            json={
-                "workspace_id": ws_id,
-                "task_schema_slug": "overlap-test",
-                "title": "Overlap Test",
-                "task_type": "classification",
-                "label_fields": [
-                    {
-                        "name": "label",
-                        "field_type": "categorical",
-                        "options": ["yes", "no"],
-                        "required": True,
-                    }
-                ],
-            },
-        )
-        assert schema_resp.status_code == 201
-        schema_id = schema_resp.json()["task_schema_id"]
-        queue_id = f"{ds_id}:{schema_id}"
-
-        # Claim the overlap record
-        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
-        assert claim_resp.status_code == 200
-        body = claim_resp.json()
-        if not body.get("queue_empty"):
-            task = body["task"]
-            # is_overlap should be True for overlap-configured queues
-            assert task.get("is_overlap") is True

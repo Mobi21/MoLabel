@@ -1795,7 +1795,9 @@ export const submitCorrectionEndpoint = <ThrowOnError extends boolean = false>(
 /**
  * List Queues Endpoint
  *
- * List review queues, optionally limited to one workspace.
+ * List the review queues of the caller's workspace.
+ *
+ * ``workspace_id`` names that workspace. Any other answers 404.
  */
 export const listQueuesEndpoint = <ThrowOnError extends boolean = false>(
   options?: Options<ListQueuesEndpointData, ThrowOnError>,

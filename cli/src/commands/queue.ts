@@ -12,8 +12,11 @@ export function registerQueueCommands(
 
   queue
     .command('list')
-    .description('List review queues and their task counts')
-    .option('--workspace-id <id>', 'Only list queues in this workspace')
+    .description("List the review queues of the session's workspace")
+    .option(
+      '--workspace-id <id>',
+      "The session's workspace. Any other fails with HTTP_404",
+    )
     .action(async function (this: Command) {
       await runQueueList(
         getRuntimeOptions(program, runtime),

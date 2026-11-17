@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from molabel.app.middleware.session import CurrentReviewer
@@ -34,6 +34,7 @@ from molabel.app.services.claims import (
     skip_task,
     submit_correction,
     submit_review,
+    task_in_workspace,
 )
 from molabel.app.utils import get_engine
 from molabel.core.types import (
@@ -394,6 +395,27 @@ def _add_notification_headers(
         response.headers["X-MoLabel-Expired-Count"] = str(len(notifications))
 
 
+def _workspace_queue(request: Request, queue_id: str, reviewer: CurrentReviewer) -> str:
+    if not queue_in_workspace(get_engine(request), queue_id, reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Review queue not found")
+    return queue_id
+
+
+def _workspace_task(
+    request: Request, task_id: uuid.UUID, reviewer: CurrentReviewer
+) -> uuid.UUID:
+    if not task_in_workspace(get_engine(request), task_id, reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Review task not found")
+    return task_id
+
+
+WorkspaceQueueId = Annotated[str, Depends(_workspace_queue)]
+"""A queue of the caller's workspace. Any other queue answers 404."""
+
+WorkspaceTaskId = Annotated[uuid.UUID, Depends(_workspace_task)]
+"""A review task of the caller's workspace. Any other task answers 404."""
+
+
 def _canonical_decision(
     decision: ReviewDecision | DeprecatedReviewDecision | None,
 ) -> tuple[ReviewDecision | None, list[str]]:
@@ -419,7 +441,7 @@ def _canonical_decision(
 async def claim_next_item(
     request: Request,
     response: Response,
-    queue_id: str,
+    queue_id: WorkspaceQueueId,
     reviewer: CurrentReviewer,
 ) -> ClaimResponse:
     """Claim the next available item from a queue (SE-006).
@@ -462,7 +484,7 @@ async def claim_next_item(
 async def submit_review_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     body: SubmitRequest,
     reviewer: CurrentReviewer,
 ) -> SubmitResponse:
@@ -532,7 +554,7 @@ async def submit_review_endpoint(
 async def skip_task_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     reviewer: CurrentReviewer,
 ) -> SkipResponse:
     """Skip a claimed task, returning it to the queue.
@@ -578,7 +600,7 @@ async def skip_task_endpoint(
 async def release_claim_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     reviewer: CurrentReviewer,
 ) -> ReleaseResponse:
     """Release a claim on a task back to the available pool."""
@@ -607,7 +629,7 @@ async def release_claim_endpoint(
 async def save_draft_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     body: DraftRequest,
     reviewer: CurrentReviewer,
 ) -> DraftResponse:
@@ -646,7 +668,7 @@ async def save_draft_endpoint(
 async def reveal_ai_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     reviewer: CurrentReviewer,
 ) -> RevealAIResponse:
     """Reveal agent output for a claimed task (RV-002).
@@ -688,7 +710,7 @@ async def reveal_ai_endpoint(
 async def submit_correction_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     body: CorrectionRequest,
     reviewer: CurrentReviewer,
 ) -> CorrectionResponse:
@@ -740,24 +762,26 @@ async def list_queues_endpoint(
     reviewer: CurrentReviewer,
     workspace_id: str | None = None,
 ) -> QueueListResponse:
-    """List review queues, optionally limited to one workspace."""
+    """List the review queues of the caller's workspace.
+
+    ``workspace_id`` names that workspace. Any other answers 404.
+    """
+    if workspace_id is not None and workspace_id != str(reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Workspace not found")
     _add_notification_headers(response, reviewer.id)
-    queues = list_queues(get_engine(request), workspace_id, reviewer.id)
+    queues = list_queues(get_engine(request), reviewer.workspace_id, reviewer.id)
     return QueueListResponse(items=[QueueSummary(**queue) for queue in queues])
 
 
 @router.get("/queues/{queue_id}/my-tasks", response_model=ReviewerTasksResponse)
 async def list_my_queue_tasks_endpoint(
     request: Request,
-    queue_id: str,
+    queue_id: WorkspaceQueueId,
     reviewer: CurrentReviewer,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
 ) -> ReviewerTasksResponse:
     """List the caller's latest tasks in a queue, to step back through them."""
-    engine = get_engine(request)
-    if not queue_in_workspace(engine, queue_id, reviewer.workspace_id):
-        raise HTTPException(status_code=404, detail="Review queue not found")
-    items = reviewer_queue_tasks(engine, queue_id, reviewer.id, limit)
+    items = reviewer_queue_tasks(get_engine(request), queue_id, reviewer.id, limit)
     return ReviewerTasksResponse(
         queue_id=queue_id,
         items=[ReviewerTaskSummary(**item) for item in items],
@@ -790,7 +814,7 @@ async def get_review_task_endpoint(
 async def get_queue_status_endpoint(
     request: Request,
     response: Response,
-    queue_id: str,
+    queue_id: WorkspaceQueueId,
     reviewer: CurrentReviewer,
 ) -> QueueStatusResponse:
     """Get queue status including item counts and active reviewers."""
@@ -815,7 +839,7 @@ async def get_queue_status_endpoint(
 @router.post("/queues/{queue_id}/close-copies", response_model=CloseCopiesResponse)
 async def close_queue_copies(
     request: Request,
-    queue_id: str,
+    queue_id: WorkspaceQueueId,
     reviewer: CurrentReviewer,
 ) -> CloseCopiesResponse:
     """Close every unclaimed copy of a queue, so its review ends with the copies in.
@@ -827,10 +851,9 @@ async def close_queue_copies(
     rater. A claimed copy stays open, because a reviewer holds it. A queue of
     another workspace answers 404.
     """
-    engine = get_engine(request)
-    if not queue_in_workspace(engine, queue_id, reviewer.workspace_id):
-        raise HTTPException(status_code=404, detail="Review queue not found")
-    return CloseCopiesResponse(queue_id=queue_id, **close_open_copies(engine, queue_id))
+    return CloseCopiesResponse(
+        queue_id=queue_id, **close_open_copies(get_engine(request), queue_id)
+    )
 
 
 # ---------------------------------------------------------------------------
