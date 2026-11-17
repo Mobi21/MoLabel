@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -98,17 +100,26 @@ def wait_for_health(base_url: str, server: subprocess.Popen[bytes]) -> None:
     raise SmokeFailure("backend did not answer /health within 60s")
 
 
-def stop(server: subprocess.Popen[bytes]) -> None:
-    # On Windows a venv's python.exe starts the real interpreter as a child,
-    # so terminating the parent alone leaves the server holding the database.
-    if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/T", "/F", "/PID", str(server.pid)],
-            capture_output=True,
-            check=False,
+def stop(server: subprocess.Popen[bytes], log: Path) -> None:
+    # On Windows a venv's python.exe runs the real interpreter as a child, and
+    # the child holds the database and the log. Killing the parent kills the
+    # child only after the parent is reaped, so the temp folder can still be
+    # in use. The parent exits after its child does, so stop the child that
+    # uvicorn names and wait on the parent.
+    if server.poll() is None:
+        started = re.search(
+            r"Started server process \[(\d+)\]", log.read_text(errors="replace")
         )
-    else:
-        server.terminate()
+        if os.name != "nt":
+            server.terminate()
+        elif started:
+            os.kill(int(started[1]), signal.SIGTERM)
+        else:
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(server.pid)],
+                capture_output=True,
+                check=False,
+            )
     server.wait(timeout=30)
 
 
@@ -395,7 +406,7 @@ def main() -> int:
             print("\n".join(server_log.read_text(errors="replace").splitlines()[-40:]))
             return 1
         finally:
-            stop(server)
+            stop(server, server_log)
     print("PASS: no-key smoke test")
     return 0
 
