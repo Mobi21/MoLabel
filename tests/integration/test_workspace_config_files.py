@@ -12,6 +12,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -315,6 +316,31 @@ async def test_config_writes_keep_hand_written_comments_and_key_order(
     )
     assert _yaml(schema_file)["label_fields"][0]["options"] == ["yes", "no"]
     assert manifest_file.read_text(encoding="utf-8") == created
+
+
+@pytest.mark.asyncio
+async def test_config_writes_keep_keys_added_to_the_manifest_by_hand(client, workspace):
+    schema = await _create(client, "/api/v1/task-schemas", SCHEMA)
+    manifest_file = workspace / "workbench.project.yaml"
+    manifest = _yaml(manifest_file)
+    owner = {"team": "research", "reviewed_on": date(2026, 11, 1)}
+    manifest["owner"] = owner
+    manifest["task_schemas"][0]["reviewed_by"] = "alice"
+    manifest_file.write_text(yaml.safe_dump(manifest, sort_keys=False), "utf-8")
+
+    await _create(client, "/api/v1/workflows", WORKFLOW)
+    after_create = _yaml(manifest_file)
+    resp = await client.put(
+        f"/api/v1/task-schemas/{schema['task_schema_id']}",
+        json={"title": "Review sentiment"},
+    )
+    assert resp.status_code == 200, resp.text
+    after_update = _yaml(manifest_file)
+
+    for written in (after_create, after_update):
+        assert written["owner"] == owner
+        assert written["task_schemas"][0]["reviewed_by"] == "alice"
+    assert [w["workflow_id"] for w in after_update["workflows"]] == ["label-reviews"]
 
 
 @pytest.mark.parametrize(

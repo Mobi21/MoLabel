@@ -10,11 +10,13 @@ from typing import Any, Literal
 
 import yaml
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import bindparam, text
 from sqlmodel import Session, select
 
 from molabel.app.api.v1.cli.deps import CurrentCliReviewer
+from molabel.app.schemas import ErrorDetail, ErrorResponse
 from molabel.app.utils import get_engine
 from molabel.app.workspace_paths import glob_in_workspace, resolve_in_workspace
 from molabel.core.agents.queue_binding import deserialize_agent_output_ids
@@ -27,12 +29,49 @@ from molabel.core.workflow.templates import (
     get_template_path,
     get_template_yaml,
     list_templates,
-    template_has_agent_run,
+    template_has_agent_step,
     template_needs_dataset,
     template_needs_task_schema,
+    template_unset_model_steps,
 )
 
 router = APIRouter(prefix="", tags=["cli"])
+
+TEMPLATE_MODEL_OPTIONS = ["--model <id>", "--provider offline"]
+
+
+class TemplateModelRequiredError(Exception):
+    """A template leaves a model unset, and the request binds none."""
+
+    def __init__(self, template_id: str, step_ids: list[str]) -> None:
+        super().__init__(
+            f"Template {template_id} leaves a model unset ({', '.join(step_ids)}). "
+            "Pass model (molabel workflow create --model <id>) to compare that "
+            "model with the template's, or provider=offline (molabel workflow "
+            "create --provider offline) to run every model on the offline "
+            "provider with no API key"
+        )
+        self.template_id = template_id
+        self.step_ids = step_ids
+
+
+async def template_model_required_error_handler(
+    _request: Request, exc: TemplateModelRequiredError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content=ErrorResponse(
+            error=ErrorDetail(
+                code="TEMPLATE_MODEL_REQUIRED",
+                message=str(exc),
+                details={
+                    "template_id": exc.template_id,
+                    "step_ids": exc.step_ids,
+                    "options": TEMPLATE_MODEL_OPTIONS,
+                },
+            )
+        ).model_dump(mode="json"),
+    )
 
 
 class WorkflowTemplateSummary(BaseModel):
@@ -130,10 +169,13 @@ async def get_workflow_template(
 
     With ``workspace_id``, the template's data and task-schema inputs are bound
     to that workspace: to the named dataset and task schema when given, else
-    to the only one the workspace has.
+    to the only one the workspace has. A template that leaves a model unset
+    then needs ``provider`` or ``model``.
 
     With ``provider=offline`` or ``model``, every ``agent_run`` step labels
     with the offline provider or that model instead of the template's model.
+    ``model`` fills the models an ``agent_compare`` step leaves unset, and
+    ``provider=offline`` runs every model it compares offline.
     """
     try:
         template_path = get_template_path(template_id)
@@ -145,6 +187,9 @@ async def get_workflow_template(
     agent_model = _agent_model_binding(definition, provider=provider, model=model)
     bindings = None
     if workspace_id is not None:
+        unset_model_steps = template_unset_model_steps(definition)
+        if agent_model is None and unset_model_steps:
+            raise TemplateModelRequiredError(template_id, unset_model_steps)
         with get_engine(request).connect() as conn:
             bindings = WorkflowTemplateBindings(
                 dataset_id=_pick_template_input(
@@ -209,10 +254,10 @@ def _agent_model_binding(
             status_code=400,
             detail="Pass provider or model, not both",
         )
-    if not template_has_agent_run(definition):
+    if not template_has_agent_step(definition):
         raise HTTPException(
             status_code=400,
-            detail="This template has no agent_run step to bind a provider or model to",
+            detail="This template has no agent step to bind a provider or model to",
         )
     if provider == ProviderType.offline:
         return {"model": OFFLINE_MODEL_ID, "provider_type": ProviderType.offline.value}

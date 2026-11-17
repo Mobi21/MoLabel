@@ -269,6 +269,10 @@ can use. So does a step that pins a model profile id that does not exist,
 whose provider MoLabel cannot run, or whose provider is not the step's
 `provider_type`, and a step whose `model` and `model_profile_id` select
 profiles of different providers.
+No template ships a model MoLabel cannot resolve. A template can leave a model
+unset instead, as `agent_comparison` does for the model it compares. Creating
+it then needs `--model <id>` or `--provider offline`, and fails with
+`TEMPLATE_MODEL_REQUIRED` without either.
 `cli/README.md` describes the heuristic, and `scripts/smoke_no_key.py` runs
 import, offline pre-label, review, and export with no key in CI.
 

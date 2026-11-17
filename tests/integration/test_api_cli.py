@@ -398,6 +398,67 @@ async def test_template_rejects_a_provider_or_model_it_cannot_bind(
 
 
 @pytest.mark.asyncio
+async def test_a_template_that_leaves_a_model_unset_needs_one_to_create(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    _seed_template_inputs(app.state.engine, workspace_id, datasets=1, task_schemas=1)
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/agent_comparison",
+        params={"workspace_id": str(workspace_id)},
+    )
+
+    assert resp.status_code == 400, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "TEMPLATE_MODEL_REQUIRED"
+    assert "--model <id>" in error["message"]
+    assert "--provider offline" in error["message"]
+    assert error["details"] == {
+        "template_id": "agent_comparison",
+        "step_ids": ["compare_models"],
+        "options": ["--model <id>", "--provider offline"],
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("params", "compare_config"),
+    [
+        (
+            {"provider": "offline"},
+            {"models": ["offline-heuristic"] * 3, "provider_type": "offline"},
+        ),
+        (
+            {"model": "llama3.1"},
+            {"models": ["claude-sonnet-4-20250514", "gpt-4o", "llama3.1"]},
+        ),
+    ],
+    ids=["offline", "model"],
+)
+async def test_template_binds_its_unset_comparison_model(
+    client, app, tmp_path, params, compare_config
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    _, (schema_id,) = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=1, task_schemas=1
+    )
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/agent_comparison",
+        params={"workspace_id": str(workspace_id), **params},
+    )
+
+    assert resp.status_code == 200, resp.text
+    steps = {step["id"]: step for step in yaml.safe_load(resp.json()["yaml"])["steps"]}
+    assert steps["compare_models"]["config"] == {
+        "prompt_ref": "prompts/default.yaml",
+        "task_schema_id": schema_id,
+        **compare_config,
+    }
+
+
+@pytest.mark.asyncio
 async def test_template_with_bound_inputs_needs_no_workspace_dataset(
     client, app, tmp_path
 ):
