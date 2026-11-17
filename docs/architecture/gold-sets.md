@@ -137,7 +137,7 @@ looks like this:
 The file is written like `gold.jsonl`: through `workspace_files`, one line
 per conflict, LF line ends, fixed field order, sorted label keys, and the
 same escapes for U+0085, U+2028 and U+2029. New conflicts go after the
-file's lines. A line that is still open keeps its bytes.
+file's lines. A line that is still open keeps its bytes, a CRLF end included.
 
 A conflict is the same as one the file holds when its item, incoming labels
 and `provenance.source` match, so running an append again adds no line.

@@ -487,6 +487,7 @@ class GoldConflictLog:
     """
 
     lines: tuple[tuple[bytes, GoldOpenConflict], ...]
+    """Each line's bytes up to its LF, the CR of a CRLF end kept, and its conflict."""
     data: bytes
 
     @classmethod
@@ -494,7 +495,6 @@ class GoldConflictLog:
         """The log these bytes hold. Raises ``GoldFileError`` on a bad line."""
         lines = []
         for number, raw in enumerate(data.split(b"\n"), start=1):
-            raw = raw.rstrip(b"\r")
             if not raw.strip():
                 continue
             try:

@@ -422,6 +422,21 @@ class TestConflictLog:
             ({"intent": "other"}, "adjudication"),
         ]
 
+    @pytest.mark.parametrize("end", [b"\r\n", b""])
+    def test_an_append_keeps_an_earlier_line_and_its_line_end_byte_for_byte(self, end):
+        held = item("refund me", "refund")
+        other = conflicts_of(held, item("refund me", "other", record="r2"))
+        bug = conflicts_of(held, item("refund me", "bug", record="r3"))
+        (line,) = (
+            GoldConflictLog.read(b"").recorded([held], other, now=NOW).data.splitlines()
+        )
+        bug_line = GoldConflictLog.read(b"").recorded([held], bug, now=NOW).data
+
+        later = GoldConflictLog.read(line + end).recorded([held], bug, now=NOW)
+
+        assert later.data == line + (end or b"\n") + bug_line
+        assert bug_line.endswith(b"}\n") and b"\r" not in bug_line
+
     def test_a_conflict_the_gold_now_settles_is_not_open_and_the_next_write_drops_it(
         self,
     ):
