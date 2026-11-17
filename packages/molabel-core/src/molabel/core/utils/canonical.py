@@ -37,3 +37,11 @@ def canonical_label_value(value: Any) -> str:
     if isinstance(value, dict):
         return json.dumps(value, sort_keys=True, default=str)
     return str(value)
+
+
+def present_label_value(value: Any) -> str | None:
+    """*value* as ``canonical_label_value`` gives it, or None when it is missing.
+
+    Null, ``""`` and ``[]`` are all missing: none of them is a label.
+    """
+    return None if value in (None, "", []) else canonical_label_value(value)

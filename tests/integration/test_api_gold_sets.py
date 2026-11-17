@@ -283,10 +283,8 @@ async def test_promotion_writes_adjudicated_and_agreed_records_with_provenance(
     assert header["sources"][0]["workflow_execution_id"]
 
 
-@pytest.mark.asyncio
-async def test_an_adjudicator_who_takes_the_ai_column_is_recorded_as_accepting_it(
-    client, app, tmp_path
-):
+async def _r3_disagreement(client, app, tmp_path):
+    """Two reviewers who disagree on r3, whose AI proposal neither reviewer gave."""
     _, tokens, queue = await _start_review(client, app, tmp_path)
     queue_id = queue["queue_id"]
     await _review_all(client, queue_id, tokens[0], FIRST_REVIEWER)
@@ -296,20 +294,28 @@ async def test_an_adjudicator_who_takes_the_ai_column_is_recorded_as_accepting_i
     record_id = _external_ids(app)["r3"]
     path = f"/api/v1/adjudication/queues/{queue_id}/disagreements/{record_id}"
     shown = (await client.get(path, headers=_as(tokens[0]))).json()
-    (proposal,) = shown["agent_labels"]
-    body = {
-        "resolved_labels": proposal["labels"],
-        "review_event_ids": [s["review_event_id"] for s in shown["reviewer_labels"]],
-    }
+    return tokens, queue_id, record_id, path, shown
 
-    unknown = await client.post(
-        f"{path}/resolve",
-        json={**body, "agent_output_ids": [str(uuid.uuid4())]},
-        headers=_as(tokens[0]),
+
+@pytest.mark.asyncio
+async def test_an_adjudicator_who_takes_an_ai_value_is_recorded_as_accepting_it(
+    client, app, tmp_path
+):
+    tokens, queue_id, record_id, path, shown = await _r3_disagreement(
+        client, app, tmp_path
     )
+    (proposal,) = shown["agent_labels"]
+    ai_sentiment = proposal["labels"]["sentiment"]
+
     resolved = await client.post(
         f"{path}/resolve",
-        json={**body, "agent_output_ids": [proposal["agent_output_id"]]},
+        json={
+            "resolved_labels": {"sentiment": ai_sentiment, "note": "checked"},
+            "review_event_ids": [
+                s["review_event_id"] for s in shown["reviewer_labels"]
+            ],
+            "agent_sources": {"sentiment": proposal["agent_output_id"]},
+        },
         headers=_as(tokens[0]),
     )
     await _create(client, tokens[0])
@@ -317,16 +323,70 @@ async def test_an_adjudicator_who_takes_the_ai_column_is_recorded_as_accepting_i
         client, tokens[0], {"queue_id": queue_id, "record_ids": [record_id]}
     )
 
-    assert unknown.status_code == 422, unknown.text
     assert resolved.status_code == 200, resolved.text
-    assert resolved.json()["resolution"]["agent_output_ids"] == [
-        proposal["agent_output_id"]
-    ]
+    assert resolved.json()["resolution"]["agent_sources"] == {
+        "sentiment": proposal["agent_output_id"]
+    }
     (item,) = report["added"]
+    assert item["expected"] == {"sentiment": ai_sentiment, "note": "checked"}
     assert item["provenance"]["source"] == "adjudication"
     assert [r["decision"] for r in item["provenance"]["reviews"]] == ["edit", "edit"]
     assert item["provenance"]["adjudicator_took_ai"] is True
     assert item["provenance"]["accepted_ai_proposal"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_claim_of_an_ai_value_the_resolution_does_not_hold_is_refused(
+    client, app, tmp_path
+):
+    tokens, queue_id, record_id, path, shown = await _r3_disagreement(
+        client, app, tmp_path
+    )
+    (proposal,) = shown["agent_labels"]
+    other = next(
+        v
+        for v in ("positive", "negative", "neutral")
+        if v != proposal["labels"]["sentiment"]
+    )
+    proposal_id = proposal["agent_output_id"]
+    events = [s["review_event_id"] for s in shown["reviewer_labels"]]
+    claims = [
+        ({"sentiment": other}, {"sentiment": proposal_id}),
+        ({"sentiment": other, "note": ""}, {"note": proposal_id}),
+        ({"sentiment": other}, {"sentiment": str(uuid.uuid4())}),
+    ]
+
+    refused = [
+        await client.post(
+            f"{path}/resolve",
+            json={
+                "resolved_labels": labels,
+                "review_event_ids": events,
+                "agent_sources": sources,
+            },
+            headers=_as(tokens[0]),
+        )
+        for labels, sources in claims
+    ]
+    honest = await client.post(
+        f"{path}/resolve",
+        json={"resolved_labels": {"sentiment": other}, "review_event_ids": events},
+        headers=_as(tokens[0]),
+    )
+    await _create(client, tokens[0])
+    report = await _promote(
+        client, tokens[0], {"queue_id": queue_id, "record_ids": [record_id]}
+    )
+
+    assert [r.status_code for r in refused] == [422, 422, 422], [
+        r.text for r in refused
+    ]
+    assert honest.status_code == 200, honest.text
+    assert honest.json()["resolution"]["agent_sources"] == {}
+    (item,) = report["added"]
+    assert item["expected"] == {"sentiment": other}
+    assert item["provenance"]["adjudicator_took_ai"] is False
+    assert item["provenance"]["accepted_ai_proposal"] is False
 
 
 @pytest.mark.asyncio

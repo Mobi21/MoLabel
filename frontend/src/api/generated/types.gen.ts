@@ -62,11 +62,13 @@ export type AdjudicationOutcome = {
    */
   review_event_id?: string | null
   /**
-   * Agent Output Ids
+   * Agent Sources
    *
-   * Agent proposals whose columns the adjudicator took values from
+   * Each field whose resolved value the adjudicator took from an agent proposal, mapped to that proposal's agent_output_id
    */
-  agent_output_ids?: Array<string>
+  agent_sources?: {
+    [key: string]: string
+  }
   /**
    * Resolved At
    */
@@ -6210,11 +6212,13 @@ export type ResolveDisagreement = {
    */
   review_event_ids: Array<string>
   /**
-   * Agent Output Ids
+   * Agent Sources
    *
-   * The agent proposals whose columns resolved_labels takes values from, each an agent_labels entry of the disagreement. 422 otherwise
+   * Each field whose resolved value the adjudicator took from an agent proposal, mapped to that proposal's agent_output_id, an agent_labels entry of the disagreement. 422 when the proposal is not one, or when its value for the field is missing or is not the resolved value
    */
-  agent_output_ids?: Array<string>
+  agent_sources?: {
+    [key: string]: string
+  }
 }
 
 /**

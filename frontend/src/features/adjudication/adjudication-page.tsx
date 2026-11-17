@@ -51,10 +51,10 @@ import {
 } from '@/lib/keymap'
 import { cn } from '@/lib/utils'
 import {
+  agentSources,
   agreedLabels,
   sourcesOf,
   take,
-  takenProposals,
   type Source,
 } from './resolution'
 
@@ -439,7 +439,7 @@ function Resolver({
         resolved_labels: rawLabels(labels),
         rationale: rationale.trim() === '' ? null : rationale.trim(),
         review_event_ids: detail.reviewer_labels.map((s) => s.review_event_id),
-        agent_output_ids: takenProposals(fields, labels, taken),
+        agent_sources: agentSources(fields, labels, taken),
       },
     })
   }

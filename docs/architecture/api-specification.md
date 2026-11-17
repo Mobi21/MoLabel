@@ -2110,7 +2110,7 @@ class AdjudicationOutcome(BaseModel):
     adjudicator_id: str
     adjudicator_name: str | None
     review_event_id: str | None
-    agent_output_ids: list[str]          # the AI columns the adjudicator took values from
+    agent_sources: dict[str, str]        # field -> agent_output_id it was taken from
     resolved_at: str
 ```
 
@@ -2123,11 +2123,13 @@ Store a resolution and return the updated `DisagreementDetail`. `resolve` needs
 (422 when invalid). `review_event_ids` names the `review_event_id` of each
 `reviewer_labels` entry the caller read. 409 when the disagreement's review
 events differ from them or it is gone, so the caller reloads it, and 409 when
-it is already resolved. `agent_output_ids` names each agent proposal whose
-column `resolved_labels` takes a value from. Each must be an `agent_labels`
-entry of the disagreement, and they need `resolve` (422 otherwise). The
-adjudication stores them, and gold promotion records that the adjudicator took
-the AI proposal.
+it is already resolved. `agent_sources` maps each field whose resolved value
+the adjudicator took from an agent proposal to that proposal's
+`agent_output_id`. Each proposal must be an `agent_labels` entry of the
+disagreement, its value for the field must be present (not null, `""` or `[]`)
+and equal the resolved value, and the map needs `resolve` (422 otherwise). The
+adjudication stores the map, and gold promotion records that the adjudicator
+took an AI proposal.
 
 ```python
 class ResolveDisagreement(BaseModel):
@@ -2135,7 +2137,7 @@ class ResolveDisagreement(BaseModel):
     resolved_labels: dict[str, Any] | None
     rationale: str | None
     review_event_ids: list[str]          # required
-    agent_output_ids: list[str] = []
+    agent_sources: dict[str, str] = {}   # field -> agent_output_id
 ```
 
 ---

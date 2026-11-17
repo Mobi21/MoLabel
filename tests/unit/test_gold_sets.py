@@ -466,15 +466,15 @@ class TestPromotion:
     @pytest.mark.parametrize(
         ("taken", "proposed", "took_ai"),
         [
-            (("o1",), OTHER, True),
-            ((), {"intent": "refund", "urgent": False, "note": ""}, True),
-            ((), OTHER, False),
+            ({"urgent": "o1"}, OTHER, True),
+            ({}, {"intent": "refund", "urgent": False, "note": ""}, True),
+            ({}, OTHER, False),
         ],
     )
     def test_an_adjudicator_who_took_the_ai_column_accepted_the_proposal(
         self, taken, proposed, took_ai
     ):
-        resolution = Resolution(**{**RESOLVED.__dict__, "agent_output_ids": taken})
+        resolution = Resolution(**{**RESOLVED.__dict__, "agent_sources": taken})
         proposal = Proposal(agent_output_id="o1", agent_run_id="run", labels=proposed)
         result = promote(
             reviewed(

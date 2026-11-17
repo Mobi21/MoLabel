@@ -125,9 +125,11 @@ or closed, in one of three ways:
 Expected labels always come from a human review event or an adjudication. An
 agent proposal that no human accepted is never promoted. `ai_revealed` says
 whether a proposal was shown to any human whose review the label rests on.
-`adjudicator_took_ai` says whether the adjudicator took an AI proposal's
-column, which the resolve request names in `agent_output_ids`, or resolved to
-labels equal to a proposal the adjudication screen showed.
+`adjudicator_took_ai` says whether the adjudicator took a field's value from an
+AI proposal, or resolved to labels equal to a proposal the adjudication screen
+showed. The resolve request names each taken field and its proposal in
+`agent_sources`, and the server refuses a field the proposal gave no value for,
+or a value other than the resolved one, with 422.
 `accepted_ai_proposal` says whether a counted reviewer accepted a shown
 proposal or the adjudicator took one. P9's bias audits filter on these fields.
 

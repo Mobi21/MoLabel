@@ -63,25 +63,39 @@ function sameValue(a: LabelValue, b: LabelValue | undefined): boolean {
   )
 }
 
+/** Null, "" and [] are no label, so taking one takes nothing from the AI. */
+function isLabel(value: LabelValue): boolean {
+  return (
+    value !== null &&
+    value !== '' &&
+    !(Array.isArray(value) && value.length === 0)
+  )
+}
+
 /**
- * The agent proposals whose columns gave values the labels still hold.
- * `taken` is the column each field was last taken from.
+ * Each field whose label still holds the value an agent proposal gave it,
+ * mapped to that proposal. `taken` is the column each field was last taken
+ * from.
  */
-export function takenProposals(
+export function agentSources(
   fields: readonly RubricField[],
   labels: Labels,
   taken: Readonly<Record<string, Source>>,
-): string[] {
-  const ids = new Set<string>()
+): Record<string, string> {
+  const sources: Record<string, string> = {}
   for (const field of fields) {
     const source = taken[field.name]
     if (!source?.agentOutputId) continue
     const value = parseLabels([field], source.labels)[field.name]
-    if (value !== undefined && sameValue(value, labels[field.name])) {
-      ids.add(source.agentOutputId)
+    if (
+      value !== undefined &&
+      isLabel(value) &&
+      sameValue(value, labels[field.name])
+    ) {
+      sources[field.name] = source.agentOutputId
     }
   }
-  return [...ids]
+  return sources
 }
 
 /** Take a source's value for one field, or for every field. */

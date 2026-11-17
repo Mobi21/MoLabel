@@ -52,6 +52,7 @@ from molabel.core.types import (
     ReviewEventSource,
     canonical_review_decision,
 )
+from molabel.core.utils.canonical import present_label_value
 
 router = APIRouter(prefix="/adjudication", tags=["adjudication"])
 
@@ -100,9 +101,12 @@ class AdjudicationOutcome(BaseModel):
     adjudicator_id: str
     adjudicator_name: str | None = None
     review_event_id: str | None = None
-    agent_output_ids: list[str] = Field(
-        default_factory=list,
-        description="Agent proposals whose columns the adjudicator took values from",
+    agent_sources: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Each field whose resolved value the adjudicator took from an agent "
+            "proposal, mapped to that proposal's agent_output_id"
+        ),
     )
     resolved_at: str
 
@@ -159,11 +163,13 @@ class ResolveDisagreement(BaseModel):
             "the disagreement's review events differ, so the caller reloads it"
         )
     )
-    agent_output_ids: list[str] = Field(
-        default_factory=list,
+    agent_sources: dict[str, str] = Field(
+        default_factory=dict,
         description=(
-            "The agent proposals whose columns resolved_labels takes values from, "
-            "each an agent_labels entry of the disagreement. 422 otherwise"
+            "Each field whose resolved value the adjudicator took from an agent "
+            "proposal, mapped to that proposal's agent_output_id, an agent_labels "
+            "entry of the disagreement. 422 when the proposal is not one, or when "
+            "its value for the field is missing or is not the resolved value"
         ),
     )
 
@@ -279,7 +285,7 @@ def _outcomes_by_record(
                     adjudicator_id=str(row[5]),
                     adjudicator_name=str(row[6]) if row[6] else None,
                     review_event_id=json_object(row[7]).get("review_event_id"),
-                    agent_output_ids=json_object(row[7]).get("agent_output_ids") or [],
+                    agent_sources=json_object(row[7]).get("agent_sources") or {},
                     resolved_at=str(row[8]),
                 ),
             )
@@ -366,6 +372,25 @@ def _bound_output_ids(conn: Any, queue: ReviewQueue, record_id: str) -> set[str]
         ).fetchall()
         for output_id in deserialize_agent_output_ids(raw)
     }
+
+
+def _contradicted_sources(
+    conn: Any, sources: dict[str, str], labels: dict[str, Any]
+) -> list[str]:
+    """The fields whose named proposal gave no value, or not the resolved one."""
+    proposed = {
+        str(row[0]): json_object(row[1])
+        for row in conn.execute(
+            _expanding("SELECT id, labels FROM agent_outputs WHERE id IN :ids", "ids"),
+            {"ids": sorted(set(sources.values()))},
+        ).fetchall()
+    }
+    contradicted = []
+    for field, output_id in sources.items():
+        value = present_label_value(proposed.get(output_id, {}).get(field))
+        if value is None or value != present_label_value(labels.get(field)):
+            contradicted.append(field)
+    return contradicted
 
 
 def _detail(
@@ -500,9 +525,12 @@ async def resolve_queue_disagreement(
     resolve_with_labels = body.resolution == AdjudicationResolution.resolve
     if resolve_with_labels and not body.resolved_labels:
         raise HTTPException(status_code=422, detail="resolve needs resolved_labels")
-    taken = sorted({hyphenated_id(output_id) for output_id in body.agent_output_ids})
-    if taken and not resolve_with_labels:
-        raise HTTPException(status_code=422, detail="agent_output_ids needs resolve")
+    sources = {
+        field: hyphenated_id(output_id)
+        for field, output_id in sorted(body.agent_sources.items())
+    }
+    if sources and not resolve_with_labels:
+        raise HTTPException(status_code=422, detail="agent_sources needs resolve")
 
     with get_engine(request).begin() as conn:
         queue = adjudicable_queue(conn, queue_id, reviewer.workspace_id)
@@ -516,7 +544,7 @@ async def resolve_queue_disagreement(
             raise HTTPException(
                 status_code=409, detail="This disagreement is already resolved"
             )
-        unknown = set(taken) - _bound_output_ids(conn, queue, record_id)
+        unknown = set(sources.values()) - _bound_output_ids(conn, queue, record_id)
         if unknown:
             raise HTTPException(
                 status_code=422,
@@ -538,6 +566,15 @@ async def resolve_queue_disagreement(
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+            contradicted = _contradicted_sources(conn, sources, labels)
+            if contradicted:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "agent_sources names a proposal that did not give the "
+                        f"resolved value of {contradicted}"
+                    ),
+                )
             review_event_id = str(uuid.uuid4())
             conn.execute(
                 text(
@@ -591,7 +628,7 @@ async def resolve_queue_disagreement(
                     {
                         "queue_id": queue_id,
                         "review_event_id": review_event_id,
-                        "agent_output_ids": taken,
+                        "agent_sources": sources,
                     }
                 ),
                 "now": now,

@@ -205,7 +205,7 @@ describe('AdjudicationPage', () => {
     })
   })
 
-  it('names the AI proposal whose column the resolution took', async () => {
+  it('names the AI proposal each taken field came from', async () => {
     const calls = serveWithProposal()
     renderAdjudication()
     await screen.findByRole('heading', { name: 'ticket-1' })
@@ -218,7 +218,7 @@ describe('AdjudicationPage', () => {
     })
     expect(resolves(calls)[0]?.body).toMatchObject({
       resolved_labels: { intent: 'shipping' },
-      agent_output_ids: ['o1'],
+      agent_sources: { intent: 'o1' },
     })
   })
 
@@ -236,8 +236,8 @@ describe('AdjudicationPage', () => {
     })
     expect(resolves(calls)[0]?.body).toMatchObject({
       resolved_labels: { intent: 'bug' },
-      agent_output_ids: [],
     })
+    expect(resolves(calls)[0]?.body).toHaveProperty('agent_sources', {})
   })
 
   it('reloads a disagreement that changed, and drops the picks made on it', async () => {

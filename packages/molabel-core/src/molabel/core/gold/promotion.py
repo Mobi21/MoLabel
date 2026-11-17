@@ -8,7 +8,7 @@ never becomes gold. ``docs/architecture/gold-sets.md`` states the rules.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
@@ -25,7 +25,7 @@ from molabel.core.gold.model import (
     expected_labels,
 )
 from molabel.core.types import AdjudicationResolution, ReviewDecision
-from molabel.core.utils.canonical import canonical_label_value
+from molabel.core.utils.canonical import present_label_value
 
 
 @dataclass(frozen=True)
@@ -50,8 +50,12 @@ class Resolution:
     labels: dict[str, Any] | None
     review_event_id: str | None
     ai_revealed: bool
-    agent_output_ids: tuple[str, ...] = ()
-    """The agent proposals whose columns the adjudicator took values from."""
+    agent_sources: dict[str, str] = field(default_factory=dict)
+    """Each field the adjudicator took from an agent proposal, and that proposal.
+
+    The resolve endpoint stores a field only when the proposal gave the
+    resolved value for it.
+    """
 
 
 @dataclass(frozen=True)
@@ -159,16 +163,12 @@ def _settle(
     return _Settled(first, GoldSource.reviewer_agreement)
 
 
-def _value(value: Any) -> str | None:
-    """A label for the failure check, with null, "" and [] all missing."""
-    return None if value in (None, "", []) else canonical_label_value(value)
-
-
 def _differing_fields(expected: dict[str, Any], proposed: dict[str, Any]) -> list[str]:
     return sorted(
         name
         for name in expected.keys() | proposed.keys()
-        if _value(expected.get(name)) != _value(proposed.get(name))
+        if present_label_value(expected.get(name))
+        != present_label_value(proposed.get(name))
     )
 
 
@@ -248,7 +248,7 @@ def gold_candidate(
     if adjudication is not None:
         reviewer_ids.add(adjudication.adjudicator_id)
     adjudicator_took_ai = resolution is not None and (
-        bool(resolution.agent_output_ids)
+        bool(resolution.agent_sources)
         or any(
             not _differing_fields(settled.expected, p.labels) for p in record.proposals
         )
