@@ -1,7 +1,9 @@
 """Tier 3 — API Coverage: Adjudication (T3-11).
 
 Tests:
-    T3-11: Detect disagreements, build queue, resolve (4 resolution types)
+    T3-11: A review queue's disagreements answer 404 for an unknown queue.
+    ``tests/integration/test_api_review_adjudication.py`` covers detection
+    and resolution on a reviewed queue.
 """
 
 from __future__ import annotations
@@ -33,111 +35,34 @@ async def _setup(client: InstrumentedClient) -> None:
     client._session_cookie = login.cookies.get("molabel_session")
 
 
-def _make_review_events(record_id: str, task_schema_id: str) -> list[dict]:
-    return [
-        {
-            "id": str(uuid.uuid4()),
-            "record_id": record_id,
-            "reviewer_id": str(uuid.uuid4()),
-            "source": "human",
-            "decision": "accept",
-            "labels": {"sentiment": "positive"},
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "record_id": record_id,
-            "reviewer_id": str(uuid.uuid4()),
-            "source": "human",
-            "decision": "accept",
-            "labels": {"sentiment": "negative"},
-        },
-    ]
-
-
 @SHARED_WORKSPACE
 @pytest.mark.asyncio
 @pytest.mark.e2e
 @pytest.mark.tier3
-async def test_adjudication_detect_build_resolve(
+async def test_adjudication_of_an_unknown_queue_is_not_found(
     client: InstrumentedClient,
     ctx: TestContext,
 ) -> None:
-    """T3-11: Detect disagreements, build queue, resolve with all 4 resolution types."""
+    """T3-11: List, show, and resolve answer 404 for an unknown queue."""
 
     await _setup(client)
+    base = f"{BASE}/adjudication/queues/{uuid.uuid4()}/disagreements"
+    record_id = str(uuid.uuid4())
 
-    task_schema_id = str(uuid.uuid4())
-    record_id_1 = str(uuid.uuid4())
-    record_id_2 = str(uuid.uuid4())
+    with checkpoint(ctx, "list_disagreements_404"):
+        resp = await client.get(base)
+        assert resp.status_code == 404, resp.text
 
-    events_by_record = {
-        record_id_1: _make_review_events(record_id_1, task_schema_id),
-        record_id_2: _make_review_events(record_id_2, task_schema_id),
-    }
+    with checkpoint(ctx, "show_disagreement_404"):
+        resp = await client.get(f"{base}/{record_id}")
+        assert resp.status_code == 404, resp.text
 
-    with checkpoint(ctx, "detect_disagreements"):
+    with checkpoint(ctx, "resolve_disagreement_404"):
         resp = await client.post(
-            f"{BASE}/adjudication/detect",
+            f"{base}/{record_id}/resolve",
             json={
-                "review_events_by_record": events_by_record,
-                "task_schema_id": task_schema_id,
+                "resolved_labels": {"sentiment": "positive"},
+                "review_event_ids": [str(uuid.uuid4())],
             },
         )
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert "disagreements" in body
-        assert "total" in body
-
-    queue_items: list = []
-    with checkpoint(ctx, "build_adjudication_queue"):
-        resp = await client.post(
-            f"{BASE}/adjudication/queue/build",
-            json={
-                "review_events_by_record": events_by_record,
-                "task_schema_id": task_schema_id,
-            },
-        )
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert "items" in body
-        assert "total" in body
-        queue_items = body["items"]
-
-    with checkpoint(ctx, "get_adjudication_queue"):
-        resp = await client.get(f"{BASE}/adjudication/queue")
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert "items" in body
-
-    # Resolve items with all 4 resolution types (if queue has items)
-    resolution_types = ["resolve", "preserve_disagreement", "downgrade", "exclude"]
-    for i, resolution in enumerate(resolution_types):
-        # Will get 404 if out of range, which is acceptable
-        item_id = queue_items[i]["id"] if i < len(queue_items) else str(uuid.uuid4())
-
-        with checkpoint(ctx, f"resolve_{resolution}"):
-            payload: dict = {
-                "queue_item_id": item_id,
-                "resolution": resolution,
-                "rationale": f"Test {resolution} resolution",
-            }
-            if resolution == "resolve":
-                payload["resolved_labels"] = {"sentiment": "positive"}
-            resp = await client.post(
-                f"{BASE}/adjudication/resolve",
-                json=payload,
-            )
-            # If no item with that ID, 404 is valid; otherwise 200
-            assert resp.status_code in (200, 404), resp.text
-
-    with checkpoint(ctx, "list_adjudication_queue_filtered"):
-        resp = await client.get(
-            f"{BASE}/adjudication/queue",
-            params={"task_schema_id": task_schema_id},
-        )
-        assert resp.status_code == 200, resp.text
-
-    with checkpoint(ctx, "queue_disagreements_404"):
-        fake_id = str(uuid.uuid4())
-        resp = await client.get(f"{BASE}/adjudication/queues/{fake_id}/disagreements")
         assert resp.status_code == 404, resp.text

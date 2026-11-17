@@ -13,7 +13,6 @@ import {
   advanceStep,
   approveRelease,
   bootstrapWorkspace,
-  buildAdjudicationQueueEndpoint,
   cancelAgentRun,
   cancelExecution,
   checkHfAuth,
@@ -37,14 +36,12 @@ import {
   deleteModelProfile,
   deleteRuntimeProfile,
   deleteSession,
-  detectDisagreementsEndpoint,
   detectWorkspace,
   diffArtifact,
   disablePlugin,
   downloadExport,
   enablePlugin,
   executeWorkflow,
-  getAdjudicationQueueEndpoint,
   getAgentAnalytics,
   getAgentOutputForRecord,
   getAgentRun,
@@ -115,7 +112,6 @@ import {
   readArtifact,
   reindexWorkspace,
   releaseClaimEndpoint,
-  resolveAdjudicationEndpoint,
   resolveQueueDisagreement,
   resolveSelector,
   restoreSnapshot,
@@ -154,9 +150,6 @@ import type {
   BootstrapWorkspaceData,
   BootstrapWorkspaceError,
   BootstrapWorkspaceResponse,
-  BuildAdjudicationQueueEndpointData,
-  BuildAdjudicationQueueEndpointError,
-  BuildAdjudicationQueueEndpointResponse,
   CancelAgentRunData,
   CancelAgentRunError,
   CancelAgentRunResponse,
@@ -224,9 +217,6 @@ import type {
   DeleteRuntimeProfileResponse,
   DeleteSessionData,
   DeleteSessionResponse,
-  DetectDisagreementsEndpointData,
-  DetectDisagreementsEndpointError,
-  DetectDisagreementsEndpointResponse,
   DetectWorkspaceData,
   DetectWorkspaceError,
   DetectWorkspaceResponse,
@@ -244,9 +234,6 @@ import type {
   ExecuteWorkflowData,
   ExecuteWorkflowError,
   ExecuteWorkflowResponse,
-  GetAdjudicationQueueEndpointData,
-  GetAdjudicationQueueEndpointError,
-  GetAdjudicationQueueEndpointResponse,
   GetAgentAnalyticsData,
   GetAgentAnalyticsError,
   GetAgentAnalyticsResponse,
@@ -450,9 +437,6 @@ import type {
   ReleaseClaimEndpointData,
   ReleaseClaimEndpointError,
   ReleaseClaimEndpointResponse,
-  ResolveAdjudicationEndpointData,
-  ResolveAdjudicationEndpointError,
-  ResolveAdjudicationEndpointResponse,
   ResolveQueueDisagreementData,
   ResolveQueueDisagreementError,
   ResolveQueueDisagreementResponse,
@@ -3494,131 +3478,6 @@ export const getMissionControlReviewersOptions = (
     },
     queryKey: getMissionControlReviewersQueryKey(options),
   })
-
-/**
- * Detect Disagreements Endpoint
- *
- * Detect disagreements in review events (AJ-001).
- *
- * Compares review events for overlapping records and identifies both
- * human-human and human-agent disagreements at the field level.
- */
-export const detectDisagreementsEndpointMutation = (
-  options?: Partial<Options<DetectDisagreementsEndpointData>>,
-): UseMutationOptions<
-  DetectDisagreementsEndpointResponse,
-  DetectDisagreementsEndpointError,
-  Options<DetectDisagreementsEndpointData>
-> => {
-  const mutationOptions: UseMutationOptions<
-    DetectDisagreementsEndpointResponse,
-    DetectDisagreementsEndpointError,
-    Options<DetectDisagreementsEndpointData>
-  > = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await detectDisagreementsEndpoint({
-        ...options,
-        ...fnOptions,
-        throwOnError: true,
-      })
-      return data
-    },
-  }
-  return mutationOptions
-}
-
-/**
- * Build Adjudication Queue Endpoint
- *
- * Detect disagreements and build an adjudication queue (AJ-001, AJ-002).
- *
- * Detects disagreements, classifies severity and type, and builds a
- * prioritized adjudication queue.
- */
-export const buildAdjudicationQueueEndpointMutation = (
-  options?: Partial<Options<BuildAdjudicationQueueEndpointData>>,
-): UseMutationOptions<
-  BuildAdjudicationQueueEndpointResponse,
-  BuildAdjudicationQueueEndpointError,
-  Options<BuildAdjudicationQueueEndpointData>
-> => {
-  const mutationOptions: UseMutationOptions<
-    BuildAdjudicationQueueEndpointResponse,
-    BuildAdjudicationQueueEndpointError,
-    Options<BuildAdjudicationQueueEndpointData>
-  > = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await buildAdjudicationQueueEndpoint({
-        ...options,
-        ...fnOptions,
-        throwOnError: true,
-      })
-      return data
-    },
-  }
-  return mutationOptions
-}
-
-export const getAdjudicationQueueEndpointQueryKey = (
-  options?: Options<GetAdjudicationQueueEndpointData>,
-) => createQueryKey('getAdjudicationQueueEndpoint', options)
-
-/**
- * Get Adjudication Queue Endpoint
- *
- * Get the current adjudication queue (AJ-002).
- */
-export const getAdjudicationQueueEndpointOptions = (
-  options?: Options<GetAdjudicationQueueEndpointData>,
-) =>
-  queryOptions<
-    GetAdjudicationQueueEndpointResponse,
-    GetAdjudicationQueueEndpointError,
-    GetAdjudicationQueueEndpointResponse,
-    ReturnType<typeof getAdjudicationQueueEndpointQueryKey>
-  >({
-    queryFn: async ({ queryKey, signal }) => {
-      const { data } = await getAdjudicationQueueEndpoint({
-        ...options,
-        ...queryKey[0],
-        signal,
-        throwOnError: true,
-      })
-      return data
-    },
-    queryKey: getAdjudicationQueueEndpointQueryKey(options),
-  })
-
-/**
- * Resolve Adjudication Endpoint
- *
- * Resolve an adjudication queue item (AJ-003, AJ-007).
- *
- * Applies a resolution and creates a review event for the audit trail.
- */
-export const resolveAdjudicationEndpointMutation = (
-  options?: Partial<Options<ResolveAdjudicationEndpointData>>,
-): UseMutationOptions<
-  ResolveAdjudicationEndpointResponse,
-  ResolveAdjudicationEndpointError,
-  Options<ResolveAdjudicationEndpointData>
-> => {
-  const mutationOptions: UseMutationOptions<
-    ResolveAdjudicationEndpointResponse,
-    ResolveAdjudicationEndpointError,
-    Options<ResolveAdjudicationEndpointData>
-  > = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await resolveAdjudicationEndpoint({
-        ...options,
-        ...fnOptions,
-        throwOnError: true,
-      })
-      return data
-    },
-  }
-  return mutationOptions
-}
 
 export const listReviewEventsQueryKey = (
   options?: Options<ListReviewEventsData>,

@@ -1,12 +1,10 @@
-"""Unit tests for adjudication service (AJ-001 through AJ-005, AJ-007).
+"""Unit tests for adjudication service (AJ-001 through AJ-005).
 
 Tests cover:
 - AJ-001: Disagreement detection (human-human and human-agent)
 - AJ-002: Adjudication queue with severity/type classification
-- AJ-003: Adjudication resolutions
 - AJ-004: Side-by-side comparison data
 - AJ-005: Policy context matching
-- AJ-007: Adjudication creates review events
 """
 
 from __future__ import annotations
@@ -16,14 +14,12 @@ import uuid
 import pytest
 
 from molabel.core.adjudication.adjudication_service import (
-    AdjudicationQueueItem,
     AdjudicationService,
     AdjudicationSeverity,
     AdjudicationType,
     Disagreement,
     DisagreementType,
 )
-from molabel.core.types import AdjudicationResolution
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -31,7 +27,6 @@ from molabel.core.types import AdjudicationResolution
 
 
 TASK_SCHEMA_ID = uuid.uuid4()
-WORKSPACE_ID = uuid.uuid4()
 
 
 def _make_event(
@@ -356,140 +351,6 @@ class TestAdjudicationQueue:
         assert queue[0].severity == AdjudicationSeverity.high
         assert queue[1].severity == AdjudicationSeverity.low
 
-    def test_get_unresolved_queue(self, service: AdjudicationService) -> None:
-        """get_unresolved_queue filters out resolved items."""
-        d = self._build_disagreement(fields=["f"])
-        queue = service.build_queue([d])
-        assert len(service.get_unresolved_queue()) == 1
-
-        # Resolve the item
-        service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.preserve_disagreement,
-        )
-        assert len(service.get_unresolved_queue()) == 0
-
-
-# ---------------------------------------------------------------------------
-# AJ-003: Adjudication resolutions
-# ---------------------------------------------------------------------------
-
-
-class TestAdjudicationResolutions:
-    """Tests for applying adjudication resolutions (AJ-003)."""
-
-    def _make_queue(self, service: AdjudicationService) -> list[AdjudicationQueueItem]:
-        """Helper to create a queue with one item."""
-        d = Disagreement(
-            record_id=uuid.uuid4(),
-            task_schema_id=TASK_SCHEMA_ID,
-            conflicting_event_ids=[uuid.uuid4(), uuid.uuid4()],
-            disagreement_type=DisagreementType.human_human,
-            fields_in_conflict=["sentiment"],
-            reviewer_labels={
-                "r1": {"sentiment": "positive"},
-                "r2": {"sentiment": "negative"},
-            },
-        )
-        return service.build_queue([d])
-
-    def test_resolve_with_labels(self, service: AdjudicationService) -> None:
-        """Resolution type 'resolve' produces final labels."""
-        queue = self._make_queue(service)
-        result = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.resolve,
-            resolved_labels={"sentiment": "positive"},
-            rationale="Reviewer 1 was more careful",
-        )
-        assert result.resolution == AdjudicationResolution.resolve
-        assert result.resolved_labels is not None
-        assert result.resolved_labels.labels == {"sentiment": "positive"}
-        assert result.rationale == "Reviewer 1 was more careful"
-
-    def test_preserve_disagreement(self, service: AdjudicationService) -> None:
-        """Resolution type 'preserve_disagreement' keeps both labels."""
-        queue = self._make_queue(service)
-        result = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.preserve_disagreement,
-        )
-        assert result.resolution == AdjudicationResolution.preserve_disagreement
-        assert result.resolved_labels is None
-
-    def test_exclude_resolution(self, service: AdjudicationService) -> None:
-        """Resolution type 'exclude' excludes the record."""
-        queue = self._make_queue(service)
-        result = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.exclude,
-        )
-        assert result.resolution == AdjudicationResolution.exclude
-        assert result.resolved_labels is not None
-        assert result.resolved_labels.labels == {}
-
-    def test_downgrade_resolution(self, service: AdjudicationService) -> None:
-        """Resolution type 'downgrade' marks for re-review."""
-        queue = self._make_queue(service)
-        result = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.downgrade,
-            rationale="Needs re-review with updated guidelines",
-        )
-        assert result.resolution == AdjudicationResolution.downgrade
-        assert result.rationale == "Needs re-review with updated guidelines"
-
-    def test_resolve_marks_item_resolved(self, service: AdjudicationService) -> None:
-        """Resolving marks the queue item as resolved."""
-        queue = self._make_queue(service)
-        assert queue[0].resolved is False
-        service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.resolve,
-            resolved_labels={"sentiment": "neutral"},
-        )
-        assert queue[0].resolved is True
-
-    def test_resolve_nonexistent_raises(self, service: AdjudicationService) -> None:
-        """Resolving a non-existent queue item raises ValueError."""
-        with pytest.raises(ValueError, match="not found"):
-            service.resolve(
-                uuid.uuid4(),
-                uuid.uuid4(),
-                AdjudicationResolution.resolve,
-            )
-
-    def test_source_event_ids_tracked(self, service: AdjudicationService) -> None:
-        """Resolved labels track which events were considered."""
-        queue = self._make_queue(service)
-        result = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.resolve,
-            resolved_labels={"sentiment": "positive"},
-        )
-        assert result.resolved_labels is not None
-        assert len(result.resolved_labels.source_event_ids) == 2
-
-    def test_get_resolution(self, service: AdjudicationService) -> None:
-        """get_resolution retrieves a stored resolution."""
-        queue = self._make_queue(service)
-        result = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.resolve,
-            resolved_labels={"sentiment": "positive"},
-        )
-        fetched = service.get_resolution(result.adjudication_id)
-        assert fetched is not None
-        assert fetched.adjudication_id == result.adjudication_id
-
 
 # ---------------------------------------------------------------------------
 # AJ-004: Side-by-side comparison
@@ -750,95 +611,3 @@ class TestPolicyContext:
         assert len(excerpts) >= 1
         # Most relevant should be first
         assert excerpts[0].section_id == "more_relevant"
-
-
-# ---------------------------------------------------------------------------
-# AJ-007: Adjudication creates review events
-# ---------------------------------------------------------------------------
-
-
-class TestAdjudicationReviewEvents:
-    """Tests for review event creation from adjudication (AJ-007)."""
-
-    def _make_queue(self, service: AdjudicationService) -> list[AdjudicationQueueItem]:
-        """Helper to create a queue with one item."""
-        d = Disagreement(
-            record_id=uuid.uuid4(),
-            task_schema_id=TASK_SCHEMA_ID,
-            conflicting_event_ids=[uuid.uuid4(), uuid.uuid4()],
-            disagreement_type=DisagreementType.human_human,
-            fields_in_conflict=["sentiment"],
-        )
-        return service.build_queue([d])
-
-    def test_resolve_creates_review_event(self, service: AdjudicationService) -> None:
-        """Resolving with 'resolve' creates a review event ID."""
-        queue = self._make_queue(service)
-        result = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.resolve,
-            resolved_labels={"sentiment": "positive"},
-            rationale="Adjudicator determined positive",
-        )
-        assert result.review_event_id is not None
-
-    def test_preserve_does_not_create_event(self, service: AdjudicationService) -> None:
-        """Preserving disagreement does not create a review event."""
-        queue = self._make_queue(service)
-        result = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.preserve_disagreement,
-        )
-        assert result.review_event_id is None
-
-    def test_review_event_is_append_only(self, service: AdjudicationService) -> None:
-        """Each resolution creates a new event ID, never reusing old ones."""
-        d1 = Disagreement(
-            record_id=uuid.uuid4(),
-            task_schema_id=TASK_SCHEMA_ID,
-            conflicting_event_ids=[uuid.uuid4()],
-            disagreement_type=DisagreementType.human_human,
-            fields_in_conflict=["f"],
-        )
-        d2 = Disagreement(
-            record_id=uuid.uuid4(),
-            task_schema_id=TASK_SCHEMA_ID,
-            conflicting_event_ids=[uuid.uuid4()],
-            disagreement_type=DisagreementType.human_human,
-            fields_in_conflict=["f"],
-        )
-        queue = service.build_queue([d1, d2])
-
-        r1 = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.resolve,
-            resolved_labels={"f": "a"},
-        )
-        r2 = service.resolve(
-            queue[1].id,
-            uuid.uuid4(),
-            AdjudicationResolution.resolve,
-            resolved_labels={"f": "b"},
-        )
-
-        assert r1.review_event_id is not None
-        assert r2.review_event_id is not None
-        assert r1.review_event_id != r2.review_event_id
-
-    def test_resolution_includes_workspace_id(
-        self, service: AdjudicationService
-    ) -> None:
-        """Resolution can include workspace ID for audit trail."""
-        queue = self._make_queue(service)
-        result = service.resolve(
-            queue[0].id,
-            uuid.uuid4(),
-            AdjudicationResolution.resolve,
-            resolved_labels={"sentiment": "positive"},
-            workspace_id=WORKSPACE_ID,
-        )
-        assert result.review_event_id is not None
-        assert result.adjudication_id is not None

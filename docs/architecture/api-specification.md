@@ -2019,9 +2019,8 @@ more copies than reviewers.
 Each endpoint below reads only a queue of the caller's workspace. A queue of
 another workspace answers 404.
 
-The detect, build, queue, and resolve endpoints in `queue.py` take review events
-from the caller and keep nothing in the database. The CLI's `adjudication`
-commands use them.
+The GUI and the CLI's `molabel adjudication list`, `show`, and `resolve` use
+these endpoints, so a resolution made through either one is the same row.
 
 ---
 

@@ -72,7 +72,7 @@ The CLI is already capable of substantial project authoring and operation:
 - workflow create and run,
 - queue claim and status,
 - review submit, draft, reveal, correct,
-- adjudication queue and resolve,
+- adjudication list, show, and resolve,
 - export create and download,
 - artifact read, diff, and safe write.
 
@@ -415,7 +415,7 @@ The expected loop is:
 11. `molabel workflow run`,
 12. `molabel queue status` and `molabel queue claim`,
 13. `molabel review submit` or related review commands,
-14. `molabel adjudication queue` and `molabel adjudication resolve`,
+14. `molabel adjudication list`, `show`, and `resolve`,
 15. `molabel quality ...`,
 16. `molabel export ...`,
 17. benchmark-native scoring and report generation.

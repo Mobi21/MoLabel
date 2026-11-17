@@ -18,9 +18,6 @@ import type {
   BootstrapWorkspaceData,
   BootstrapWorkspaceErrors,
   BootstrapWorkspaceResponses,
-  BuildAdjudicationQueueEndpointData,
-  BuildAdjudicationQueueEndpointErrors,
-  BuildAdjudicationQueueEndpointResponses,
   CancelAgentRunData,
   CancelAgentRunErrors,
   CancelAgentRunResponses,
@@ -88,9 +85,6 @@ import type {
   DeleteRuntimeProfileResponses,
   DeleteSessionData,
   DeleteSessionResponses,
-  DetectDisagreementsEndpointData,
-  DetectDisagreementsEndpointErrors,
-  DetectDisagreementsEndpointResponses,
   DetectWorkspaceData,
   DetectWorkspaceErrors,
   DetectWorkspaceResponses,
@@ -109,9 +103,6 @@ import type {
   ExecuteWorkflowData,
   ExecuteWorkflowErrors,
   ExecuteWorkflowResponses,
-  GetAdjudicationQueueEndpointData,
-  GetAdjudicationQueueEndpointErrors,
-  GetAdjudicationQueueEndpointResponses,
   GetAgentAnalyticsData,
   GetAgentAnalyticsErrors,
   GetAgentAnalyticsResponses,
@@ -315,9 +306,6 @@ import type {
   ReleaseClaimEndpointData,
   ReleaseClaimEndpointErrors,
   ReleaseClaimEndpointResponses,
-  ResolveAdjudicationEndpointData,
-  ResolveAdjudicationEndpointErrors,
-  ResolveAdjudicationEndpointResponses,
   ResolveQueueDisagreementData,
   ResolveQueueDisagreementErrors,
   ResolveQueueDisagreementResponses,
@@ -1930,115 +1918,6 @@ export const getMissionControlReviewers = <
     GetMissionControlReviewersErrors,
     ThrowOnError
   >({ url: '/api/v1/mission-control/reviewers', ...options })
-
-/**
- * Detect Disagreements Endpoint
- *
- * Detect disagreements in review events (AJ-001).
- *
- * Compares review events for overlapping records and identifies both
- * human-human and human-agent disagreements at the field level.
- */
-export const detectDisagreementsEndpoint = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<DetectDisagreementsEndpointData, ThrowOnError>,
-): RequestResult<
-  DetectDisagreementsEndpointResponses,
-  DetectDisagreementsEndpointErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    DetectDisagreementsEndpointResponses,
-    DetectDisagreementsEndpointErrors,
-    ThrowOnError
-  >({
-    url: '/api/v1/adjudication/detect',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
-
-/**
- * Build Adjudication Queue Endpoint
- *
- * Detect disagreements and build an adjudication queue (AJ-001, AJ-002).
- *
- * Detects disagreements, classifies severity and type, and builds a
- * prioritized adjudication queue.
- */
-export const buildAdjudicationQueueEndpoint = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<BuildAdjudicationQueueEndpointData, ThrowOnError>,
-): RequestResult<
-  BuildAdjudicationQueueEndpointResponses,
-  BuildAdjudicationQueueEndpointErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    BuildAdjudicationQueueEndpointResponses,
-    BuildAdjudicationQueueEndpointErrors,
-    ThrowOnError
-  >({
-    url: '/api/v1/adjudication/queue/build',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
-
-/**
- * Get Adjudication Queue Endpoint
- *
- * Get the current adjudication queue (AJ-002).
- */
-export const getAdjudicationQueueEndpoint = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<GetAdjudicationQueueEndpointData, ThrowOnError>,
-): RequestResult<
-  GetAdjudicationQueueEndpointResponses,
-  GetAdjudicationQueueEndpointErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    GetAdjudicationQueueEndpointResponses,
-    GetAdjudicationQueueEndpointErrors,
-    ThrowOnError
-  >({ url: '/api/v1/adjudication/queue', ...options })
-
-/**
- * Resolve Adjudication Endpoint
- *
- * Resolve an adjudication queue item (AJ-003, AJ-007).
- *
- * Applies a resolution and creates a review event for the audit trail.
- */
-export const resolveAdjudicationEndpoint = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<ResolveAdjudicationEndpointData, ThrowOnError>,
-): RequestResult<
-  ResolveAdjudicationEndpointResponses,
-  ResolveAdjudicationEndpointErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ResolveAdjudicationEndpointResponses,
-    ResolveAdjudicationEndpointErrors,
-    ThrowOnError
-  >({
-    url: '/api/v1/adjudication/resolve',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
 
 /**
  * List Review Events

@@ -407,24 +407,38 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       description: 'Submit a correction that supersedes a previous review',
     },
     {
-      name: 'adjudication queue',
+      name: 'adjudication list',
       group: 'adjudication',
-      description: 'Inspect the adjudication queue',
+      description:
+        'List the records the reviewers of a queue disagree on, once every copy of the record is reviewed',
     },
     {
-      name: 'adjudication detect',
+      name: 'adjudication show',
       group: 'adjudication',
-      description: 'Detect disagreements from review events',
-    },
-    {
-      name: 'adjudication build',
-      group: 'adjudication',
-      description: 'Detect disagreements and build an adjudication queue',
+      description:
+        "Show a queue's disagreement on a record with every reviewer's labels",
     },
     {
       name: 'adjudication resolve',
       group: 'adjudication',
-      description: 'Resolve an adjudication item',
+      description:
+        'Resolve a disagreement and store the outcome, which export and the GUI read',
+      flags: [
+        {
+          name: '--review-event-ids',
+          description:
+            'The review_event_id of each reviewer_labels entry adjudication show printed',
+        },
+        {
+          name: '--resolution',
+          description:
+            'resolve (the default), preserve_disagreement, downgrade, or exclude',
+        },
+        {
+          name: '--resolved-labels-json',
+          description: 'The labels, for resolve',
+        },
+      ],
     },
     {
       name: 'agent-run list',

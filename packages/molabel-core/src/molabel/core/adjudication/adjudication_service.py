@@ -1,8 +1,7 @@
-"""Adjudication service (AJ-001 through AJ-005, AJ-007).
+"""Adjudication service (AJ-001 through AJ-005).
 
-Detects disagreements between reviewers, builds an adjudication queue
-with severity/type classification, supports resolution workflows, and
-produces audit-trail review events.
+Detects disagreements between reviewers and classifies each by severity and
+type. A resolution is stored by the API's adjudication endpoints.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ from molabel.core.quality.review_agreement import (
     counted_review_events,
     rated_labels,
 )
-from molabel.core.types import AdjudicationResolution, ReviewEventSource
+from molabel.core.types import ReviewEventSource
 
 # ---------------------------------------------------------------------------
 # AJ-001: Disagreement detection
@@ -79,34 +78,6 @@ class AdjudicationQueueItem:
     severity: AdjudicationSeverity = AdjudicationSeverity.medium
     adjudication_type: AdjudicationType = AdjudicationType.factual
     created_at: str = ""
-    resolved: bool = False
-
-
-# ---------------------------------------------------------------------------
-# AJ-003: Adjudication resolutions
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class ResolvedLabels:
-    """Final labels produced by an adjudication resolution."""
-
-    labels: dict[str, Any]
-    source_event_ids: list[uuid.UUID]
-    """Event IDs that were considered in producing the resolved labels."""
-
-
-@dataclass(frozen=True)
-class ResolutionResult:
-    """Result of applying an adjudication resolution."""
-
-    adjudication_id: uuid.UUID
-    record_id: uuid.UUID
-    resolution: AdjudicationResolution
-    resolved_labels: ResolvedLabels | None
-    rationale: str | None = None
-    review_event_id: uuid.UUID | None = None
-    """ID of the review event created for the audit trail (AJ-007)."""
 
 
 # ---------------------------------------------------------------------------
@@ -172,47 +143,14 @@ class PolicyContext:
 
 
 # ---------------------------------------------------------------------------
-# Review event data structure (AJ-007)
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class AdjudicationReviewEvent:
-    """Data for a review event created from an adjudication resolution.
-
-    Follows the existing ReviewEvent model patterns but is created as a
-    result of adjudication rather than direct review.
-    """
-
-    id: uuid.UUID
-    record_id: uuid.UUID
-    task_schema_id: uuid.UUID
-    task_schema_version: int
-    adjudicator_id: uuid.UUID
-    source: str
-    labels: dict[str, Any]
-    rationale: str | None = None
-    adjudication_id: uuid.UUID | None = None
-    conflicting_event_ids: list[uuid.UUID] = field(default_factory=list)
-    created_at: str = ""
-    workspace_id: uuid.UUID | None = None
-
-
-# ---------------------------------------------------------------------------
 # AdjudicationService
 # ---------------------------------------------------------------------------
 
 
 class AdjudicationService:
-    """Service for detecting, queuing, and resolving disagreements.
-
-    Pure computation service that operates on in-memory data. The caller
-    is responsible for persistence.
-    """
+    """Detects and classifies disagreements. It keeps no state between calls."""
 
     def __init__(self) -> None:
-        self._queue: list[AdjudicationQueueItem] = []
-        self._resolutions: dict[uuid.UUID, ResolutionResult] = {}
         self._policy_sections: list[dict[str, Any]] = []
 
     # ----- AJ-001: Disagreement detection -----
@@ -408,8 +346,6 @@ class AdjudicationService:
             AdjudicationSeverity.low: 2,
         }
         items.sort(key=lambda i: (severity_order[i.severity], i.created_at))
-
-        self._queue = items
         return items
 
     def _classify_severity(self, disagreement: Disagreement) -> AdjudicationSeverity:
@@ -479,126 +415,6 @@ class AdjudicationService:
             return AdjudicationType.subjective
 
         return AdjudicationType.factual
-
-    def get_queue(self) -> list[AdjudicationQueueItem]:
-        """Return the current adjudication queue."""
-        return list(self._queue)
-
-    def get_unresolved_queue(self) -> list[AdjudicationQueueItem]:
-        """Return only unresolved items from the queue."""
-        return [item for item in self._queue if not item.resolved]
-
-    # ----- AJ-003: Adjudication resolutions -----
-
-    def resolve(
-        self,
-        queue_item_id: uuid.UUID,
-        adjudicator_id: uuid.UUID,
-        resolution: AdjudicationResolution,
-        resolved_labels: dict[str, Any] | None = None,
-        rationale: str | None = None,
-        task_schema_version: int = 1,
-        workspace_id: uuid.UUID | None = None,
-    ) -> ResolutionResult:
-        """Apply a resolution to an adjudication queue item.
-
-        Supports resolution types from AdjudicationResolution enum:
-        - preserve_disagreement: Keep all labels as-is
-        - resolve: Accept specific labels as the resolution
-        - downgrade: Mark the record for re-review
-        - exclude: Exclude the record from the dataset
-
-        Also creates a review event for the audit trail (AJ-007).
-        """
-        # Find the queue item
-        queue_item: AdjudicationQueueItem | None = None
-        for item in self._queue:
-            if item.id == queue_item_id:
-                queue_item = item
-                break
-
-        if queue_item is None:
-            msg = f"Queue item {queue_item_id} not found"
-            raise ValueError(msg)
-
-        adjudication_id = uuid.uuid4()
-        review_event_id: uuid.UUID | None = None
-        resolved_labels_obj: ResolvedLabels | None = None
-
-        if resolution == AdjudicationResolution.resolve and resolved_labels is not None:
-            resolved_labels_obj = ResolvedLabels(
-                labels=resolved_labels,
-                source_event_ids=list(queue_item.disagreement.conflicting_event_ids),
-            )
-
-            # AJ-007: Create a review event for the audit trail
-            review_event_id = uuid.uuid4()
-            self._create_adjudication_event(
-                event_id=review_event_id,
-                queue_item=queue_item,
-                adjudicator_id=adjudicator_id,
-                adjudication_id=adjudication_id,
-                labels=resolved_labels,
-                rationale=rationale,
-                task_schema_version=task_schema_version,
-                workspace_id=workspace_id,
-            )
-        elif resolution == AdjudicationResolution.preserve_disagreement:
-            resolved_labels_obj = None
-        elif resolution == AdjudicationResolution.exclude:
-            resolved_labels_obj = ResolvedLabels(
-                labels={},
-                source_event_ids=list(queue_item.disagreement.conflicting_event_ids),
-            )
-
-        queue_item.resolved = True
-
-        result = ResolutionResult(
-            adjudication_id=adjudication_id,
-            record_id=queue_item.record_id,
-            resolution=resolution,
-            resolved_labels=resolved_labels_obj,
-            rationale=rationale,
-            review_event_id=review_event_id,
-        )
-        self._resolutions[adjudication_id] = result
-        return result
-
-    def _create_adjudication_event(
-        self,
-        event_id: uuid.UUID,
-        queue_item: AdjudicationQueueItem,
-        adjudicator_id: uuid.UUID,
-        adjudication_id: uuid.UUID,
-        labels: dict[str, Any],
-        rationale: str | None,
-        task_schema_version: int,
-        workspace_id: uuid.UUID | None,
-    ) -> AdjudicationReviewEvent:
-        """Create a review event from an adjudication resolution (AJ-007).
-
-        The event is append-only: it never modifies existing events.
-        """
-        now = datetime.now(UTC).isoformat()
-        event = AdjudicationReviewEvent(
-            id=event_id,
-            record_id=queue_item.record_id,
-            task_schema_id=queue_item.task_schema_id,
-            task_schema_version=task_schema_version,
-            adjudicator_id=adjudicator_id,
-            source=ReviewEventSource.human.value,
-            labels=labels,
-            rationale=rationale,
-            adjudication_id=adjudication_id,
-            conflicting_event_ids=list(queue_item.disagreement.conflicting_event_ids),
-            created_at=now,
-            workspace_id=workspace_id,
-        )
-        return event
-
-    def get_resolution(self, adjudication_id: uuid.UUID) -> ResolutionResult | None:
-        """Look up a resolution by adjudication ID."""
-        return self._resolutions.get(adjudication_id)
 
     # ----- AJ-004: Side-by-side comparison data -----
 

@@ -9,166 +9,91 @@ import { getRuntimeOptions, outputMode, requireClient } from './context.js'
 
 type JsonObject = Record<string, unknown>
 
+interface ResolveOptions {
+  reviewEventIds: string
+  resolution?: string
+  resolvedLabelsJson?: string
+  resolvedLabelsFile?: string
+  rationale?: string
+}
+
 export function registerAdjudicationCommands(
   program: Command,
   runtime: CliRuntimeOptions,
 ): void {
   const adjudication = program
     .command('adjudication')
-    .description('Adjudication operations')
+    .description("Adjudicate the disagreements of a review queue's reviewers")
 
   adjudication
-    .command('queue')
-    .description('Show the current adjudication queue')
-    .action(async () => {
-      await runAdjudicationQueue(getRuntimeOptions(program, runtime))
-    })
-
-  adjudication
-    .command('detect')
-    .description('Detect disagreements from review events')
-    .option('--task-schema-id <id>')
-    .option('--events-json <json>')
-    .option('--events-file <path>')
-    .action(async function (this: Command) {
-      const options = this.opts<{
-        taskSchemaId?: string
-        eventsJson?: string
-        eventsFile?: string
-      }>()
-      await runAdjudicationDetect(
-        getRuntimeOptions(program, runtime),
-        options.taskSchemaId,
-        options.eventsJson,
-        options.eventsFile,
+    .command('list <queue-id>')
+    .description('List the records the reviewers of a queue disagree on')
+    .action(async (queueId: string) => {
+      const options = getRuntimeOptions(program, runtime)
+      const client = await requireClient(options, 'adjudication list')
+      await emit(
+        await client.getJson(disagreementsPath(queueId)),
+        outputMode(options),
       )
     })
 
   adjudication
-    .command('build')
-    .description('Detect disagreements and build an adjudication queue')
-    .option('--task-schema-id <id>')
-    .option('--events-json <json>')
-    .option('--events-file <path>')
-    .action(async function (this: Command) {
-      const options = this.opts<{
-        taskSchemaId?: string
-        eventsJson?: string
-        eventsFile?: string
-      }>()
-      await runAdjudicationBuild(
-        getRuntimeOptions(program, runtime),
-        options.taskSchemaId,
-        options.eventsJson,
-        options.eventsFile,
+    .command('show <queue-id> <record-id>')
+    .description("Show a disagreement with every reviewer's labels")
+    .action(async (queueId: string, recordId: string) => {
+      const options = getRuntimeOptions(program, runtime)
+      const client = await requireClient(options, 'adjudication show')
+      await emit(
+        await client.getJson(disagreementsPath(queueId, recordId)),
+        outputMode(options),
       )
     })
 
   adjudication
-    .command('resolve <queue-item-id>')
-    .description('Resolve an adjudication queue item')
-    .option('--resolution <resolution>')
-    .option('--resolved-labels-json <json>')
-    .option('--resolved-labels-file <path>')
+    .command('resolve <queue-id> <record-id>')
+    .description('Resolve a disagreement and store the outcome')
+    .requiredOption(
+      '--review-event-ids <ids>',
+      'Comma-separated review_event_id of each reviewer_labels entry that adjudication show printed',
+    )
+    .option(
+      '--resolution <resolution>',
+      'resolve (the default), preserve_disagreement, downgrade, or exclude',
+    )
+    .option('--resolved-labels-json <json>', 'The labels, for resolve')
+    .option('--resolved-labels-file <path>', 'The labels, for resolve')
     .option('--rationale <text>')
-    .action(async function (this: Command, queueItemId: string) {
-      const options = this.opts<{
-        resolution?: string
-        resolvedLabelsJson?: string
-        resolvedLabelsFile?: string
-        rationale?: string
-      }>()
-      await runAdjudicationResolve(
-        getRuntimeOptions(program, runtime),
-        queueItemId,
-        options.resolution,
-        options.resolvedLabelsJson,
-        options.resolvedLabelsFile,
-        options.rationale,
+    .action(async function (this: Command, queueId: string, recordId: string) {
+      const options = getRuntimeOptions(program, runtime)
+      const client = await requireClient(options, 'adjudication resolve')
+      await emit(
+        await client.postJson(
+          `${disagreementsPath(queueId, recordId)}/resolve`,
+          await resolveBody(this.opts<ResolveOptions>()),
+        ),
+        outputMode(options),
       )
     })
 }
 
-async function runAdjudicationQueue(options: CliRuntimeOptions): Promise<void> {
-  const client = await requireClient(options, 'adjudication queue')
-  const response = await client.getJson('/api/v1/adjudication/queue')
-  await emit(response, outputMode(options))
+function disagreementsPath(queueId: string, recordId?: string): string {
+  const base = `/api/v1/adjudication/queues/${encodeURIComponent(queueId)}/disagreements`
+  return recordId ? `${base}/${encodeURIComponent(recordId)}` : base
 }
 
-async function runAdjudicationDetect(
-  options: CliRuntimeOptions,
-  taskSchemaId?: string,
-  eventsJson?: string,
-  eventsFile?: string,
-): Promise<void> {
-  const client = await requireClient(options, 'adjudication detect')
-  const response = await client.postJson(
-    '/api/v1/adjudication/detect',
-    await buildEventsBody(taskSchemaId, eventsJson, eventsFile),
+async function resolveBody(options: ResolveOptions): Promise<JsonObject> {
+  const labels = await readOptionalJsonObject(
+    options.resolvedLabelsJson,
+    options.resolvedLabelsFile,
   )
-  await emit(response, outputMode(options))
-}
-
-async function runAdjudicationBuild(
-  options: CliRuntimeOptions,
-  taskSchemaId?: string,
-  eventsJson?: string,
-  eventsFile?: string,
-): Promise<void> {
-  const client = await requireClient(options, 'adjudication build')
-  const response = await client.postJson(
-    '/api/v1/adjudication/queue/build',
-    await buildEventsBody(taskSchemaId, eventsJson, eventsFile),
-  )
-  await emit(response, outputMode(options))
-}
-
-async function runAdjudicationResolve(
-  options: CliRuntimeOptions,
-  queueItemId: string,
-  resolution?: string,
-  resolvedLabelsJson?: string,
-  resolvedLabelsFile?: string,
-  rationale?: string,
-): Promise<void> {
-  if (!resolution) {
-    throw new Error('adjudication resolve requires --resolution')
-  }
-  const client = await requireClient(options, 'adjudication resolve')
-  const body: JsonObject = {
-    queue_item_id: queueItemId,
-    resolution,
-    rationale: rationale ?? null,
-  }
-  const resolvedLabels = await readOptionalJsonObject(
-    resolvedLabelsJson,
-    resolvedLabelsFile,
-  )
-  if (resolvedLabels) {
-    body.resolved_labels = resolvedLabels
-  }
-  const response = await client.postJson('/api/v1/adjudication/resolve', body)
-  await emit(response, outputMode(options))
-}
-
-async function buildEventsBody(
-  taskSchemaId?: string,
-  eventsJson?: string,
-  eventsFile?: string,
-): Promise<JsonObject> {
-  if (!taskSchemaId) {
-    throw new Error('--task-schema-id is required')
-  }
-  const reviewEventsByRecord = await readOptionalJsonObject(
-    eventsJson,
-    eventsFile,
-  )
-  if (!reviewEventsByRecord) {
-    throw new Error('Provide --events-json, --events-file, or piped JSON input')
-  }
   return {
-    task_schema_id: taskSchemaId,
-    review_events_by_record: reviewEventsByRecord,
+    ...(options.resolution ? { resolution: options.resolution } : {}),
+    ...(labels ? { resolved_labels: labels } : {}),
+    ...(options.rationale ? { rationale: options.rationale } : {}),
+    review_event_ids: options.reviewEventIds
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
   }
 }
 

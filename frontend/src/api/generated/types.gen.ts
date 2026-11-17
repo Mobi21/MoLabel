@@ -92,63 +92,6 @@ export type AdjudicationPolicy = {
 }
 
 /**
- * AdjudicationQueueItemResponse
- *
- * Response model for an adjudication queue item.
- */
-export type AdjudicationQueueItemResponse = {
-  /**
-   * Id
-   */
-  id: string
-  /**
-   * Record Id
-   */
-  record_id: string
-  /**
-   * Task Schema Id
-   */
-  task_schema_id: string
-  disagreement: DisagreementResponse
-  /**
-   * Severity
-   */
-  severity: string
-  /**
-   * Adjudication Type
-   */
-  adjudication_type: string
-  /**
-   * Created At
-   */
-  created_at: string
-  /**
-   * Resolved
-   */
-  resolved?: boolean
-}
-
-/**
- * AdjudicationQueueResponse
- *
- * Response for the full adjudication queue.
- */
-export type AdjudicationQueueResponse = {
-  /**
-   * Items
-   */
-  items: Array<AdjudicationQueueItemResponse>
-  /**
-   * Total
-   */
-  total?: number
-  /**
-   * Unresolved
-   */
-  unresolved?: number
-}
-
-/**
  * AdjudicationResolution
  */
 export type AdjudicationResolution =
@@ -2358,46 +2301,6 @@ export type DeprecatedReviewDecision =
   | 'correct'
 
 /**
- * DetectDisagreementsRequest
- *
- * Request body for disagreement detection.
- */
-export type DetectDisagreementsRequest = {
-  /**
-   * Review Events By Record
-   *
-   * Mapping of record_id -> list of review event dicts
-   */
-  review_events_by_record: {
-    [key: string]: Array<{
-      [key: string]: unknown
-    }>
-  }
-  /**
-   * Task Schema Id
-   *
-   * Task schema ID for these events
-   */
-  task_schema_id: string
-}
-
-/**
- * DetectDisagreementsResponse
- *
- * Response for disagreement detection.
- */
-export type DetectDisagreementsResponse = {
-  /**
-   * Disagreements
-   */
-  disagreements: Array<DisagreementResponse>
-  /**
-   * Total
-   */
-  total?: number
-}
-
-/**
  * DisagreementDetail
  *
  * A disagreement with the record, every reviewer's labels, and its outcome.
@@ -2490,42 +2393,6 @@ export type DisagreementQueue = {
    * Unresolved
    */
   unresolved: number
-}
-
-/**
- * DisagreementResponse
- *
- * Response model for a detected disagreement.
- */
-export type DisagreementResponse = {
-  /**
-   * Record Id
-   */
-  record_id: string
-  /**
-   * Task Schema Id
-   */
-  task_schema_id: string
-  /**
-   * Conflicting Event Ids
-   */
-  conflicting_event_ids: Array<string>
-  /**
-   * Disagreement Type
-   */
-  disagreement_type: string
-  /**
-   * Fields In Conflict
-   */
-  fields_in_conflict: Array<string>
-  /**
-   * Reviewer Labels
-   */
-  reviewer_labels?: {
-    [key: string]: {
-      [key: string]: unknown
-    }
-  }
 }
 
 /**
@@ -5600,76 +5467,6 @@ export type ResolveDisagreement = {
    * The review_event_id of each reviewer_labels entry as read. 409 when the disagreement's review events differ, so the caller reloads it
    */
   review_event_ids: Array<string>
-}
-
-/**
- * ResolveRequest
- *
- * Request body for adjudication resolution.
- */
-export type ResolveRequest = {
-  /**
-   * Queue Item Id
-   *
-   * Adjudication queue item ID
-   */
-  queue_item_id: string
-  /**
-   * Resolution type
-   */
-  resolution: AdjudicationResolution
-  /**
-   * Resolved Labels
-   *
-   * Resolved labels (required for 'resolve')
-   */
-  resolved_labels?: {
-    [key: string]: unknown
-  } | null
-  /**
-   * Rationale
-   *
-   * Rationale for the resolution
-   */
-  rationale?: string | null
-}
-
-/**
- * ResolveResponse
- *
- * Response for an adjudication resolution.
- */
-export type ResolveResponse = {
-  /**
-   * Adjudication Id
-   */
-  adjudication_id: string
-  /**
-   * Record Id
-   */
-  record_id: string
-  /**
-   * Resolution
-   */
-  resolution: string
-  /**
-   * Resolved Labels
-   */
-  resolved_labels?: {
-    [key: string]: unknown
-  } | null
-  /**
-   * Rationale
-   */
-  rationale?: string | null
-  /**
-   * Review Event Id
-   */
-  review_event_id?: string | null
-  /**
-   * Message
-   */
-  message?: string
 }
 
 /**
@@ -10780,114 +10577,6 @@ export type GetMissionControlReviewersResponses = {
 
 export type GetMissionControlReviewersResponse =
   GetMissionControlReviewersResponses[keyof GetMissionControlReviewersResponses]
-
-export type DetectDisagreementsEndpointData = {
-  body: DetectDisagreementsRequest
-  path?: never
-  query?: never
-  url: '/api/v1/adjudication/detect'
-}
-
-export type DetectDisagreementsEndpointErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError
-}
-
-export type DetectDisagreementsEndpointError =
-  DetectDisagreementsEndpointErrors[keyof DetectDisagreementsEndpointErrors]
-
-export type DetectDisagreementsEndpointResponses = {
-  /**
-   * Successful Response
-   */
-  200: DetectDisagreementsResponse
-}
-
-export type DetectDisagreementsEndpointResponse =
-  DetectDisagreementsEndpointResponses[keyof DetectDisagreementsEndpointResponses]
-
-export type BuildAdjudicationQueueEndpointData = {
-  body: DetectDisagreementsRequest
-  path?: never
-  query?: never
-  url: '/api/v1/adjudication/queue/build'
-}
-
-export type BuildAdjudicationQueueEndpointErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError
-}
-
-export type BuildAdjudicationQueueEndpointError =
-  BuildAdjudicationQueueEndpointErrors[keyof BuildAdjudicationQueueEndpointErrors]
-
-export type BuildAdjudicationQueueEndpointResponses = {
-  /**
-   * Successful Response
-   */
-  200: AdjudicationQueueResponse
-}
-
-export type BuildAdjudicationQueueEndpointResponse =
-  BuildAdjudicationQueueEndpointResponses[keyof BuildAdjudicationQueueEndpointResponses]
-
-export type GetAdjudicationQueueEndpointData = {
-  body?: never
-  path?: never
-  query?: never
-  url: '/api/v1/adjudication/queue'
-}
-
-export type GetAdjudicationQueueEndpointErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError
-}
-
-export type GetAdjudicationQueueEndpointError =
-  GetAdjudicationQueueEndpointErrors[keyof GetAdjudicationQueueEndpointErrors]
-
-export type GetAdjudicationQueueEndpointResponses = {
-  /**
-   * Successful Response
-   */
-  200: AdjudicationQueueResponse
-}
-
-export type GetAdjudicationQueueEndpointResponse =
-  GetAdjudicationQueueEndpointResponses[keyof GetAdjudicationQueueEndpointResponses]
-
-export type ResolveAdjudicationEndpointData = {
-  body: ResolveRequest
-  path?: never
-  query?: never
-  url: '/api/v1/adjudication/resolve'
-}
-
-export type ResolveAdjudicationEndpointErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError
-}
-
-export type ResolveAdjudicationEndpointError =
-  ResolveAdjudicationEndpointErrors[keyof ResolveAdjudicationEndpointErrors]
-
-export type ResolveAdjudicationEndpointResponses = {
-  /**
-   * Successful Response
-   */
-  200: ResolveResponse
-}
-
-export type ResolveAdjudicationEndpointResponse =
-  ResolveAdjudicationEndpointResponses[keyof ResolveAdjudicationEndpointResponses]
 
 export type ListReviewEventsData = {
   body?: never
