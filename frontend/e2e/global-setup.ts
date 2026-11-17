@@ -229,6 +229,16 @@ async function seedWorkspace(workspace: string, config: string): Promise<Seed> {
     3,
   )
 
+  molabel(
+    'gold',
+    'create',
+    'ticket-gold',
+    '--task-schema',
+    'ticket-triage',
+    '--name',
+    'Ticket triage gold',
+  )
+
   const reviewers = molabel('session', 'list-reviewers') as {
     items: { id: string; display_name: string }[]
   }
@@ -247,6 +257,8 @@ async function seedWorkspace(workspace: string, config: string): Promise<Seed> {
 
   return {
     workspaceId,
+    workspace,
+    goldSet: 'ticket-gold',
     reviewers: { first: first.id, second },
     queues: { overlap, blind, thin },
     proposals: {
@@ -262,9 +274,10 @@ async function seedWorkspace(workspace: string, config: string): Promise<Seed> {
 
 /**
  * Start the real backend on a temp data folder with no API keys, and seed a
- * workspace through the CLI: a dataset, three task schemas, and three offline
- * workflows run to review: one with overlap_count 2, one blind, and one with
- * overlap_count 3 for the two reviewers.
+ * workspace through the CLI: a dataset, three task schemas, three offline
+ * workflows run to review (one with overlap_count 2, one blind, and one with
+ * overlap_count 3 for the two reviewers), and an empty gold set for the first
+ * schema.
  */
 export default async function globalSetup() {
   if (!existsSync(CLI)) {

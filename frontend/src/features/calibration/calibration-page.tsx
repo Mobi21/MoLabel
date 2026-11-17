@@ -2,8 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { AgreementScope } from '@/api/generated/types.gen'
 import { errorMessage } from '@/api/client'
-import { agreementQuery } from '@/api/queries'
+import { agreementQuery, taskSchemaQuery } from '@/api/queries'
 import { KeyLegend } from '@/components/key-legend'
+import {
+  PromoteToGold,
+  usePromoteToGold,
+} from '@/features/gold/promote-to-gold'
 import { QueueHeader } from '@/features/queues/queue-header'
 import { useQueue } from '@/features/queues/queues'
 import { useReviewer } from '@/features/session/session'
@@ -206,6 +210,15 @@ export function CalibrationPage() {
   const reviewer = useReviewer()
   const navigate = useNavigate()
   const report = useQuery(agreementQuery(reviewer.workspace_id, queueId))
+  const schema = useQuery({
+    ...taskSchemaQuery(queue?.task_schema_id ?? ''),
+    enabled: queue !== undefined,
+  })
+  const promotion = usePromoteToGold({
+    queueId,
+    taskSchemaSlug: schema.data?.task_schema_slug,
+  })
+  const promotes = queue !== undefined && queue.kind !== 'calibrate'
 
   const bindings: Binding[] = [
     {
@@ -225,6 +238,10 @@ export function CalibrationPage() {
       run: () => {
         void navigate(`/queues/${queueId}/adjudication`)
       },
+    },
+    {
+      ...promotion.binding,
+      disabled: promotion.binding.disabled === true || !promotes,
     },
     {
       id: 'queues',
@@ -290,6 +307,12 @@ export function CalibrationPage() {
                 title="Skipped against the AI"
               />
             </section>
+            {promotes && (
+              <PromoteToGold
+                promotion={promotion}
+                what="agreed and adjudicated records"
+              />
+            )}
             {(data.warnings ?? []).length > 0 && (
               <ul className="space-y-1 text-sm text-ink-soft">
                 {(data.warnings ?? []).map((warning) => (

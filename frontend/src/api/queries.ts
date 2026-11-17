@@ -1,11 +1,13 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import {
   getAgreementMetricsQueryKey,
+  getGoldSetQueryKey,
   getMeQueryKey,
   getQueueDisagreementQueryKey,
   getReviewTaskEndpointQueryKey,
   getTaskSchemaQueryKey,
   listMyQueueTasksEndpointQueryKey,
+  listGoldSetsEndpointQueryKey,
   listQueueDisagreementsQueryKey,
   listQueuesEndpointQueryKey,
   listReviewerProfilesQueryKey,
@@ -13,10 +15,12 @@ import {
 } from '@/api/generated/@tanstack/react-query.gen'
 import {
   getAgreementMetrics,
+  getGoldSet,
   getMe,
   getQueueDisagreement,
   getReviewTaskEndpoint,
   getTaskSchema,
+  listGoldSetsEndpoint,
   listMyQueueTasksEndpoint,
   listQueueDisagreements,
   listQueuesEndpoint,
@@ -128,6 +132,29 @@ export const agreementQuery = (workspaceId: string, queueId: string) => {
       (await getAgreementMetrics({ ...options, signal, throwOnError: true }))
         .data,
   })
+}
+
+export const goldSetsQuery = () =>
+  queryOptions({
+    queryKey: listGoldSetsEndpointQueryKey(),
+    queryFn: async ({ signal }) =>
+      (await listGoldSetsEndpoint({ signal, throwOnError: true })).data,
+  })
+
+export const goldSetQuery = (goldSetId: string) => {
+  const options = { path: { gold_set_id: goldSetId } }
+  return queryOptions({
+    queryKey: getGoldSetQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await getGoldSet({ ...options, signal, throwOnError: true })).data,
+  })
+}
+
+/** Mark stale the gold-set list and every set read, which a promotion changes. */
+export function invalidateGoldSets(queryClient: QueryClient): void {
+  for (const _id of ['listGoldSetsEndpoint', 'getGoldSet']) {
+    void queryClient.invalidateQueries({ queryKey: [{ _id }] })
+  }
 }
 
 /**

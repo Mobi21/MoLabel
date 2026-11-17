@@ -163,6 +163,15 @@ export function QueueListPage() {
       },
       disabled: !current,
     },
+    {
+      id: 'gold',
+      caps: ['G'],
+      label: 'Gold sets',
+      match: letter('g'),
+      run: () => {
+        void navigate('/gold')
+      },
+    },
   ]
   useKeymap(bindings)
 

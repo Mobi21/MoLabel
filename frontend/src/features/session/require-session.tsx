@@ -1,4 +1,4 @@
-import { Link, Navigate, Outlet } from 'react-router-dom'
+import { Link, NavLink, Navigate, Outlet } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useMe, useSignOut } from './session'
 
@@ -24,6 +24,25 @@ export function RequireSession() {
             MoLabel
           </Link>
           <span className="font-mono text-xs text-faint">review desk</span>
+          <nav aria-label="Sections" className="flex gap-3 text-sm">
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'
+              }
+            >
+              Queues
+            </NavLink>
+            <NavLink
+              to="/gold"
+              className={({ isActive }) =>
+                isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'
+              }
+            >
+              Gold sets
+            </NavLink>
+          </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
             <span className="flex items-center gap-2">
               <span
