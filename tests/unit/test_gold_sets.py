@@ -266,6 +266,41 @@ class TestVersions:
         assert v2.header.previous_hash == file_hash(compacted.encode())
         assert v2.header.item_count == 2
 
+    def test_an_append_renders_afresh_only_the_lines_whose_hashes_are_stale(self):
+        kept = json.dumps(json.loads(item("a", "bug").line()), separators=(",", ":"))
+        relabelled = json.loads(item("b", "bug", record="r2").line())
+        relabelled["expected"] = {"intent": "refund"}
+        written_by_hand = {
+            k: v
+            for k, v in json.loads(item("c", "other", record="r3").line()).items()
+            if k not in ("item_id", "input_hash", "content_hash")
+        }
+        data = "\n".join(
+            [kept, json.dumps(relabelled), "", json.dumps(written_by_hand), ""]
+        ).encode()
+        header = GoldSet.new(slug="g", name="G", task_schema=SCHEMA, now=NOW).header
+
+        held = GoldSet.read(header, data)
+        v2 = held.appended([item("d", "bug", record="r4")], now=NOW)
+
+        assert not held.items_consistent
+        assert [(s.line, s.fields) for s in held.stale] == [
+            (2, ("content_hash",)),
+            (4, ("item_id", "input_hash", "content_hash")),
+        ]
+        assert v2.data == "\n".join(
+            [
+                kept,
+                item("b", "refund", record="r2").line(),
+                "",
+                item("c", "other", record="r3").line(),
+                item("d", "bug", record="r4").line(),
+                "",
+            ]
+        ).encode("utf-8")
+        assert GoldSet.read(v2.header, v2.data).items_consistent
+        assert v2.header.previous_hash == file_hash(data)
+
 
 class TestDedupe:
     def test_exact_repeats_are_removed_and_the_first_is_kept(self):

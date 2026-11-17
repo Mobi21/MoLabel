@@ -35,6 +35,7 @@ from molabel.core.gold.model import (
     GoldItemRef,
     GoldSetHeader,
     GoldSetSource,
+    StaleLine,
     dedupe,
     file_hash,
     render_items,
@@ -48,6 +49,12 @@ CONTENT_HASH_MATCHES = (
     "False when gold.jsonl is not the file the header describes: it was edited "
     "outside MoLabel, or a write stopped between gold.jsonl and gold.yaml. The "
     "header's version, item_count and content_hash then describe the previous file"
+)
+ITEMS_CONSISTENT = (
+    "False when a line of gold.jsonl stores an item_id, input_hash or "
+    "content_hash its content does not give, as a hand edit to input or "
+    "expected leaves it. MoLabel reads the content; the next promotion or "
+    "append renders those lines afresh"
 )
 
 
@@ -78,10 +85,30 @@ class GoldSetList(BaseModel):
     items: list[GoldSetSummary]
 
 
+class GoldStaleItem(BaseModel):
+    """A line of gold.jsonl whose stored id or hashes disagree with its content."""
+
+    line: int = Field(description="The 1-based line in gold.jsonl")
+    item_id: str = Field(description="The id the line's content gives")
+    fields: list[str] = Field(
+        description="The stored fields that are wrong or missing: item_id, "
+        "input_hash, content_hash"
+    )
+
+
+def _stale_items(stale: tuple[StaleLine, ...]) -> list[GoldStaleItem]:
+    return [
+        GoldStaleItem(line=s.line, item_id=s.item.item_id, fields=list(s.fields))
+        for s in stale
+    ]
+
+
 class GoldSetDetail(GoldSetSummary):
     """A gold set with its sources, latest items, and the repeats it holds."""
 
     sources: list[GoldSetSource]
+    items_consistent: bool = Field(description=ITEMS_CONSISTENT)
+    stale_items: list[GoldStaleItem]
     recent_additions: list[GoldItem] = Field(description="Newest first")
     duplicates: list[GoldItemRef] = Field(
         description="Exact repeats, which gold dedupe removes"
@@ -97,6 +124,8 @@ def _detail(stored: StoredGoldSet) -> GoldSetDetail:
     return GoldSetDetail(
         **_summary(stored.definition_path, gold.header, gold.file_hash).model_dump(),
         sources=gold.header.sources,
+        items_consistent=gold.items_consistent,
+        stale_items=_stale_items(gold.stale),
         recent_additions=list(reversed(gold.items[-RECENT_ADDITIONS:])),
         duplicates=list(found.removed),
         conflicts=list(found.conflicts),
@@ -138,6 +167,7 @@ class GoldWriteCounts(BaseModel):
     duplicates: int
     conflicts: int
     skipped: int
+    corrected: int
 
 
 class GoldWriteReport(BaseModel):
@@ -146,6 +176,10 @@ class GoldWriteReport(BaseModel):
     gold_set: GoldSetSummary
     written: bool = Field(description="False when the files did not change")
     counts: GoldWriteCounts
+    corrected: list[GoldStaleItem] = Field(
+        description="Stale lines the write rendered afresh with the id and hashes "
+        "their content gives. Every other earlier line is kept byte for byte"
+    )
     added: list[GoldItem]
     duplicates: list[GoldItemRef]
     conflicts: list[GoldConflict]
@@ -174,6 +208,7 @@ class GoldExport(BaseModel):
     item_count: int
     content_hash: str
     content_hash_matches: bool = Field(description=CONTENT_HASH_MATCHES)
+    items_consistent: bool = Field(description=ITEMS_CONSISTENT)
     path: str | None = None
     content: str | None = None
 
@@ -254,7 +289,9 @@ def _write_report(request, gold_set_id, body, reviewer, *, failures_only):
             duplicates=len(write.duplicates),
             conflicts=len(write.conflicts),
             skipped=len(write.skipped),
+            corrected=len(write.corrected),
         ),
+        corrected=_stale_items(write.corrected),
         added=list(write.added),
         duplicates=list(write.duplicates),
         conflicts=list(write.conflicts),
@@ -329,6 +366,7 @@ async def export_gold_set_content(
         item_count=len(gold.items),
         content_hash=file_hash(data),
         content_hash_matches=gold.content_hash_matches,
+        items_consistent=gold.items_consistent,
         content=data.decode("utf-8"),
     )
 
@@ -355,5 +393,6 @@ async def export_gold_set_to_path(
         item_count=len(stored.gold.items),
         content_hash=file_hash(data),
         content_hash_matches=stored.gold.content_hash_matches,
+        items_consistent=stored.gold.items_consistent,
         path=path,
     )

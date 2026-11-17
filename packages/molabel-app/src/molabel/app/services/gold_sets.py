@@ -51,10 +51,10 @@ from molabel.core.gold.model import (
     GoldSet,
     GoldSetHeader,
     GoldSetSource,
+    StaleLine,
     dedupe,
     file_hash,
     merge,
-    parse_items,
     render_items,
 )
 from molabel.core.gold.promotion import (
@@ -146,15 +146,11 @@ def read_gold_set(folder: WorkspaceFolder, slug: str) -> StoredGoldSet:
             {"gold_set_id": slug},
         )
     header = _read_header(folder, entry)
-    data = _items_data(folder, entry)
     try:
-        items = parse_items(header.task_schema, data)
+        gold = GoldSet.read(header, _items_data(folder, entry))
     except GoldFileError as exc:
         raise _invalid(entry, f"{ITEMS_FILENAME} {exc}", line=exc.line) from exc
-    return StoredGoldSet(
-        gold=GoldSet(header=header, items=items, data=data),
-        definition_path=entry.definition_path,
-    )
+    return StoredGoldSet(gold=gold, definition_path=entry.definition_path)
 
 
 def _write(files: WorkspaceFiles, stored: StoredGoldSet, gold: GoldSet) -> str:
@@ -458,6 +454,8 @@ class GoldWrite:
     definition_path: str
     gold: GoldSet
     written: bool
+    corrected: tuple[StaleLine, ...]
+    """The stale lines the write rendered afresh."""
     added: tuple[GoldItem, ...]
     duplicates: tuple[GoldItemRef, ...]
     conflicts: tuple[GoldConflict, ...]
@@ -520,6 +518,7 @@ def promote_to_gold(
         definition_path=stored.definition_path,
         gold=revised or gold,
         written=revised is not None,
+        corrected=gold.stale if revised is not None else (),
         added=merged.added,
         duplicates=merged.duplicates,
         conflicts=merged.conflicts,

@@ -229,24 +229,52 @@ def render_items(items: Iterable[GoldItem]) -> bytes:
     return "".join(f"{item.line()}\n" for item in items).encode("utf-8")
 
 
-def parse_items(task_schema: str, data: bytes) -> tuple[GoldItem, ...]:
-    """The items of a ``gold.jsonl`` file. Blank lines are allowed.
+DERIVED_FIELDS = ("item_id", "input_hash", "content_hash")
+"""The stored fields of an item that its content determines."""
 
-    Lines end at LF alone; the CR of a CRLF end is JSON whitespace.
-    """
+
+@dataclass(frozen=True)
+class StaleLine:
+    """A line of ``gold.jsonl`` whose stored id or hashes disagree with its content."""
+
+    line: int
+    """1-based."""
+    item: GoldItem
+    """The line's item, with the id and hashes its content gives."""
+    fields: tuple[str, ...]
+    """The ``DERIVED_FIELDS`` the line stores wrong or leaves out."""
+
+
+def _read_items(
+    task_schema: str, data: bytes
+) -> tuple[tuple[GoldItem, ...], tuple[StaleLine, ...]]:
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise GoldFileError(f"not UTF-8: {exc}") from exc
     items: list[GoldItem] = []
+    stale: list[StaleLine] = []
     for number, line in enumerate(text.split("\n"), start=1):
         if not line.strip():
             continue
         try:
-            items.append(GoldItem.parse(task_schema, json.loads(line)))
+            document = json.loads(line)
+            item = GoldItem.parse(task_schema, document)
         except ValueError as exc:
             raise GoldFileError(str(exc), number) from exc
-    return tuple(items)
+        items.append(item)
+        fields = tuple(f for f in DERIVED_FIELDS if document.get(f) != getattr(item, f))
+        if fields:
+            stale.append(StaleLine(line=number, item=item, fields=fields))
+    return tuple(items), tuple(stale)
+
+
+def parse_items(task_schema: str, data: bytes) -> tuple[GoldItem, ...]:
+    """The items of a ``gold.jsonl`` file. Blank lines are allowed.
+
+    Lines end at LF alone; the CR of a CRLF end is JSON whitespace.
+    """
+    return _read_items(task_schema, data)[0]
 
 
 class GoldSetSource(GoldModel):
@@ -281,6 +309,14 @@ class GoldSet:
     items: tuple[GoldItem, ...]
     data: bytes
     """``gold.jsonl`` byte for byte, as read or as it is to be written."""
+    stale: tuple[StaleLine, ...] = ()
+    """The lines of *data* whose stored id or hashes disagree with their content."""
+
+    @classmethod
+    def read(cls, header: GoldSetHeader, data: bytes) -> Self:
+        """The set these files hold. Raises ``GoldFileError`` on a bad line."""
+        items, stale = _read_items(header.task_schema, data)
+        return cls(header=header, items=items, data=data, stale=stale)
 
     @classmethod
     def new(cls, *, slug: str, name: str, task_schema: str, now: str) -> Self:
@@ -306,6 +342,11 @@ class GoldSet:
         """Whether the items file is the one MoLabel last wrote."""
         return self.header.content_hash == self.file_hash
 
+    @property
+    def items_consistent(self) -> bool:
+        """Whether every line stores the id and hashes its content gives."""
+        return not self.stale
+
     def appended(
         self,
         added: Sequence[GoldItem],
@@ -315,13 +356,17 @@ class GoldSet:
     ) -> Self | None:
         """The next version with *added* as lines after the file's bytes.
 
-        Every earlier line stays byte for byte, hand formatting included. It
-        also lists *sources* the header does not list yet. None when there is
-        nothing to add.
+        Every earlier line stays byte for byte, hand formatting included,
+        except a stale line, which is rendered afresh so that no line stores an
+        id or hash its content contradicts. It also lists *sources* the header
+        does not list yet. None when there is nothing to add.
         """
         if not added:
             return None
-        data = self.data
+        lines = self.data.split(b"\n")
+        for stale in self.stale:
+            lines[stale.line - 1] = stale.item.line().encode("utf-8")
+        data = b"\n".join(lines)
         if data and not data.endswith(b"\n"):
             data += b"\n"
         return self._next(

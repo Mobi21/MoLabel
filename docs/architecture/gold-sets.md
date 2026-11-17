@@ -37,7 +37,8 @@ files are UTF-8 with LF line ends.
 
 Items keep the order they were added in. Promote and append write new lines
 after the file's bytes and leave every earlier line as it is, hand formatting
-included. Only dedupe, which removes items, renders the whole file again.
+included, except a stale line (below), which they render afresh. Only dedupe,
+which removes items, renders the whole file again.
 Within an item the fields keep a fixed order and free-form objects (`input`,
 `expected`) have sorted keys. U+0085, U+2028 and U+2029 are escaped inside
 strings, so every editor sees one item per line. The same content renders to
@@ -69,8 +70,14 @@ the same bytes on any machine.
   `adjudicator_took_ai`, `model_failure`, `promoted_at` and `promoted_by`.
 
 MoLabel recomputes `item_id`, `input_hash` and `content_hash` from the content
-whenever it reads a file. A hand edit to `input` or `expected` therefore gets
-correct hashes on the next write.
+whenever it reads a file, and dedupes and finds conflicts on the recomputed
+values. A line whose stored values differ from the recomputed ones, as a hand
+edit to `input` or `expected` leaves it, is stale. `gold show` lists stale
+lines under `stale_items` with `items_consistent: false`, and `gold export`
+reports `items_consistent`. The next promotion or append that adds an item
+replaces each stale line with the item rendered afresh and lists it under
+`corrected`. A write never leaves a line whose stored id or hashes its content
+contradicts.
 
 ## Version rule
 

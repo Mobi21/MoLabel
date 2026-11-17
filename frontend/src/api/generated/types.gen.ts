@@ -3206,6 +3206,12 @@ export type GoldExport = {
    */
   content_hash_matches: boolean
   /**
+   * Items Consistent
+   *
+   * False when a line of gold.jsonl stores an item_id, input_hash or content_hash its content does not give, as a hand edit to input or expected leaves it. MoLabel reads the content; the next promotion or append renders those lines afresh
+   */
+  items_consistent: boolean
+  /**
    * Path
    */
   path?: string | null
@@ -3547,6 +3553,16 @@ export type GoldSetDetail = {
    */
   sources: Array<GoldSetSource>
   /**
+   * Items Consistent
+   *
+   * False when a line of gold.jsonl stores an item_id, input_hash or content_hash its content does not give, as a hand edit to input or expected leaves it. MoLabel reads the content; the next promotion or append renders those lines afresh
+   */
+  items_consistent: boolean
+  /**
+   * Stale Items
+   */
+  stale_items: Array<GoldStaleItem>
+  /**
    * Recent Additions
    *
    * Newest first
@@ -3660,6 +3676,32 @@ export type GoldSource =
   | 'single_reviewer'
 
 /**
+ * GoldStaleItem
+ *
+ * A line of gold.jsonl whose stored id or hashes disagree with its content.
+ */
+export type GoldStaleItem = {
+  /**
+   * Line
+   *
+   * The 1-based line in gold.jsonl
+   */
+  line: number
+  /**
+   * Item Id
+   *
+   * The id the line's content gives
+   */
+  item_id: string
+  /**
+   * Fields
+   *
+   * The stored fields that are wrong or missing: item_id, input_hash, content_hash
+   */
+  fields: Array<string>
+}
+
+/**
  * GoldWriteCounts
  */
 export type GoldWriteCounts = {
@@ -3679,6 +3721,10 @@ export type GoldWriteCounts = {
    * Skipped
    */
   skipped: number
+  /**
+   * Corrected
+   */
+  corrected: number
 }
 
 /**
@@ -3695,6 +3741,12 @@ export type GoldWriteReport = {
    */
   written: boolean
   counts: GoldWriteCounts
+  /**
+   * Corrected
+   *
+   * Stale lines the write rendered afresh with the id and hashes their content gives. Every other earlier line is kept byte for byte
+   */
+  corrected: Array<GoldStaleItem>
   /**
    * Added
    */

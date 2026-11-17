@@ -14,6 +14,7 @@ import pytest_asyncio
 import yaml
 from sqlalchemy import text
 
+from molabel.core.gold.model import parse_items
 from tests.integration.review_flow import (
     FIRST_REVIEWER,
     OFFLINE_SENTIMENT,
@@ -242,6 +243,7 @@ async def test_promotion_writes_adjudicated_and_agreed_records_with_provenance(
         "duplicates": 0,
         "conflicts": 0,
         "skipped": 0,
+        "corrected": 0,
     }
     items = {
         item["input_ref"]["external_id"]: item for item in _lines(_items_path(tmp_path))
@@ -483,6 +485,7 @@ async def test_append_adds_only_what_the_model_got_wrong_and_dedupes(
         "duplicates": 0,
         "conflicts": 0,
         "skipped": 5,
+        "corrected": 0,
     }
     (item,) = _lines(_items_path(tmp_path))
     assert item["input_ref"]["external_id"] == "r3"
@@ -777,5 +780,84 @@ async def test_a_promotion_that_adds_nothing_leaves_a_hand_edited_file_alone(
 
     assert report["written"] is False
     assert report["counts"]["conflicts"] == 1
+    assert report["corrected"] == []
     assert path.read_bytes() == hand_edited
     assert _header(tmp_path)["version"] == 2
+    headers = _as(tokens[0])
+    shown = (await client.get(f"/api/v1/gold-sets/{GOLD}", headers=headers)).json()
+    exported = await client.get(f"/api/v1/gold-sets/{GOLD}/export", headers=headers)
+    assert shown["items_consistent"] is False
+    assert [(s["line"], s["fields"]) for s in shown["stale_items"]] == [
+        (2, ["content_hash"])
+    ]
+    assert exported.json()["items_consistent"] is False
+
+
+def _stored_and_recomputed(data: bytes) -> list[tuple[dict, dict]]:
+    """Each line's stored item_id and hashes, beside the ones its content gives."""
+    derived = ("item_id", "input_hash", "content_hash")
+    stored = [json.loads(line) for line in data.split(b"\n") if line.strip()]
+    recomputed = parse_items("sentiment-demo-v1", data)
+    return [
+        ({k: s.get(k) for k in derived}, {k: getattr(r, k) for k in derived})
+        for s, r in zip(stored, recomputed, strict=True)
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("edit", "stale_fields"),
+    [
+        (("input", {"text": "A different human-authored input"}), None),
+        (("expected", {"sentiment": "positive"}), ["content_hash"]),
+    ],
+)
+async def test_an_append_after_a_hand_edit_rewrites_only_the_stale_lines(
+    client, app, tmp_path, edit, stale_fields
+):
+    _, tokens, queue_id, _ = await _reviewed_and_adjudicated(client, app, tmp_path)
+    await _create(client, tokens[0])
+    ids = _external_ids(app)
+    await _promote(
+        client, tokens[0], {"queue_id": queue_id, "record_ids": [ids["r1"], ids["r3"]]}
+    )
+    path = _items_path(tmp_path)
+    first, second = path.read_text("utf-8").splitlines()
+    kept = json.dumps(json.loads(first), separators=(",", ":")).encode()
+    edited = json.loads(second)
+    key, value = edit
+    edited[key] = {**edited[key], **value}
+    hand_edited = kept + b"\n" + json.dumps(edited).encode() + b"\n"
+    path.write_bytes(hand_edited)
+    headers = _as(tokens[0])
+    shown = (await client.get(f"/api/v1/gold-sets/{GOLD}", headers=headers)).json()
+
+    report = await _promote(client, tokens[0], {"queue_id": queue_id})
+
+    fields = stale_fields or ["item_id", "input_hash", "content_hash"]
+    (stale,) = shown["stale_items"]
+    assert shown["items_consistent"] is False
+    assert (stale["line"], stale["fields"]) == (2, fields)
+    assert report["written"] is True
+    assert report["corrected"] == [stale]
+    assert report["counts"]["corrected"] == 1
+    data = path.read_bytes()
+    assert data.startswith(kept + b"\n")
+    pairs = _stored_and_recomputed(data)
+    assert all(stored == recomputed for stored, recomputed in pairs)
+    assert pairs[1][0]["item_id"] == stale["item_id"]
+    item_derived = [stored for stored, _ in pairs]
+    item_ids = [stored["item_id"] for stored in item_derived]
+    assert len(set(item_ids)) == len(item_ids)
+    header = _header(tmp_path)
+    assert header["item_count"] == len(item_ids)
+    assert header["content_hash"] == _sha256(path)
+    assert (
+        header["previous_hash"] == f"sha256:{hashlib.sha256(hand_edited).hexdigest()}"
+    )
+    exported = await client.get(f"/api/v1/gold-sets/{GOLD}/export", headers=headers)
+    export_pairs = _stored_and_recomputed(exported.json()["content"].encode("utf-8"))
+    assert [stored for stored, _ in export_pairs] == item_derived
+    after = (await client.get(f"/api/v1/gold-sets/{GOLD}", headers=headers)).json()
+    assert after["items_consistent"] is True
+    assert after["stale_items"] == []

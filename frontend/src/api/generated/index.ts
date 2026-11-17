@@ -613,6 +613,7 @@ export type {
   GoldSetSource,
   GoldSetSummary,
   GoldSource,
+  GoldStaleItem,
   GoldWriteCounts,
   GoldWriteReport,
   HealthCheck,
