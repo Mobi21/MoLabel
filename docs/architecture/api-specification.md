@@ -1998,6 +1998,11 @@ List review events with filtering. Used for review history views.
 
 **Response:** `200 OK` -> `PaginatedResponse[ReviewEvent]`
 
+It needs a session, as the other review endpoints do. A `record_id`,
+`reviewer_id`, `task_schema_id` or `dataset_id` that names no row of the
+caller's workspace answers 404. The listing is not built yet, so `items` is
+always empty.
+
 ---
 
 ### Adjudication

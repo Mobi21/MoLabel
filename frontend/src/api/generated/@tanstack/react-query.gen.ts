@@ -3488,7 +3488,11 @@ export const listReviewEventsQueryKey = (
 /**
  * List Review Events
  *
- * List review events with filtering (API-063).
+ * List review events with filtering (API-063). It lists none yet.
+ *
+ * It needs a session, and a filter that names a row of another workspace
+ * answers 404, as every review endpoint does for a queue or task of
+ * another workspace.
  */
 export const listReviewEventsOptions = (
   options?: Options<ListReviewEventsData>,
@@ -3519,7 +3523,11 @@ export const listReviewEventsInfiniteQueryKey = (
 /**
  * List Review Events
  *
- * List review events with filtering (API-063).
+ * List review events with filtering (API-063). It lists none yet.
+ *
+ * It needs a session, and a filter that names a row of another workspace
+ * answers 404, as every review endpoint does for a queue or task of
+ * another workspace.
  */
 export const listReviewEventsInfiniteOptions = (
   options?: Options<ListReviewEventsData>,
