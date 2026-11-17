@@ -37,11 +37,16 @@ def _utc(value: Any) -> datetime:
 
 
 def queue_review_events(conn: Any, queue_ids: Sequence[str]) -> list[ReviewEventLabels]:
-    """Human review events submitted or corrected on the tasks of these queues."""
+    """Human review events submitted or corrected on the tasks of these queues.
+
+    An event's ``ai_revealed`` is true when the reviewer revealed a proposal
+    or the claim showed one, which a ``show_agent_outputs`` schema does.
+    """
     rows = conn.execute(
         text(
             "SELECT e.id, e.record_id, e.reviewer_id, e.decision, e.labels, "
-            "e.supersedes_event_id, e.created_at "
+            "e.supersedes_event_id, e.created_at, "
+            "e.ai_was_revealed = 1 OR e.agent_output_id IS NOT NULL "
             "FROM review_events e "
             "JOIN review_tasks t ON t.id = e.review_task_id "
             "WHERE e.source = 'human' AND e.reviewer_id IS NOT NULL "
@@ -58,6 +63,7 @@ def queue_review_events(conn: Any, queue_ids: Sequence[str]) -> list[ReviewEvent
             labels=json_object(row[4]),
             supersedes_event_id=str(row[5]) if row[5] else None,
             created_at=_utc(row[6]),
+            ai_revealed=bool(row[7]),
         )
         for row in rows
     ]

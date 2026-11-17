@@ -21,6 +21,10 @@ export function e2eRoot(): string {
 
 export interface Seed {
   workspaceId: string
+  /** The workspace folder, where gold sets are written. */
+  workspace: string
+  /** An empty gold set of the overlap queue's task schema. */
+  goldSet: string
   reviewers: { first: string; second: string }
   queues: { overlap: string; blind: string; thin: string }
   /** The offline provider's proposal for each ticket, by external id. */

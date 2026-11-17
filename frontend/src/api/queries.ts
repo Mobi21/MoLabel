@@ -1,11 +1,14 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import {
   getAgreementMetricsQueryKey,
+  getCalibrationReportQueryKey,
+  getGoldSetQueryKey,
   getMeQueryKey,
   getQueueDisagreementQueryKey,
   getReviewTaskEndpointQueryKey,
   getTaskSchemaQueryKey,
   listMyQueueTasksEndpointQueryKey,
+  listGoldSetsEndpointQueryKey,
   listQueueDisagreementsQueryKey,
   listQueuesEndpointQueryKey,
   listReviewerProfilesQueryKey,
@@ -13,10 +16,13 @@ import {
 } from '@/api/generated/@tanstack/react-query.gen'
 import {
   getAgreementMetrics,
+  getCalibrationReport,
+  getGoldSet,
   getMe,
   getQueueDisagreement,
   getReviewTaskEndpoint,
   getTaskSchema,
+  listGoldSetsEndpoint,
   listMyQueueTasksEndpoint,
   listQueueDisagreements,
   listQueuesEndpoint,
@@ -130,9 +136,43 @@ export const agreementQuery = (workspaceId: string, queueId: string) => {
   })
 }
 
+export const calibrationReportQuery = (queueId: string) => {
+  const options = { path: { queue_id: queueId } }
+  return queryOptions({
+    queryKey: getCalibrationReportQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await getCalibrationReport({ ...options, signal, throwOnError: true }))
+        .data,
+  })
+}
+
+export const goldSetsQuery = () =>
+  queryOptions({
+    queryKey: listGoldSetsEndpointQueryKey(),
+    queryFn: async ({ signal }) =>
+      (await listGoldSetsEndpoint({ signal, throwOnError: true })).data,
+  })
+
+export const goldSetQuery = (goldSetId: string) => {
+  const options = { path: { gold_set_id: goldSetId } }
+  return queryOptions({
+    queryKey: getGoldSetQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await getGoldSet({ ...options, signal, throwOnError: true })).data,
+  })
+}
+
+/** Mark stale the gold-set list and every set read, which a promotion changes. */
+export function invalidateGoldSets(queryClient: QueryClient): void {
+  for (const _id of ['listGoldSetsEndpoint', 'getGoldSet']) {
+    void queryClient.invalidateQueries({ queryKey: [{ _id }] })
+  }
+}
+
 /**
  * Mark stale what a submit, correction, skip or resolve changes: the queue's
- * agreement, its disagreements, and the record's disagreement.
+ * agreement and calibration report, its disagreements, and the record's
+ * disagreement.
  */
 export function invalidateQueueOutcomes(
   queryClient: QueryClient,
@@ -140,6 +180,7 @@ export function invalidateQueueOutcomes(
 ): void {
   for (const queryKey of [
     agreementQuery(scope.workspaceId, scope.queueId).queryKey,
+    calibrationReportQuery(scope.queueId).queryKey,
     disagreementsQuery(scope.queueId).queryKey,
     disagreementQuery(scope.queueId, scope.recordId).queryKey,
   ]) {

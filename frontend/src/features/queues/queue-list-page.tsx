@@ -5,7 +5,13 @@ import { errorMessage } from '@/api/client'
 import { KeyLegend } from '@/components/key-legend'
 import { letter, plainKey, useKeymap, type Binding } from '@/lib/keymap'
 import { cn } from '@/lib/utils'
-import { isBlind, kindLabel, queueTitle, useQueues } from './queues'
+import {
+  isAdjudicable,
+  isBlind,
+  kindLabel,
+  queueTitle,
+  useQueues,
+} from './queues'
 
 function Meter({ done, total }: { done: number; total: number }) {
   const share = total === 0 ? 0 : done / total
@@ -86,12 +92,14 @@ function QueueRow({
         >
           {left > 0 ? 'Review' : 'Open'}
         </Link>
-        <Link
-          to={`${base}/adjudication`}
-          className="rounded-[3px] border border-rule px-3 py-1.5 text-xs font-medium hover:border-ink-soft"
-        >
-          Adjudicate
-        </Link>
+        {isAdjudicable(queue) && (
+          <Link
+            to={`${base}/adjudication`}
+            className="rounded-[3px] border border-rule px-3 py-1.5 text-xs font-medium hover:border-ink-soft"
+          >
+            Adjudicate
+          </Link>
+        )}
         <Link
           to={`${base}/calibration`}
           className="rounded-[3px] border border-rule px-3 py-1.5 text-xs font-medium hover:border-ink-soft"
@@ -151,7 +159,7 @@ export function QueueListPage() {
       run: () => {
         open('adjudication')
       },
-      disabled: !current,
+      disabled: !current || !isAdjudicable(current),
     },
     {
       id: 'calibration',
@@ -162,6 +170,15 @@ export function QueueListPage() {
         open('calibration')
       },
       disabled: !current,
+    },
+    {
+      id: 'gold',
+      caps: ['G'],
+      label: 'Gold sets',
+      match: letter('g'),
+      run: () => {
+        void navigate('/gold')
+      },
     },
   ]
   useKeymap(bindings)

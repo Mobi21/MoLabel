@@ -114,7 +114,11 @@ Frontend only talks to backend through the API.
 ## 4. Storage Ownership
 
 Config is files in the workspace folder. Review in progress is SQLite.
-Released gold sets will be files too (planned, P8).
+Released gold sets are files too: `gold/<slug>/gold.yaml` and
+`gold/<slug>/gold.jsonl`, listed under `gold_sets` in the manifest.
+MoLabel writes them through the workspace lock and never runs git.
+`docs/architecture/gold-sets.md` gives the item shape and the rules for
+versions, duplicates and conflicts.
 
 ### 4.1 Config Files
 
@@ -148,7 +152,11 @@ two disagree:
 - Every writer of a workspace takes turns, whatever its data directory. Each
   write holds an OS-level lock on `.molabel/locks/workspace.lock` inside the
   workspace. `.molabel/` holds a `.gitignore` of `*`, so it never shows in
-  `git status`.
+  `git status`. Every write puts that file back first when it is missing,
+  empty or changed.
+- A write puts the new content in `.molabel/tmp/` and moves it over the file,
+  so a process killed partway leaves the old file whole and no stray file
+  beside it. The move needs `.molabel/` and the file on one filesystem.
 - An edit made to a file outside the API, by hand or with `molabel artifact
   write`, reaches the database at the next `molabel workspace bootstrap`. Bootstrap
   re-reads every file the manifest lists and rewrites its row. A listed file it
@@ -359,10 +367,10 @@ Examples of supported step types include:
 - `export`, `snapshot`, `release_validation`
 - `loop`, `conditional`, `parallel`, `gate`
 
-`human_calibration`, which checks reviewers against gold labels before review,
-is planned with gold sets (P8). No shipped template uses it, and the API
-refuses a workflow that has one with `CALIBRATION_NOT_AVAILABLE` when it is
-created, updated, or run.
+- `human_calibration`, which checks reviewers against a gold set the step
+  names with `gold_set`. A step without one fails with
+  `CALIBRATION_GOLD_SET_REQUIRED`. No shipped template uses it, because a
+  template cannot know the workspace's gold sets.
 
 At runtime each step reads from and writes to the shared workflow context. Human
 steps can pause execution. Control steps branch or orchestrate child steps.

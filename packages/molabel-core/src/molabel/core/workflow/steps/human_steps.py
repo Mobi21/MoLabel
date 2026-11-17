@@ -191,8 +191,11 @@ class HumanTriageExecutor(StepExecutor):
 class HumanCalibrationExecutor(StepExecutor):
     """Executor for human_calibration steps (WF-013).
 
-    Creates a shared calibration queue where all reviewers get the same
-    items. Pauses until min_reviewers have completed.
+    Makes a calibration queue of the gold set that ``config.gold_set`` names,
+    read through the ``gold_sets`` service. Each item gets ``min_reviewers``
+    copies, 2 by default, so that many reviewers label every item. The
+    workflow's active record set is left as it was. Pauses until the queue
+    is done.
     """
 
     def validate(
@@ -202,12 +205,14 @@ class HumanCalibrationExecutor(StepExecutor):
         context: WorkflowContext,
     ) -> list[str]:
         errors: list[str] = []
-        if not context.active_record_set_id:
-            errors.append("human_calibration requires an active record set")
-        if not config.get("sample_size"):
-            errors.append("human_calibration requires 'sample_size' in config")
-        if not config.get("min_reviewers"):
-            errors.append("human_calibration requires 'min_reviewers' in config")
+        if not isinstance(config.get("gold_set"), str) or not config["gold_set"]:
+            errors.append("human_calibration requires 'gold_set' in config")
+        for key in ("sample_size", "min_reviewers"):
+            value = config.get(key)
+            if value is not None and (type(value) is not int or value < 1):
+                errors.append(
+                    f"human_calibration {key} must be an integer of 1 or more"
+                )
         return errors
 
     def execute(
@@ -217,34 +222,36 @@ class HumanCalibrationExecutor(StepExecutor):
         context: WorkflowContext,
         services: dict[str, Any] | None = None,
     ) -> StepResult:
-        services = services or {}
-        input_record_ids = context.get_active_record_ids()
-        sample_size = min(int(config["sample_size"]), len(input_record_ids))
-        min_reviewers = int(config["min_reviewers"])
+        gold_sets = (services or {}).get("gold_sets")
+        if gold_sets is None:
+            return StepResult(
+                success=False, error="human_calibration needs the gold_sets service"
+            )
+        try:
+            items = gold_sets.calibration_items(config["gold_set"])
+        except Exception as e:
+            return StepResult(
+                success=False,
+                error=f"Failed to read gold set '{config['gold_set']}': {e}",
+                error_trace=str(e)[:2000],
+            )
+        record_ids = list(items.record_ids)
+        sample_size = config.get("sample_size")
+        if sample_size and sample_size < len(record_ids):
+            import random
 
-        import random
-
-        rng = random.Random(config.get("seed"))
-        calibration_ids = rng.sample(input_record_ids, sample_size)
+            record_ids = random.Random(config.get("seed")).sample(
+                record_ids, sample_size
+            )
+        min_reviewers = int(config.get("min_reviewers", 2))
 
         queue_id = str(uuid.uuid4())
-
-        review_service = services.get("review_queue")
-        if review_service is not None:
-            try:
-                review_service.create_queue(
-                    queue_id=queue_id,
-                    record_ids=calibration_ids,
-                    config={**config, "calibration_mode": True},
-                )
-            except Exception as e:
-                return StepResult(
-                    success=False,
-                    error=f"Failed to create calibration queue: {e}",
-                    error_trace=str(e)[:2000],
-                )
-
         context.review_queue_ids.append(queue_id)
+        context.record_sets[step_id] = RecordSet(
+            record_ids=record_ids,
+            record_count=len(record_ids),
+            description=f"Calibration queue on gold set {items.gold_set}",
+        )
         context.metrics["calibration.agreement"] = 0.0
         context.metrics["calibration.reviewer_count"] = 0
 
@@ -256,8 +263,14 @@ class HumanCalibrationExecutor(StepExecutor):
                 step_type="human_calibration",
                 summary={
                     "queue_id": queue_id,
-                    "calibration_items": len(calibration_ids),
+                    "gold_set": items.gold_set,
+                    "gold_version": items.version,
+                    "gold_content_hash": items.content_hash,
+                    "task_schema_id": items.task_schema,
+                    "calibration_items": len(record_ids),
+                    "unresolved_items": list(items.unresolved),
                     "min_reviewers": min_reviewers,
+                    "show_ai_proposal": config.get("show_ai_proposal") is True,
                 },
             ),
         )

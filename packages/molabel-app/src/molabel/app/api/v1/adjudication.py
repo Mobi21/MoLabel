@@ -15,8 +15,9 @@ own review of the record is in. Closing a queue's copies, through
 leaves the claimed ones open.
 
 Every endpoint reads only a queue of the caller's workspace, and answers 404
-for a queue of any other. The GUI and the CLI's ``molabel adjudication``
-commands both use these endpoints.
+for a queue of any other. A calibration queue answers 409: gold is the answer
+to its items, so it has no disagreement to resolve. The GUI and the CLI's
+``molabel adjudication`` commands both use these endpoints.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import bindparam, text
 
+from molabel.app.errors import ApiError
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.services.claims import (
     load_task_schema_version,
@@ -50,6 +52,7 @@ from molabel.core.types import (
     ReviewEventSource,
     canonical_review_decision,
 )
+from molabel.core.utils.canonical import present_label_value
 
 router = APIRouter(prefix="/adjudication", tags=["adjudication"])
 
@@ -98,6 +101,13 @@ class AdjudicationOutcome(BaseModel):
     adjudicator_id: str
     adjudicator_name: str | None = None
     review_event_id: str | None = None
+    agent_sources: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Each field whose resolved value the adjudicator took from an agent "
+            "proposal, mapped to that proposal's agent_output_id"
+        ),
+    )
     resolved_at: str
 
 
@@ -153,6 +163,15 @@ class ResolveDisagreement(BaseModel):
             "the disagreement's review events differ, so the caller reloads it"
         )
     )
+    agent_sources: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Each field whose resolved value the adjudicator took from an agent "
+            "proposal, mapped to that proposal's agent_output_id, an agent_labels "
+            "entry of the disagreement. 422 when the proposal is not one, or when "
+            "its value for the field is missing or is not the resolved value"
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -161,27 +180,49 @@ class ResolveDisagreement(BaseModel):
 
 
 @dataclass(frozen=True)
-class _Queue:
+class ReviewQueue:
     queue_id: str
     workspace_id: str
     task_schema_id: str
+    calibration: bool = False
+    """A ``human_calibration`` queue, whose answers are scored against gold."""
 
 
-def _queue(conn: Any, queue_id: str, workspace_id: uuid.UUID) -> _Queue:
+def workspace_review_queue(
+    conn: Any, queue_id: str, workspace_id: uuid.UUID
+) -> ReviewQueue:
     row = conn.execute(
         text(
-            "SELECT workspace_id, task_schema_id FROM review_tasks "
+            "SELECT workspace_id, task_schema_id, is_calibration FROM review_tasks "
             "WHERE queue_id = :q AND workspace_id = :w LIMIT 1"
         ),
         {"q": queue_id, "w": str(workspace_id)},
     ).first()
     if row is None:
         raise HTTPException(status_code=404, detail="Review queue not found")
-    return _Queue(queue_id, str(row[0]), str(row[1]))
+    return ReviewQueue(queue_id, str(row[0]), str(row[1]), parse_bool(row[2]))
+
+
+def adjudicable_queue(conn: Any, queue_id: str, workspace_id: uuid.UUID) -> ReviewQueue:
+    """The queue of this workspace, or 404; a calibration queue answers 409.
+
+    Gold is the answer to a calibration item, so its reviewers' differences
+    are scores, not disagreements, and no resolution may label the record.
+    """
+    queue = workspace_review_queue(conn, queue_id, workspace_id)
+    if queue.calibration:
+        raise ApiError(
+            409,
+            "CALIBRATION_QUEUE_NOT_ADJUDICABLE",
+            f"Queue '{queue_id}' is a calibration queue. Its answers are scored "
+            "against gold in the calibration report, not adjudicated.",
+            {"queue_id": queue_id},
+        )
+    return queue
 
 
 @dataclass(frozen=True)
-class _Disagreement:
+class Disagreement:
     item: AdjudicationQueueItem
     record_external_id: str | None
     dataset_id: str
@@ -244,6 +285,7 @@ def _outcomes_by_record(
                     adjudicator_id=str(row[5]),
                     adjudicator_name=str(row[6]) if row[6] else None,
                     review_event_id=json_object(row[7]).get("review_event_id"),
+                    agent_sources=json_object(row[7]).get("agent_sources") or {},
                     resolved_at=str(row[8]),
                 ),
             )
@@ -251,7 +293,7 @@ def _outcomes_by_record(
     return outcomes
 
 
-def _queue_disagreements(conn: Any, queue: _Queue) -> list[_Disagreement]:
+def queue_disagreements(conn: Any, queue: ReviewQueue) -> list[Disagreement]:
     open_records = {
         str(record_id)
         for (record_id,) in conn.execute(
@@ -293,7 +335,7 @@ def _queue_disagreements(conn: Any, queue: _Queue) -> list[_Disagreement]:
             if covered == event_ids
         ]
         disagreements.append(
-            _Disagreement(
+            Disagreement(
                 item=item,
                 record_external_id=external_id,
                 dataset_id=dataset_id,
@@ -303,22 +345,56 @@ def _queue_disagreements(conn: Any, queue: _Queue) -> list[_Disagreement]:
     return disagreements
 
 
-def _find_or_none(conn: Any, queue: _Queue, record_id: str) -> _Disagreement | None:
-    for disagreement in _queue_disagreements(conn, queue):
+def _find_or_none(conn: Any, queue: ReviewQueue, record_id: str) -> Disagreement | None:
+    for disagreement in queue_disagreements(conn, queue):
         if str(disagreement.item.record_id) == record_id:
             return disagreement
     return None
 
 
-def _find(conn: Any, queue: _Queue, record_id: str) -> _Disagreement:
+def _find(conn: Any, queue: ReviewQueue, record_id: str) -> Disagreement:
     disagreement = _find_or_none(conn, queue, record_id)
     if disagreement is None:
         raise HTTPException(status_code=404, detail="No disagreement on this record")
     return disagreement
 
 
+def _bound_output_ids(conn: Any, queue: ReviewQueue, record_id: str) -> set[str]:
+    """The agent outputs the queue's tasks for the record are bound to."""
+    return {
+        str(output_id)
+        for (raw,) in conn.execute(
+            text(
+                "SELECT agent_output_ids FROM review_tasks "
+                "WHERE queue_id = :q AND record_id = :r"
+            ),
+            {"q": queue.queue_id, "r": record_id},
+        ).fetchall()
+        for output_id in deserialize_agent_output_ids(raw)
+    }
+
+
+def _contradicted_sources(
+    conn: Any, sources: dict[str, str], labels: dict[str, Any]
+) -> list[str]:
+    """The fields whose named proposal gave no value, or not the resolved one."""
+    proposed = {
+        str(row[0]): json_object(row[1])
+        for row in conn.execute(
+            _expanding("SELECT id, labels FROM agent_outputs WHERE id IN :ids", "ids"),
+            {"ids": sorted(set(sources.values()))},
+        ).fetchall()
+    }
+    contradicted = []
+    for field, output_id in sources.items():
+        value = present_label_value(proposed.get(output_id, {}).get(field))
+        if value is None or value != present_label_value(labels.get(field)):
+            contradicted.append(field)
+    return contradicted
+
+
 def _detail(
-    conn: Any, queue: _Queue, disagreement: _Disagreement
+    conn: Any, queue: ReviewQueue, disagreement: Disagreement
 ) -> DisagreementDetail:
     record_id = str(disagreement.item.record_id)
     event_rows = conn.execute(
@@ -332,24 +408,13 @@ def _detail(
         ),
         {"ids": sorted(disagreement.event_ids)},
     ).fetchall()
-    bound_output_ids = {
-        str(output_id)
-        for (raw,) in conn.execute(
-            text(
-                "SELECT agent_output_ids FROM review_tasks "
-                "WHERE queue_id = :q AND record_id = :r"
-            ),
-            {"q": queue.queue_id, "r": record_id},
-        ).fetchall()
-        for output_id in deserialize_agent_output_ids(raw)
-    }
     output_rows = conn.execute(
         _expanding(
             "SELECT id, agent_run_id, labels, composite_confidence "
             "FROM agent_outputs WHERE id IN :ids ORDER BY created_at",
             "ids",
         ),
-        {"ids": sorted(bound_output_ids)},
+        {"ids": sorted(_bound_output_ids(conn, queue, record_id))},
     ).fetchall()
     context = reviewer_record_context(conn, record_id)
     reviewer_labels = disagreement.item.disagreement.reviewer_labels
@@ -412,8 +477,8 @@ async def list_queue_disagreements(
     submitted, skipped, or closed.
     """
     with get_engine(request).connect() as conn:
-        queue = _queue(conn, queue_id, reviewer.workspace_id)
-        disagreements = _queue_disagreements(conn, queue)
+        queue = adjudicable_queue(conn, queue_id, reviewer.workspace_id)
+        disagreements = queue_disagreements(conn, queue)
     items = [DisagreementSummary(**d.summary()) for d in disagreements]
     return DisagreementQueue(
         queue_id=queue_id,
@@ -435,7 +500,7 @@ async def get_queue_disagreement(
 ) -> DisagreementDetail:
     """Show a disagreement side by side: the record and each reviewer's labels."""
     with get_engine(request).connect() as conn:
-        queue = _queue(conn, queue_id, reviewer.workspace_id)
+        queue = adjudicable_queue(conn, queue_id, reviewer.workspace_id)
         return _detail(conn, queue, _find(conn, queue, record_id))
 
 
@@ -460,9 +525,15 @@ async def resolve_queue_disagreement(
     resolve_with_labels = body.resolution == AdjudicationResolution.resolve
     if resolve_with_labels and not body.resolved_labels:
         raise HTTPException(status_code=422, detail="resolve needs resolved_labels")
+    sources = {
+        field: hyphenated_id(output_id)
+        for field, output_id in sorted(body.agent_sources.items())
+    }
+    if sources and not resolve_with_labels:
+        raise HTTPException(status_code=422, detail="agent_sources needs resolve")
 
     with get_engine(request).begin() as conn:
-        queue = _queue(conn, queue_id, reviewer.workspace_id)
+        queue = adjudicable_queue(conn, queue_id, reviewer.workspace_id)
         disagreement = _find_or_none(conn, queue, record_id)
         if disagreement is None or disagreement.event_ids != set(body.review_event_ids):
             raise HTTPException(
@@ -472,6 +543,12 @@ async def resolve_queue_disagreement(
         if disagreement.outcome is not None:
             raise HTTPException(
                 status_code=409, detail="This disagreement is already resolved"
+            )
+        unknown = set(sources.values()) - _bound_output_ids(conn, queue, record_id)
+        if unknown:
+            raise HTTPException(
+                status_code=422,
+                detail=f"No agent proposal of this disagreement: {sorted(unknown)}",
             )
         task_schema_id = str(disagreement.item.task_schema_id)
         now = datetime.now(UTC).isoformat()
@@ -489,6 +566,15 @@ async def resolve_queue_disagreement(
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+            contradicted = _contradicted_sources(conn, sources, labels)
+            if contradicted:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "agent_sources names a proposal that did not give the "
+                        f"resolved value of {contradicted}"
+                    ),
+                )
             review_event_id = str(uuid.uuid4())
             conn.execute(
                 text(
@@ -539,7 +625,11 @@ async def resolve_queue_disagreement(
                 "labels": json.dumps(labels) if labels is not None else None,
                 "rationale": body.rationale,
                 "metadata": json.dumps(
-                    {"queue_id": queue_id, "review_event_id": review_event_id}
+                    {
+                        "queue_id": queue_id,
+                        "review_event_id": review_event_id,
+                        "agent_sources": sources,
+                    }
                 ),
                 "now": now,
                 "workspace_id": queue.workspace_id,

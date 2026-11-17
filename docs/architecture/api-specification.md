@@ -94,7 +94,13 @@ glob finds there is checked too. A path is first refused if it contains a
 a registered root or inside one. Artifact routes need `workspace_root` or
 `workspace_id`; there is no fallback to the server's working directory.
 Bootstrap is the one route that takes a new root. It needs an absolute path
-without `..`.
+without `..`. A file the server writes in a workspace, such as a config file,
+a gold set or an export, must also have names Windows can hold, whatever
+platform runs the server, so the workspace opens on every machine. No folder
+or file name may end with a dot or a space, or be a Windows device name
+(`con`, `prn`, `aux`, `nul`, `com1` to `com9`, `lpt1` to `lpt9`, and `com`
+or `lpt` with a superscript 1, 2 or 3, in any case and with any extension).
+`com0` and `lpt0` are ordinary names.
 
 | HTTP Status | Code                     | When                                              |
 |-------------|--------------------------|---------------------------------------------------|
@@ -102,6 +108,7 @@ without `..`.
 | 400         | `PATH_NOT_ABSOLUTE`      | A workspace root or bootstrap path is relative    |
 | 400         | `WORKSPACE_REQUIRED`     | Neither `workspace_root` nor `workspace_id` given |
 | 403         | `PATH_OUTSIDE_WORKSPACE` | The resolved path is outside every registered root |
+| 422         | `PATH_NOT_PORTABLE`      | A name to write ends with a dot or space, or is a Windows device name |
 
 `details.path` echoes the rejected path. A workflow step whose path is
 refused fails with "Path is outside the workspace" in its `error_summary`.
@@ -2103,6 +2110,7 @@ class AdjudicationOutcome(BaseModel):
     adjudicator_id: str
     adjudicator_name: str | None
     review_event_id: str | None
+    agent_sources: dict[str, str]        # field -> agent_output_id it was taken from
     resolved_at: str
 ```
 
@@ -2115,7 +2123,15 @@ Store a resolution and return the updated `DisagreementDetail`. `resolve` needs
 (422 when invalid). `review_event_ids` names the `review_event_id` of each
 `reviewer_labels` entry the caller read. 409 when the disagreement's review
 events differ from them or it is gone, so the caller reloads it, and 409 when
-it is already resolved.
+it is already resolved. `agent_sources` maps each field whose resolved value
+the adjudicator took from an agent proposal to that proposal's
+`agent_output_id`. Each proposal must be an `agent_labels` entry of the
+disagreement, its value for the field must be present (not null, `""` or `[]`)
+and equal the resolved value, and the map needs `resolve` (422 otherwise).
+Values are equal when they have the same JSON type and value; a list matches
+one holding the same elements in any order. The
+adjudication stores the map, and gold promotion records that the adjudicator
+took an AI proposal.
 
 ```python
 class ResolveDisagreement(BaseModel):
@@ -2123,6 +2139,7 @@ class ResolveDisagreement(BaseModel):
     resolved_labels: dict[str, Any] | None
     rationale: str | None
     review_event_ids: list[str]          # required
+    agent_sources: dict[str, str] = {}   # field -> agent_output_id
 ```
 
 ---

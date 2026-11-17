@@ -21,6 +21,10 @@ import { Kbd, KeyLegend } from '@/components/key-legend'
 import { ReadFailed } from '@/components/read-failed'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  PromoteToGold,
+  usePromoteToGold,
+} from '@/features/gold/promote-to-gold'
 import { QueueHeader } from '@/features/queues/queue-header'
 import { queuesKey, useQueue } from '@/features/queues/queues'
 import { RecordView } from '@/features/review/record-view'
@@ -46,7 +50,13 @@ import {
   type Binding,
 } from '@/lib/keymap'
 import { cn } from '@/lib/utils'
-import { agreedLabels, sourcesOf, take, type Source } from './resolution'
+import {
+  agentSources,
+  agreedLabels,
+  sourcesOf,
+  take,
+  type Source,
+} from './resolution'
 
 export function AdjudicationPage() {
   const { queueId = '' } = useParams()
@@ -297,6 +307,7 @@ function Disagreement(props: DisagreementProps) {
       {...props}
       detail={detail.data}
       fields={fields}
+      taskSchemaSlug={schema.data.task_schema_slug}
       reloaded={reloaded}
       onConflict={() => {
         setReloaded(true)
@@ -309,6 +320,7 @@ function Resolver({
   queueId,
   detail,
   fields,
+  taskSchemaSlug,
   onResolved,
   onNext,
   onPrevious,
@@ -319,6 +331,7 @@ function Resolver({
 }: DisagreementProps & {
   detail: DisagreementDetail
   fields: readonly RubricField[]
+  taskSchemaSlug: string
   /** The disagreement changed under a resolve and was read again. */
   reloaded: boolean
   onConflict: () => void
@@ -332,6 +345,7 @@ function Resolver({
   const [labels, setLabels] = useState<Labels>(() =>
     agreedLabels(fields, detail),
   )
+  const [taken, setTaken] = useState<Readonly<Record<string, Source>>>({})
   const [active, setActive] = useState(() =>
     Math.max(
       0,
@@ -342,6 +356,11 @@ function Resolver({
   const [problem, setProblem] = useState<string | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const note = useRef<HTMLTextAreaElement>(null)
+  const promotion = usePromoteToGold({
+    queueId,
+    taskSchemaSlug,
+    recordIds: [detail.record_id],
+  })
 
   useEffect(() => {
     heading.current?.focus()
@@ -391,6 +410,11 @@ function Resolver({
     setLabels((current) =>
       take(fields, current, source, whole ? null : (field?.name ?? null)),
     )
+    const names = whole ? fields.map((f) => f.name) : field ? [field.name] : []
+    setTaken((current) => ({
+      ...current,
+      ...Object.fromEntries(names.map((name) => [name, source])),
+    }))
     setProblem(null)
     if (!whole) setActive((i) => nextConflict(i))
   }
@@ -415,6 +439,7 @@ function Resolver({
         resolved_labels: rawLabels(labels),
         rationale: rationale.trim() === '' ? null : rationale.trim(),
         review_event_ids: detail.reviewer_labels.map((s) => s.review_event_id),
+        agent_sources: agentSources(fields, labels, taken),
       },
     })
   }
@@ -504,6 +529,10 @@ function Resolver({
         note.current?.focus()
       },
       disabled: resolved !== null,
+    },
+    {
+      ...promotion.binding,
+      disabled: promotion.binding.disabled === true || resolved === null,
     },
     {
       id: 'queues',
@@ -599,30 +628,35 @@ function Resolver({
         </table>
 
         {resolved ? (
-          <div
-            data-testid="resolution"
-            className="rounded-[3px] border border-go/40 bg-go-soft p-4"
-          >
-            <p className="font-mono text-xs text-go">
-              resolved by {resolved.adjudicator_name ?? 'an adjudicator'} ·{' '}
-              {new Date(resolved.resolved_at).toLocaleString()}
-            </p>
-            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-              {fields.map((f) => (
-                <div key={f.name} className="contents">
-                  <dt className="font-mono text-xs leading-6 text-ink-soft">
-                    {f.name}
-                  </dt>
-                  <dd className="leading-6">
-                    {formatValue(resolved.resolved_labels?.[f.name])}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            {resolved.rationale && (
-              <p className="mt-2 text-sm text-ink-soft">{resolved.rationale}</p>
-            )}
-          </div>
+          <>
+            <div
+              data-testid="resolution"
+              className="rounded-[3px] border border-go/40 bg-go-soft p-4"
+            >
+              <p className="font-mono text-xs text-go">
+                resolved by {resolved.adjudicator_name ?? 'an adjudicator'} ·{' '}
+                {new Date(resolved.resolved_at).toLocaleString()}
+              </p>
+              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                {fields.map((f) => (
+                  <div key={f.name} className="contents">
+                    <dt className="font-mono text-xs leading-6 text-ink-soft">
+                      {f.name}
+                    </dt>
+                    <dd className="leading-6">
+                      {formatValue(resolved.resolved_labels?.[f.name])}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {resolved.rationale && (
+                <p className="mt-2 text-sm text-ink-soft">
+                  {resolved.rationale}
+                </p>
+              )}
+            </div>
+            <PromoteToGold promotion={promotion} what="this record" />
+          </>
         ) : (
           <div className="space-y-4">
             {reloaded && (

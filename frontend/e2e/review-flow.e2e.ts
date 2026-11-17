@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { readSeed, type Seed } from './env'
@@ -196,6 +197,70 @@ test('reviewer 2 accepts every proposal, disagreeing on two tickets', async ({
   expect(stored.resolution.resolved_labels.intent).toBe(
     seed.proposals[ticket]?.intent,
   )
+})
+
+test('the resolved record is promoted to gold by keyboard, once', async ({
+  page,
+}) => {
+  await signIn(page, 'Reviewer 2')
+  const base = `/api/v1/adjudication/queues/${seed.queues.overlap}/disagreements`
+  const list = (await (await page.request.get(base)).json()) as {
+    items: { record_id: string; record_external_id: string; status: string }[]
+  }
+  const resolved = list.items.find((i) => i.status === 'resolved')
+  if (!resolved) throw new Error('no resolved disagreement to promote')
+  await page.goto(
+    `/queues/${seed.queues.overlap}/adjudication?record=${resolved.record_id}`,
+  )
+  await expect(page.getByTestId('resolution')).toBeVisible()
+  const panel = page.getByRole('region', { name: 'Promote to gold' })
+  await expect(panel.getByRole('combobox', { name: 'Gold set' })).toHaveValue(
+    seed.goldSet,
+  )
+
+  await page.keyboard.press('g')
+  await expect(panel.getByTestId('promote-result')).toHaveText(
+    'Added 1 item to Ticket triage gold, now version 2 with 1 item.',
+  )
+  await snap(page, 'promote-to-gold')
+
+  const folder = join(seed.workspace, 'gold', seed.goldSet)
+  const lines = readFileSync(join(folder, 'gold.jsonl'), 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map(
+      (line) =>
+        JSON.parse(line) as {
+          input_ref: { external_id: string }
+          expected: { intent: string }
+          provenance: { source: string; promoted_by: string }
+        },
+    )
+  expect(lines).toHaveLength(1)
+  expect(lines[0]?.input_ref.external_id).toBe(resolved.record_external_id)
+  expect(lines[0]?.expected.intent).toBe(
+    seed.proposals[resolved.record_external_id]?.intent,
+  )
+  expect(lines[0]?.provenance.source).toBe('adjudication')
+  expect(lines[0]?.provenance.promoted_by).toBe(seed.reviewers.second)
+  expect(readFileSync(join(folder, 'gold.yaml'), 'utf8')).toContain(
+    'version: 2',
+  )
+
+  await page.keyboard.press('g')
+  await expect(panel.getByTestId('promote-result')).toContainText(
+    'Nothing added to Ticket triage gold; it stays at version 2.',
+  )
+
+  await page.goto('/gold')
+  await expect(
+    page.getByRole('heading', { name: 'Ticket triage gold' }),
+  ).toBeVisible()
+  await expect(page.getByTestId('gold-version')).toHaveText('version 2')
+  await expect(page.getByTestId('gold-item')).toContainText(
+    resolved.record_external_id,
+  )
+  await snap(page, 'gold-set')
 })
 
 test('a blind queue keeps the AI proposal out of the page until reveal', async ({

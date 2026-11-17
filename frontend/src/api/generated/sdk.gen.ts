@@ -12,6 +12,9 @@ import type {
   AdvanceStepData,
   AdvanceStepErrors,
   AdvanceStepResponses,
+  AppendFailuresToGoldSetData,
+  AppendFailuresToGoldSetErrors,
+  AppendFailuresToGoldSetResponses,
   ApproveReleaseData,
   ApproveReleaseErrors,
   ApproveReleaseResponses,
@@ -44,6 +47,9 @@ import type {
   CreateExportData,
   CreateExportErrors,
   CreateExportResponses,
+  CreateGoldSetEndpointData,
+  CreateGoldSetEndpointErrors,
+  CreateGoldSetEndpointResponses,
   CreateModelProfileData,
   CreateModelProfileErrors,
   CreateModelProfileResponses,
@@ -77,6 +83,9 @@ import type {
   DecideArtifactProposalData,
   DecideArtifactProposalErrors,
   DecideArtifactProposalResponses,
+  DedupeGoldSetEndpointData,
+  DedupeGoldSetEndpointErrors,
+  DedupeGoldSetEndpointResponses,
   DeleteModelProfileData,
   DeleteModelProfileErrors,
   DeleteModelProfileResponses,
@@ -103,6 +112,12 @@ import type {
   ExecuteWorkflowData,
   ExecuteWorkflowErrors,
   ExecuteWorkflowResponses,
+  ExportGoldSetContentData,
+  ExportGoldSetContentErrors,
+  ExportGoldSetContentResponses,
+  ExportGoldSetToPathData,
+  ExportGoldSetToPathErrors,
+  ExportGoldSetToPathResponses,
   GetAgentAnalyticsData,
   GetAgentAnalyticsErrors,
   GetAgentAnalyticsResponses,
@@ -121,6 +136,9 @@ import type {
   GetBenchmarkRunFactsData,
   GetBenchmarkRunFactsErrors,
   GetBenchmarkRunFactsResponses,
+  GetCalibrationReportData,
+  GetCalibrationReportErrors,
+  GetCalibrationReportResponses,
   GetComparisonResultsData,
   GetComparisonResultsErrors,
   GetComparisonResultsResponses,
@@ -145,6 +163,9 @@ import type {
   GetExportData,
   GetExportErrors,
   GetExportResponses,
+  GetGoldSetData,
+  GetGoldSetErrors,
+  GetGoldSetResponses,
   GetLocksData,
   GetLocksResponses,
   GetMeData,
@@ -236,6 +257,9 @@ import type {
   ListExportsData,
   ListExportsErrors,
   ListExportsResponses,
+  ListGoldSetsEndpointData,
+  ListGoldSetsEndpointErrors,
+  ListGoldSetsEndpointResponses,
   ListModelProfilesData,
   ListModelProfilesErrors,
   ListModelProfilesResponses,
@@ -294,6 +318,9 @@ import type {
   PreviewLabelMappingData,
   PreviewLabelMappingErrors,
   PreviewLabelMappingResponses,
+  PromoteToGoldSetData,
+  PromoteToGoldSetErrors,
+  PromoteToGoldSetResponses,
   PushToHuggingfaceData,
   PushToHuggingfaceErrors,
   PushToHuggingfaceResponses,
@@ -2014,6 +2041,202 @@ export const resolveQueueDisagreement = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   })
+
+/**
+ * List Gold Sets Endpoint
+ *
+ * List the gold sets of the session's workspace, in manifest order.
+ */
+export const listGoldSetsEndpoint = <ThrowOnError extends boolean = false>(
+  options?: Options<ListGoldSetsEndpointData, ThrowOnError>,
+): RequestResult<
+  ListGoldSetsEndpointResponses,
+  ListGoldSetsEndpointErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListGoldSetsEndpointResponses,
+    ListGoldSetsEndpointErrors,
+    ThrowOnError
+  >({ url: '/api/v1/gold-sets', ...options })
+
+/**
+ * Create Gold Set Endpoint
+ *
+ * Write version 1 of an empty gold set and list it in the manifest.
+ */
+export const createGoldSetEndpoint = <ThrowOnError extends boolean = false>(
+  options: Options<CreateGoldSetEndpointData, ThrowOnError>,
+): RequestResult<
+  CreateGoldSetEndpointResponses,
+  CreateGoldSetEndpointErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateGoldSetEndpointResponses,
+    CreateGoldSetEndpointErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/gold-sets',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+/**
+ * Get Gold Set
+ *
+ * Show a gold set: its header, newest items, duplicates and conflicts.
+ */
+export const getGoldSet = <ThrowOnError extends boolean = false>(
+  options: Options<GetGoldSetData, ThrowOnError>,
+): RequestResult<GetGoldSetResponses, GetGoldSetErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetGoldSetResponses,
+    GetGoldSetErrors,
+    ThrowOnError
+  >({ url: '/api/v1/gold-sets/{gold_set_id}', ...options })
+
+/**
+ * Promote To Gold Set
+ *
+ * Promote reviewed records into the set.
+ *
+ * A record qualifies when an adjudication resolved it with labels or every
+ * counted reviewer gave identical labels, or, with allow_single_reviewer,
+ * one reviewer labelled it. Promoting a record again is a duplicate and
+ * changes nothing; other labels for the same input are a conflict, which
+ * is reported and never overwrites the item.
+ */
+export const promoteToGoldSet = <ThrowOnError extends boolean = false>(
+  options: Options<PromoteToGoldSetData, ThrowOnError>,
+): RequestResult<
+  PromoteToGoldSetResponses,
+  PromoteToGoldSetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    PromoteToGoldSetResponses,
+    PromoteToGoldSetErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/gold-sets/{gold_set_id}/promote',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+/**
+ * Append Failures To Gold Set
+ *
+ * Append the reviewed records the model got wrong.
+ *
+ * These are the records that qualify for promotion and whose human label
+ * contradicts an agent proposal bound to their review tasks. Each item
+ * records that proposal. Append dedupes as promotion does.
+ */
+export const appendFailuresToGoldSet = <ThrowOnError extends boolean = false>(
+  options: Options<AppendFailuresToGoldSetData, ThrowOnError>,
+): RequestResult<
+  AppendFailuresToGoldSetResponses,
+  AppendFailuresToGoldSetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    AppendFailuresToGoldSetResponses,
+    AppendFailuresToGoldSetErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/gold-sets/{gold_set_id}/append',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+/**
+ * Dedupe Gold Set Endpoint
+ *
+ * Remove exact repeats, keeping the first, and report the conflicts left.
+ */
+export const dedupeGoldSetEndpoint = <ThrowOnError extends boolean = false>(
+  options: Options<DedupeGoldSetEndpointData, ThrowOnError>,
+): RequestResult<
+  DedupeGoldSetEndpointResponses,
+  DedupeGoldSetEndpointErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    DedupeGoldSetEndpointResponses,
+    DedupeGoldSetEndpointErrors,
+    ThrowOnError
+  >({ url: '/api/v1/gold-sets/{gold_set_id}/dedupe', ...options })
+
+/**
+ * Export Gold Set Content
+ *
+ * The set's items as JSONL, one item per line as gold.jsonl holds them.
+ */
+export const exportGoldSetContent = <ThrowOnError extends boolean = false>(
+  options: Options<ExportGoldSetContentData, ThrowOnError>,
+): RequestResult<
+  ExportGoldSetContentResponses,
+  ExportGoldSetContentErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ExportGoldSetContentResponses,
+    ExportGoldSetContentErrors,
+    ThrowOnError
+  >({ url: '/api/v1/gold-sets/{gold_set_id}/export', ...options })
+
+/**
+ * Export Gold Set To Path
+ *
+ * Write the set's items as JSONL to a path inside the workspace.
+ */
+export const exportGoldSetToPath = <ThrowOnError extends boolean = false>(
+  options: Options<ExportGoldSetToPathData, ThrowOnError>,
+): RequestResult<
+  ExportGoldSetToPathResponses,
+  ExportGoldSetToPathErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ExportGoldSetToPathResponses,
+    ExportGoldSetToPathErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/gold-sets/{gold_set_id}/export',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+/**
+ * Get Calibration Report
+ *
+ * Score each reviewer of a calibration queue against its gold set.
+ */
+export const getCalibrationReport = <ThrowOnError extends boolean = false>(
+  options: Options<GetCalibrationReportData, ThrowOnError>,
+): RequestResult<
+  GetCalibrationReportResponses,
+  GetCalibrationReportErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetCalibrationReportResponses,
+    GetCalibrationReportErrors,
+    ThrowOnError
+  >({ url: '/api/v1/calibration/queues/{queue_id}', ...options })
 
 /**
  * Get Quality Dashboard

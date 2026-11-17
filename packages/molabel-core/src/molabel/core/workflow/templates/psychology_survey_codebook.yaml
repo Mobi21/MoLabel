@@ -3,8 +3,9 @@ version: 1
 description: >
   End-to-end psychology and qualitative research workflow for messy free-text
   survey or interview responses with a versioned codebook, assisted coding,
-  review, adjudication, export, and release certification. Codebook
-  calibration against a gold set is planned with gold sets (P8).
+  review, adjudication, export, and release certification. To calibrate
+  coders against a gold set, add a human_calibration step that names it with
+  gold_set: <slug>.
 
 metadata:
   domain: psychology_research

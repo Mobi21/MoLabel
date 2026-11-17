@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from molabel.core.agents.agent_run_orchestrator import AgentRunBatchResult
+from molabel.core.gold.calibration import CalibrationItems
 from molabel.core.workflow.context import (
     RecordSet,
     WorkflowContext,
@@ -567,18 +568,56 @@ class TestHumanTriage:
         assert any("categories" in e for e in errors)
 
 
-class TestHumanCalibration:
-    def test_creates_calibration_queue(self) -> None:
-        executor = HumanCalibrationExecutor()
-        ctx = _ctx_with_records()
-        result = executor.execute(
-            "cal",
-            {"sample_size": 3, "min_reviewers": 2, "seed": 42},
-            ctx,
+class _GoldSets:
+    def __init__(self, record_ids: list[str]) -> None:
+        self.record_ids = record_ids
+        self.read: list[str] = []
+
+    def calibration_items(self, slug: str) -> CalibrationItems:
+        self.read.append(slug)
+        return CalibrationItems(
+            gold_set=slug,
+            version=3,
+            content_hash="sha256:abc",
+            task_schema="triage",
+            record_ids=self.record_ids,
+            unresolved=["item-gone"],
         )
-        assert result.success
-        assert result.waiting_for_human
-        assert "calibration.agreement" in ctx.metrics
+
+
+class TestHumanCalibration:
+    def test_queues_the_gold_sets_records_and_keeps_the_active_set(self) -> None:
+        ctx = _ctx_with_records()
+        gold_sets = _GoldSets(["g1", "g2", "g3", "g4"])
+
+        result = HumanCalibrationExecutor().execute(
+            "cal",
+            {"gold_set": "triage-gold", "sample_size": 3, "seed": 42},
+            ctx,
+            services={"gold_sets": gold_sets},
+        )
+
+        assert result.success and result.waiting_for_human
+        assert gold_sets.read == ["triage-gold"]
+        queued = ctx.record_sets["cal"].record_ids
+        assert len(queued) == 3 and set(queued) <= {"g1", "g2", "g3", "g4"}
+        assert ctx.active_record_set_id == "_init"
+        summary = result.output.summary
+        assert summary["queue_id"] == ctx.review_queue_ids[-1]
+        assert (summary["gold_set"], summary["gold_version"]) == ("triage-gold", 3)
+        assert summary["task_schema_id"] == "triage"
+        assert summary["min_reviewers"] == 2
+        assert summary["show_ai_proposal"] is False
+        assert summary["unresolved_items"] == ["item-gone"]
+
+    def test_a_step_without_a_gold_set_does_not_validate(self) -> None:
+        errors = HumanCalibrationExecutor().validate(
+            "cal", {"min_reviewers": 0}, _ctx_with_records()
+        )
+        assert errors == [
+            "human_calibration requires 'gold_set' in config",
+            "human_calibration min_reviewers must be an integer of 1 or more",
+        ]
 
 
 class TestHumanAdjudication:

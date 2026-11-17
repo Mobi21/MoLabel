@@ -42,6 +42,8 @@ class ReviewEventLabels:
     labels: dict[str, Any]
     supersedes_event_id: str | None
     created_at: datetime
+    ai_revealed: bool = False
+    """Whether an AI proposal was shown to the reviewer, by policy or reveal."""
 
 
 @dataclass(frozen=True)

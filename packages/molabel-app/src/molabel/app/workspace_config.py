@@ -14,6 +14,7 @@ from __future__ import annotations
 import errno
 import os
 import stat
+import sys
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -26,9 +27,19 @@ from fastapi import HTTPException
 from filelock import FileLock
 from sqlalchemy import text
 
-from molabel.app.workspace_paths import WorkspacePathError, resolve_in_workspace
+from molabel.app.workspace_paths import (
+    WorkspacePathError,
+    require_portable,
+    resolve_in_workspace,
+)
+from molabel.core.gold.model import (
+    GOLD_DIRECTORY,
+    HEADER_FILENAME,
+    ITEMS_FILENAME,
+)
 from molabel.core.manifest import (
     DatasetManifestEntry,
+    GoldSetManifestEntry,
     PromptManifestEntry,
     TaskSchemaManifestEntry,
     WorkflowManifestEntry,
@@ -103,12 +114,44 @@ def workspace_folder(engine, workspace_id: str) -> WorkspaceFolder:
     return WorkspaceFolder(workspace_id, str(row[0]), root)
 
 
-def _write_atomically(path: Path, content: str | bytes) -> None:
-    """Replace *path* with *content*, refusing a file its owner made read-only."""
+WORKSPACE_STATE_DIR = ".molabel"
+_IGNORE_ALL = b"*\n"
+
+
+def _state_path(root: Path, *names: str) -> Path:
+    """``.molabel/`` or a path in it, refused when a link leads out of *root*."""
+    return resolve_in_workspace(root, "/".join((WORKSPACE_STATE_DIR, *names)))
+
+
+def _state_dir(root: Path, name: str) -> Path:
+    """The folder ``.molabel/<name>/`` in the workspace at *root*, created."""
+    folder = _state_path(root, name)
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _ignore_state_dir(root: Path) -> None:
+    """Make ``.molabel/`` ignore itself in git. Call it holding ``workspace_lock``.
+
+    Its ``.gitignore`` is rewritten whenever it does not hold exactly ``*``,
+    so a write cut short is repaired by the next one. On Windows a rewrite
+    fails while another writer reads the file, hence the lock.
+    """
+    ignore = _state_path(root, ".gitignore")
+    if not (ignore.is_file() and ignore.read_bytes() == _IGNORE_ALL):
+        temp = _state_path(root, f".gitignore.{uuid.uuid4().hex}.tmp")
+        _write_atomically(ignore, _IGNORE_ALL, temp)
+
+
+def _write_atomically(path: Path, content: str | bytes, temp: Path) -> None:
+    """Replace *path* with *content*, refusing a file its owner made read-only.
+
+    The content goes to *temp*, on *path*'s filesystem, and moves into place,
+    so a process killed partway leaves nothing beside *path*.
+    """
     if path.exists() and not path.stat().st_mode & stat.S_IWUSR:
         raise PermissionError(errno.EACCES, "The file is read-only", str(path))
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         if isinstance(content, str):
             temp.write_text(content, encoding="utf-8")
@@ -146,6 +189,7 @@ class WorkspaceFiles:
     def __init__(self, folder: WorkspaceFolder) -> None:
         self.folder = folder
         self._originals: dict[Path, bytes | None] = {}
+        _state_dir(folder.path, "tmp")
 
     def write_config(
         self,
@@ -162,9 +206,7 @@ class WorkspaceFiles:
         source, and the caller is registering it. Returns the path relative
         to the workspace folder.
         """
-        target = resolve_in_workspace(
-            self.folder.path, file_path or f"{kind.directory}/{slug}.yaml"
-        )
+        target = self._target(file_path or f"{kind.directory}/{slug}.yaml")
         if overwrite or not target.exists():
             self._write(target, dump_yaml(document, _text_or_none(target)))
         relative = target.relative_to(self.folder.path).as_posix()
@@ -204,6 +246,58 @@ class WorkspaceFiles:
 
         self._update_manifest(add_source)
 
+    def write_gold_set(
+        self,
+        slug: str,
+        *,
+        header: dict[str, Any],
+        items: bytes,
+        definition_path: str | None,
+    ) -> str:
+        """Write a gold set's items and header and list the set in the manifest.
+
+        The header keeps the comments and layout of the one it replaces, and
+        both files end lines with LF. Returns the header's path relative to
+        the workspace folder.
+
+        The items go first, so the header's ``content_hash`` and
+        ``item_count`` always describe a file already on disk. A process
+        killed between the two leaves a header that names the previous file,
+        which every read reports as ``content_hash_matches: false``.
+        """
+        header_path = self._target(
+            definition_path or f"{GOLD_DIRECTORY}/{slug}/{HEADER_FILENAME}"
+        )
+        relative = header_path.relative_to(self.folder.path).as_posix()
+        items_path = resolve_in_workspace(
+            self.folder.path, f"{header_path.parent.as_posix()}/{ITEMS_FILENAME}"
+        )
+        self._write(items_path, items)
+        self._write(
+            header_path, dump_yaml(header, _text_or_none(header_path)).encode("utf-8")
+        )
+
+        def list_set(manifest: WorkspaceManifest) -> None:
+            manifest.gold_sets = _replaced(
+                manifest.gold_sets,
+                GoldSetManifestEntry(gold_set_id=slug, definition_path=relative),
+                "gold_set_id",
+            )
+
+        self._update_manifest(list_set)
+        return relative
+
+    def write_file(self, relative: str, content: bytes) -> str:
+        """Write a generated file, such as an export, inside the workspace."""
+        path = self._target(relative)
+        self._write(path, content)
+        return path.relative_to(self.folder.path).as_posix()
+
+    def _target(self, raw: str) -> Path:
+        """Where *raw* is in the workspace, checked before anything touches it."""
+        require_portable(self.folder.path, raw)
+        return resolve_in_workspace(self.folder.path, raw)
+
     def _update_manifest(self, change: Callable[[WorkspaceManifest], None]) -> None:
         path = resolve_in_workspace(self.folder.path, MANIFEST_FILENAME)
         previous = _text_or_none(path)
@@ -219,10 +313,16 @@ class WorkspaceFiles:
         change(manifest)
         self._write(path, dump_manifest(manifest, previous))
 
-    def _write(self, path: Path, content: str) -> None:
+    def _temp_for(self, path: Path) -> Path:
+        """A new file in ``.molabel/tmp/`` to stage *path*'s content in."""
+        return _state_path(
+            self.folder.path, "tmp", f"{path.name}.{uuid.uuid4().hex}.tmp"
+        )
+
+    def _write(self, path: Path, content: str | bytes) -> None:
         original = path.read_bytes() if path.exists() else None
         try:
-            _write_atomically(path, content)
+            _write_atomically(path, content, self._temp_for(path))
         except OSError as exc:
             relative = path.relative_to(self.folder.path).as_posix()
             raise WorkspacePathError(
@@ -238,28 +338,29 @@ class WorkspaceFiles:
             if original is None:
                 path.unlink(missing_ok=True)
             else:
-                _write_atomically(path, original)
+                _write_atomically(path, original, self._temp_for(path))
 
 
-WORKSPACE_STATE_DIR = ".molabel"
-
-
-def workspace_lock(root: Path) -> FileLock:
-    """The OS-level lock every writer of files in the workspace at *root* holds.
+@contextmanager
+def workspace_lock(root: Path) -> Iterator[None]:
+    """Hold the OS-level lock every writer of files in the workspace at *root* holds.
 
     Take it before any database write, so writers wait for each other in one
     order and a rollback in ``workspace_files`` can only undo its own writes.
     The lock file lives in the workspace, so every writer shares it whatever
     its data directory, under ``.molabel/``, which ignores itself in git.
+
+    On Windows the lock file stays after release. Resolving a path whose file
+    another writer deletes meanwhile can return it with a ``\\\\?\\`` prefix,
+    which the path guard refuses as outside the workspace. Elsewhere keeping
+    it would stop filelock falling back to a soft lock where ``flock`` is
+    missing.
     """
-    state_dir = resolve_in_workspace(root, WORKSPACE_STATE_DIR)
-    (state_dir / "locks").mkdir(parents=True, exist_ok=True)
-    ignore = resolve_in_workspace(root, f"{WORKSPACE_STATE_DIR}/.gitignore")
-    if not ignore.exists():
-        _write_atomically(ignore, "*\n")
-    return FileLock(
-        resolve_in_workspace(root, f"{WORKSPACE_STATE_DIR}/locks/workspace.lock")
-    )
+    _state_dir(root, "locks")
+    lock_file = _state_path(root, "locks", "workspace.lock")
+    with FileLock(lock_file, preserve_lock_file=sys.platform == "win32"):
+        _ignore_state_dir(root)
+        yield
 
 
 @contextmanager

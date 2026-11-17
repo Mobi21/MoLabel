@@ -1337,9 +1337,8 @@ INGEST_STEP = {
 def _assert_calibration_refused(resp):
     assert resp.status_code == 400, resp.text
     error = resp.json()["error"]
-    assert error["code"] == "CALIBRATION_NOT_AVAILABLE"
-    assert "P8" in error["message"]
-    assert "gold sets" in error["message"]
+    assert error["code"] == "CALIBRATION_GOLD_SET_REQUIRED"
+    assert "gold_set: <slug>" in error["message"]
     assert error["details"] == {"step_id": "calibrate"}
 
 
@@ -1353,7 +1352,7 @@ async def _bootstrapped_workspace(client, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_a_workflow_with_a_calibration_step_is_refused_at_create(
+async def test_a_calibration_step_with_no_gold_set_is_refused_at_create(
     client, tmp_path
 ):
     workspace_id, workflows = await _bootstrapped_workspace(client, tmp_path)
@@ -1373,7 +1372,25 @@ async def test_a_workflow_with_a_calibration_step_is_refused_at_create(
 
 
 @pytest.mark.asyncio
-async def test_a_calibration_step_is_refused_at_update(client, tmp_path):
+async def test_a_calibration_step_that_names_a_gold_set_is_created(client, tmp_path):
+    workspace_id, workflows = await _bootstrapped_workspace(client, tmp_path)
+    step = {**CALIBRATION_STEP, "config": {"gold_set": "ticket-gold"}}
+
+    resp = await client.post(
+        "/api/v1/workflows",
+        json={"workspace_id": workspace_id, "name": "Calibrate", "steps": [step]},
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert "gold_set: ticket-gold" in (workflows / "calibrate.yaml").read_text(
+        encoding="utf-8"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_calibration_step_with_no_gold_set_is_refused_at_update(
+    client, tmp_path
+):
     workspace_id, workflows = await _bootstrapped_workspace(client, tmp_path)
     created = await client.post(
         "/api/v1/workflows",
@@ -1392,7 +1409,7 @@ async def test_a_calibration_step_is_refused_at_update(client, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_a_stored_calibration_step_is_refused_before_any_step_runs(
+async def test_a_stored_step_with_no_gold_set_is_refused_before_any_step_runs(
     client, app, tmp_path
 ):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
