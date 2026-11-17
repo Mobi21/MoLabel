@@ -12,9 +12,11 @@ run. ``upgrade_database`` runs it with foreign keys off, which rewriting a
 referenced primary key needs; the rows that reference it are rewritten in
 the same transaction.
 
-Downgrade changes nothing: ``sa.Uuid`` reads the hyphenated form, and the
-routes always wrote it, so an older release runs on these rows unchanged.
-It writes new ORM rows as hex again, the mix this revision removes.
+The revision is one-way. Downgrade changes nothing and logs a warning that
+points to the backup ``upgrade_database`` wrote before the upgrade.
+``sa.Uuid`` reads the hyphenated form, and the routes always wrote it, so an
+older release runs on these rows unchanged. It writes new ORM rows as hex
+again, the mix this revision removes.
 
 Revision ID: 005
 Revises: 004
@@ -23,6 +25,7 @@ Create Date: 2026-11-17
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -171,4 +174,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    pass
+    logging.getLogger("molabel.core.migrations").warning(
+        "Revision 005 is one-way. Downgrading it leaves every UUID hyphenated. "
+        "To return to the data from before the upgrade, restore the "
+        "molabel.backup.<timestamp>.sqlite file that the upgrade wrote beside "
+        "the database."
+    )

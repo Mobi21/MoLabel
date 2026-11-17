@@ -14,8 +14,8 @@ with no run of 32 hex digits is skipped in SQL, and a second run finds
 nothing to rewrite. ``docs/architecture/database-migrations.md`` lists every
 column that holds ids, and why the ones missing here are left alone.
 
-Downgrade changes nothing, as for 005: every reader parses the hyphenated
-form.
+The revision is one-way, as 005 is. Downgrade changes nothing and logs a
+warning that points to the backup. Every reader parses the hyphenated form.
 
 Revision ID: 006
 Revises: 005
@@ -25,6 +25,7 @@ Create Date: 2026-11-17
 from __future__ import annotations
 
 import json
+import logging
 import string
 import uuid
 from collections.abc import Callable, Sequence
@@ -171,4 +172,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    pass
+    logging.getLogger("molabel.core.migrations").warning(
+        "Revision 006 is one-way. Downgrading it leaves the ids in JSON and "
+        "text columns hyphenated. "
+        "To return to the data from before the upgrade, restore the "
+        "molabel.backup.<timestamp>.sqlite file that the upgrade wrote beside "
+        "the database."
+    )

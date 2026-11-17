@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import subprocess
 import sys
@@ -419,6 +420,27 @@ def test_the_uuid_rewrite_leaves_hyphenated_data_as_it_is(
     assert _revision_and_drift(db_path)[0] == (HEAD,)
     assert _stored_ids(db_path) == rewritten
     assert _violations(db_path) == []
+
+
+def test_downgrading_past_the_id_rewrites_warns_that_they_are_one_way(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    db_path = tmp_path / "molabel.db"
+    _start_server(monkeypatch, db_path)
+    cfg = AlembicConfig()
+    cfg.set_main_option("script_location", str(MIGRATIONS_DIR))
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path.as_posix()}")
+
+    with caplog.at_level(logging.WARNING):
+        alembic_command.downgrade(cfg, "004")
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert [w.split()[1] for w in warnings] == ["006", "005"]
+    for warning in warnings:
+        assert "one-way" in warning
+        assert "molabel.backup.<timestamp>.sqlite" in warning
 
 
 def test_a_snapshot_restores_on_a_migrated_mixed_format_database(
