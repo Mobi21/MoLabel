@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import uuid
@@ -818,6 +819,54 @@ async def test_a_write_killed_between_the_files_is_reported_by_every_read(
     assert exported.json()["content_hash_matches"] is False
     assert retried["written"] is False
     assert retried["gold_set"]["content_hash_matches"] is False
+
+
+def _untracked_temp_files(root) -> list[str]:
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return [line for line in status.splitlines() if line.endswith(".tmp")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
+async def test_a_write_killed_before_its_header_replace_leaves_nothing_git_sees(
+    client, app, tmp_path
+):
+    workspace_id, tokens, queue_id, _ = await _reviewed_and_adjudicated(
+        client, app, tmp_path
+    )
+    await _create(client, tokens[0])
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+
+    killed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            PROMOTE_AND_DIE_AT_HEADER,
+            str(tmp_path / "review-gui.db"),
+            str(workspace_id),
+            GOLD,
+            _reviewer_ids(app)[0],
+            queue_id,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    after_kill = _untracked_temp_files(tmp_path)
+    folder_after_kill = sorted(p.name for p in (tmp_path / "gold" / GOLD).iterdir())
+    retried = await _promote(client, tokens[0], {"queue_id": queue_id})
+
+    assert killed.returncode == 17, killed.stderr
+    assert after_kill == []
+    assert folder_after_kill == ["gold.jsonl", "gold.yaml"]
+    assert retried["counts"]["duplicates"] == 6
+    assert _untracked_temp_files(tmp_path) == []
 
 
 @pytest.mark.asyncio

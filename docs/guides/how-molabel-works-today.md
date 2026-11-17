@@ -153,6 +153,9 @@ two disagree:
   write holds an OS-level lock on `.molabel/locks/workspace.lock` inside the
   workspace. `.molabel/` holds a `.gitignore` of `*`, so it never shows in
   `git status`.
+- A write puts the new content in `.molabel/tmp/` and moves it over the file,
+  so a process killed partway leaves the old file whole and no stray file
+  beside it. The move needs `.molabel/` and the file on one filesystem.
 - An edit made to a file outside the API, by hand or with `molabel artifact
   write`, reaches the database at the next `molabel workspace bootstrap`. Bootstrap
   re-reads every file the manifest lists and rewrites its row. A listed file it

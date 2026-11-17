@@ -113,12 +113,30 @@ def workspace_folder(engine, workspace_id: str) -> WorkspaceFolder:
     return WorkspaceFolder(workspace_id, str(row[0]), root)
 
 
-def _write_atomically(path: Path, content: str | bytes) -> None:
-    """Replace *path* with *content*, refusing a file its owner made read-only."""
+WORKSPACE_STATE_DIR = ".molabel"
+
+
+def _state_dir(root: Path) -> Path:
+    """``.molabel/`` in the workspace at *root*, which ignores itself in git."""
+    state_dir = resolve_in_workspace(root, WORKSPACE_STATE_DIR)
+    state_dir.mkdir(parents=True, exist_ok=True)
+    ignore = state_dir / ".gitignore"
+    if not ignore.exists():
+        ignore.write_text("*\n", encoding="utf-8")
+    return state_dir
+
+
+def _write_atomically(path: Path, content: str | bytes, staging: Path) -> None:
+    """Replace *path* with *content*, refusing a file its owner made read-only.
+
+    The content goes to a file in *staging*, on *path*'s filesystem, and moves
+    into place, so a process killed partway leaves nothing beside *path*.
+    """
     if path.exists() and not path.stat().st_mode & stat.S_IWUSR:
         raise PermissionError(errno.EACCES, "The file is read-only", str(path))
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    staging.mkdir(parents=True, exist_ok=True)
+    temp = staging / f"{path.name}.{uuid.uuid4().hex}.tmp"
     try:
         if isinstance(content, str):
             temp.write_text(content, encoding="utf-8")
@@ -156,6 +174,7 @@ class WorkspaceFiles:
     def __init__(self, folder: WorkspaceFolder) -> None:
         self.folder = folder
         self._originals: dict[Path, bytes | None] = {}
+        self._staging = _state_dir(folder.path) / "tmp"
 
     def write_config(
         self,
@@ -282,7 +301,7 @@ class WorkspaceFiles:
     def _write(self, path: Path, content: str | bytes) -> None:
         original = path.read_bytes() if path.exists() else None
         try:
-            _write_atomically(path, content)
+            _write_atomically(path, content, self._staging)
         except OSError as exc:
             relative = path.relative_to(self.folder.path).as_posix()
             raise WorkspacePathError(
@@ -298,10 +317,7 @@ class WorkspaceFiles:
             if original is None:
                 path.unlink(missing_ok=True)
             else:
-                _write_atomically(path, original)
-
-
-WORKSPACE_STATE_DIR = ".molabel"
+                _write_atomically(path, original, self._staging)
 
 
 def workspace_lock(root: Path) -> FileLock:
@@ -312,14 +328,9 @@ def workspace_lock(root: Path) -> FileLock:
     The lock file lives in the workspace, so every writer shares it whatever
     its data directory, under ``.molabel/``, which ignores itself in git.
     """
-    state_dir = resolve_in_workspace(root, WORKSPACE_STATE_DIR)
-    (state_dir / "locks").mkdir(parents=True, exist_ok=True)
-    ignore = resolve_in_workspace(root, f"{WORKSPACE_STATE_DIR}/.gitignore")
-    if not ignore.exists():
-        _write_atomically(ignore, "*\n")
-    return FileLock(
-        resolve_in_workspace(root, f"{WORKSPACE_STATE_DIR}/locks/workspace.lock")
-    )
+    locks = _state_dir(root) / "locks"
+    locks.mkdir(exist_ok=True)
+    return FileLock(locks / "workspace.lock")
 
 
 @contextmanager
