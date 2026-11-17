@@ -604,6 +604,7 @@ export type {
   GoldItem,
   GoldItemRef,
   GoldModelFailure,
+  GoldOpenConflict,
   GoldPromoteRequest,
   GoldProvenance,
   GoldReview,

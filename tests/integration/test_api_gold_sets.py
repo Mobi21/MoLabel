@@ -501,6 +501,122 @@ async def test_new_labels_for_a_promoted_input_are_a_conflict_that_keeps_gold(
     assert _items_path(tmp_path).read_bytes() == items
 
 
+def _conflicts_path(tmp_path, slug=GOLD):
+    return tmp_path / "gold" / slug / "conflicts.jsonl"
+
+
+@pytest.mark.asyncio
+async def test_a_conflict_is_kept_in_conflicts_jsonl_and_shown_until_gold_settles_it(
+    client, app, tmp_path
+):
+    _, tokens, queue_id, _ = await _reviewed_and_adjudicated(client, app, tmp_path)
+    await _create(client, tokens[0])
+    await _promote(client, tokens[0], {"queue_id": queue_id})
+    assert not _conflicts_path(tmp_path).exists()
+    header = _header(tmp_path)
+    items = _items_path(tmp_path).read_bytes()
+    for token in tokens:
+        await _correct(client, app, queue_id, token, "r1", {"sentiment": "neutral"})
+
+    report = await _promote(client, tokens[0], {"queue_id": queue_id})
+
+    (line,) = _lines(_conflicts_path(tmp_path))
+    gold_r1 = next(
+        i
+        for i in _lines(_items_path(tmp_path))
+        if i["input_ref"]["external_id"] == "r1"
+    )
+    assert line["item_id"] == gold_r1["item_id"]
+    assert line["input_hash"] == gold_r1["input_hash"]
+    assert line["existing"] == {"sentiment": "positive"}
+    assert line["incoming"] == {"sentiment": "neutral"}
+    assert line["provenance"]["source"] == "reviewer_agreement"
+    assert line["provenance"]["queue_id"] == queue_id
+    assert sorted(line["provenance"]["reviewer_ids"]) == sorted(_reviewer_ids(app))
+    assert len(line["provenance"]["reviews"]) == 2
+    assert line["detected_at"]
+    assert _conflicts_path(tmp_path).read_bytes().endswith(b"}\n")
+    assert _header(tmp_path) == header
+    assert _items_path(tmp_path).read_bytes() == items
+    assert [c["incoming"] for c in report["open_conflicts"]] == [
+        {"sentiment": "neutral"}
+    ]
+
+    once = _conflicts_path(tmp_path).read_bytes()
+    again = await _promote(client, tokens[0], {"queue_id": queue_id})
+    assert again["counts"]["conflicts"] == 1
+    assert _conflicts_path(tmp_path).read_bytes() == once
+
+    shown = (
+        await client.get(f"/api/v1/gold-sets/{GOLD}", headers=_as(tokens[0]))
+    ).json()
+    (open_conflict,) = shown["open_conflicts"]
+    assert open_conflict["input_ref"]["external_id"] == "r1"
+    assert open_conflict["existing"] == {"sentiment": "positive"}
+    assert open_conflict["incoming"] == {"sentiment": "neutral"}
+    deduped = await client.post(
+        f"/api/v1/gold-sets/{GOLD}/dedupe", headers=_as(tokens[0])
+    )
+    assert [c["item_id"] for c in deduped.json()["open_conflicts"]] == [line["item_id"]]
+
+    settled = [
+        {**i, "expected": {"sentiment": "neutral"}}
+        if i["item_id"] == line["item_id"]
+        else i
+        for i in _lines(_items_path(tmp_path))
+    ]
+    _items_path(tmp_path).write_text(
+        "".join(json.dumps(i) + "\n" for i in settled), encoding="utf-8"
+    )
+    shown = (
+        await client.get(f"/api/v1/gold-sets/{GOLD}", headers=_as(tokens[0]))
+    ).json()
+    assert shown["open_conflicts"] == []
+
+    await _promote(client, tokens[0], {"queue_id": queue_id})
+    assert _conflicts_path(tmp_path).read_bytes() == b""
+
+
+@pytest.mark.asyncio
+async def test_a_header_path_written_with_backslashes_keeps_the_set_beside_it(
+    client, app, tmp_path
+):
+    _, tokens, queue_id, _ = await _reviewed_and_adjudicated(client, app, tmp_path)
+    await _create(client, tokens[0])
+    await _promote(client, tokens[0], {"queue_id": queue_id})
+    items = _items_path(tmp_path).read_bytes()
+    manifest = tmp_path / "workbench.project.yaml"
+    manifest.write_text(
+        manifest.read_text("utf-8").replace(
+            "gold/sentiment-gold/gold.yaml", "gold\\sentiment-gold\\gold.yaml"
+        ),
+        encoding="utf-8",
+    )
+    assert yaml.safe_load(manifest.read_text("utf-8"))["gold_sets"] == [
+        {"gold_set_id": GOLD, "definition_path": "gold\\sentiment-gold\\gold.yaml"}
+    ]
+    for token in tokens:
+        await _correct(client, app, queue_id, token, "r1", {"sentiment": "neutral"})
+
+    report = await _promote(
+        client,
+        tokens[0],
+        {"queue_id": queue_id, "record_ids": [_external_ids(app)["r1"]]},
+    )
+
+    assert (report["counts"]["added"], report["counts"]["conflicts"]) == (0, 1)
+    assert _items_path(tmp_path).read_bytes() == items
+    assert len(items.splitlines()) == 6
+    (line,) = _lines(_conflicts_path(tmp_path))
+    assert line["incoming"] == {"sentiment": "neutral"}
+    assert not list(tmp_path.glob("*.jsonl"))
+    shown = (
+        await client.get(f"/api/v1/gold-sets/{GOLD}", headers=_as(tokens[0]))
+    ).json()
+    assert (shown["item_count"], shown["content_hash_matches"]) == (6, True)
+    assert shown["path"] == "gold/sentiment-gold/gold.yaml"
+
+
 @pytest.mark.asyncio
 async def test_a_record_with_open_copies_or_an_unresolved_disagreement_waits(
     client, app, tmp_path
@@ -1028,3 +1144,20 @@ async def test_an_append_after_a_hand_edit_rewrites_only_the_stale_lines(
     after = (await client.get(f"/api/v1/gold-sets/{GOLD}", headers=headers)).json()
     assert after["items_consistent"] is True
     assert after["stale_items"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_conflicts_line_that_does_not_parse_names_the_file_and_line(
+    client, app, tmp_path
+):
+    _, tokens, _ = await _start_review(client, app, tmp_path)
+    await _create(client, tokens[0])
+    _conflicts_path(tmp_path).write_bytes(b"\n{not json\n")
+
+    resp = await client.get(f"/api/v1/gold-sets/{GOLD}", headers=_as(tokens[0]))
+
+    assert resp.status_code == 409
+    error = resp.json()["error"]
+    assert error["code"] == "GOLD_SET_INVALID"
+    assert "conflicts.jsonl" in error["message"]
+    assert error["details"]["line"] == 2

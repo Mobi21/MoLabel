@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import type {
   GoldConflict,
   GoldItem,
+  GoldOpenConflict,
   GoldSetSummary,
 } from '@/api/generated/types.gen'
 import { errorMessage } from '@/api/client'
@@ -20,7 +21,24 @@ function labels(expected: Record<string, unknown>) {
     .join(' · ')
 }
 
-function itemName(item: GoldItem) {
+function MarkedLabels({
+  values,
+  marked,
+}: {
+  values: Record<string, unknown>
+  marked: string[]
+}) {
+  return Object.entries(values).map(([field, value], index) => (
+    <span key={field}>
+      {index > 0 && ' · '}
+      <span className={cn(marked.includes(field) && 'font-medium text-signal')}>
+        {field} {formatValue(value)}
+      </span>
+    </span>
+  ))
+}
+
+function itemName(item: Pick<GoldItem, 'input_ref' | 'item_id'>) {
   return item.input_ref.external_id ?? item.item_id.slice(0, 8)
 }
 
@@ -80,10 +98,66 @@ function Additions({ items }: { items: GoldItem[] }) {
   )
 }
 
+function OpenConflicts({ conflicts }: { conflicts: GoldOpenConflict[] }) {
+  return (
+    <div className="space-y-2">
+      <table
+        aria-label="Open conflicts"
+        className="w-full border-collapse border-y border-rule text-sm"
+      >
+        <thead>
+          <tr className="border-b border-rule text-left font-mono text-xs text-faint">
+            <th className="py-2 pr-4 font-normal">record</th>
+            <th className="py-2 pr-4 font-normal">gold has</th>
+            <th className="py-2 pr-4 font-normal">incoming</th>
+            <th className="py-2 pr-4 font-normal">from</th>
+            <th className="py-2 font-normal">found</th>
+          </tr>
+        </thead>
+        <tbody>
+          {conflicts.map((conflict, index) => (
+            <tr
+              key={`${conflict.item_id}-${String(index)}`}
+              data-testid="gold-open-conflict"
+              className="border-b border-rule last:border-b-0"
+            >
+              <th
+                scope="row"
+                className="py-2 pr-4 text-left font-mono font-medium"
+              >
+                {itemName(conflict)}
+              </th>
+              <td className="py-2 pr-4">{labels(conflict.existing)}</td>
+              <td className="py-2 pr-4">
+                <MarkedLabels
+                  values={conflict.incoming}
+                  marked={conflict.fields}
+                />
+              </td>
+              <td className="py-2 pr-4 text-ink-soft">
+                {SOURCE_TEXT[conflict.provenance.source]}
+                {conflict.provenance.model_failure && ' · model failure'} ·
+                queue{' '}
+                <span className="font-mono text-xs">
+                  {conflict.provenance.queue_id.slice(0, 8)}
+                </span>
+              </td>
+              <td className="py-2 font-mono text-xs text-ink-soft">
+                {new Date(conflict.detected_at).toLocaleString()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-sm text-ink-soft">
+        Gold keeps its labels. conflicts.jsonl keeps each until gold.jsonl holds
+        the incoming labels or a person deletes its line.
+      </p>
+    </div>
+  )
+}
+
 function Conflicts({ conflicts }: { conflicts: GoldConflict[] }) {
-  if (conflicts.length === 0) {
-    return <p className="text-sm text-faint">No conflicts.</p>
-  }
   return (
     <ul className="space-y-2 text-sm">
       {conflicts.map((conflict, index) => (
@@ -149,7 +223,13 @@ function GoldSet({ goldSetId }: { goldSetId: string }) {
       </section>
       <section aria-label="Conflicts" className="space-y-3">
         <h3 className="text-base font-semibold">Conflicts</h3>
-        <Conflicts conflicts={set.conflicts} />
+        {set.open_conflicts.length > 0 && (
+          <OpenConflicts conflicts={set.open_conflicts} />
+        )}
+        {set.conflicts.length > 0 && <Conflicts conflicts={set.conflicts} />}
+        {set.open_conflicts.length === 0 && set.conflicts.length === 0 && (
+          <p className="text-sm text-faint">No conflicts.</p>
+        )}
         {set.duplicates.length > 0 && (
           <p className="text-sm text-ink-soft">
             {set.duplicates.length} exact repeats;{' '}

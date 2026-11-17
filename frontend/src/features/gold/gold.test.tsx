@@ -467,6 +467,7 @@ describe('GoldSetsPage', () => {
             item('ticket-1', 'refund'),
           ],
           duplicates: [],
+          open_conflicts: [],
           conflicts: [
             {
               item_id: 'item-ticket-1',
@@ -489,6 +490,7 @@ describe('GoldSetsPage', () => {
           recent_additions: [],
           duplicates: [],
           conflicts: [],
+          open_conflicts: [],
         }),
       ],
     ])
@@ -527,5 +529,71 @@ describe('GoldSetsPage', () => {
       'gold.jsonl is not the file version 2 describes',
     )
     expect(calls.map((c) => c.path)).toContain('/api/v1/gold-sets/topics-gold')
+  })
+
+  it('lists the open conflicts of conflicts.jsonl with both labels and their source', async () => {
+    const incoming = item('ticket-1', 'other')
+    fakeApi([
+      ['GET', /^\/api\/v1\/gold-sets$/, () => ({ items: [TRIAGE_GOLD] })],
+      [
+        'GET',
+        /^\/api\/v1\/gold-sets\/triage-gold$/,
+        () => ({
+          ...TRIAGE_GOLD,
+          sources: [],
+          recent_additions: [item('ticket-1', 'refund')],
+          duplicates: [],
+          conflicts: [],
+          open_conflicts: [
+            {
+              item_id: 'item-ticket-1',
+              input_hash: 'sha256:in',
+              input_ref: incoming.input_ref,
+              fields: ['intent'],
+              existing: { intent: 'refund' },
+              incoming: { intent: 'other' },
+              provenance: {
+                ...incoming.provenance,
+                source: 'single_reviewer',
+                queue_id: '3b150cd8-33de-4ab5-99c7-20982c818721',
+                model_failure: {
+                  agent_output_id: 'o1',
+                  agent_run_id: 'run1',
+                  proposed: { intent: 'refund' },
+                  failed_fields: ['intent'],
+                },
+              },
+              detected_at: '2026-11-17T00:00:00Z',
+            },
+          ],
+        }),
+      ],
+    ])
+    render(
+      <QueryClientProvider client={client()}>
+        <MemoryRouter initialEntries={['/gold']}>
+          <Routes>
+            <Route path="/gold" element={<GoldSetsPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    const table = await screen.findByRole('table', { name: 'Open conflicts' })
+    const row = within(table).getByTestId('gold-open-conflict')
+    expect(
+      within(row).getByRole('rowheader', { name: 'ticket-1' }),
+    ).toBeVisible()
+    const cells = within(row).getAllByRole('cell')
+    expect(cells.map((cell) => cell.textContent)).toEqual([
+      'intent refund',
+      'intent other',
+      expect.stringMatching(/^one reviewer · model failure · queue 3b150cd8/),
+      expect.any(String),
+    ])
+    expect(
+      screen.getByText(/conflicts\.jsonl keeps each until gold\.jsonl/),
+    ).toBeVisible()
+    expect(screen.queryByText('No conflicts.')).not.toBeInTheDocument()
   })
 })

@@ -9,12 +9,15 @@ writes, duplicates and calibration.
 ## File layout
 
 ```
-gold/<slug>/gold.yaml    the header
-gold/<slug>/gold.jsonl   one item per line
+gold/<slug>/gold.yaml        the header
+gold/<slug>/gold.jsonl       one item per line
+gold/<slug>/conflicts.jsonl  one open conflict per line, once there is one
 ```
 
 `workbench.project.yaml` lists each set under `gold_sets`, with its
-`gold_set_id` (the slug) and `definition_path` (the header). The header holds
+`gold_set_id` (the slug) and `definition_path` (the header). The set's other
+files are the ones beside the header, in the folder its path resolves to, and
+a path written with `\` separators works on every platform. The header holds
 the slug, `name`, `task_schema` (the task schema's slug, the file-canonical
 id), `format_version`, `version`, `item_count`, `content_hash`,
 `previous_hash`, `sources`, `created_at` and `updated_at`. `sources` lists each
@@ -106,10 +109,69 @@ candidate whose key is new is added. A candidate whose key exists with the
 same `content_hash` is a duplicate and is skipped. The same key with a
 different `content_hash` means the same input has different expected labels.
 That is a conflict. MoLabel reports both label sets and never overwrites the
-item. A person settles the conflict by editing `gold.jsonl` or the source
-review. `gold dedupe` removes repeated items with the same content, which a
-git merge of two appends can leave, and keeps the first. It reports conflicts
-and leaves them in place.
+item. `gold dedupe` removes repeated items with the same content, which a
+git merge of two appends can leave, and keeps the first. It reports the
+conflicts `gold.jsonl` holds and leaves them in place.
+
+### conflicts.jsonl
+
+A promotion or append writes each conflict it finds to `conflicts.jsonl`
+beside `gold.jsonl`, so a conflict an agent's `gold append` met reaches the
+lead who opens the set. The file appears with the first conflict. A line
+looks like this:
+
+```json
+{"item_id": "uuid", "input_hash": "sha256:...", "input_ref": {"dataset": "support-tickets", "external_id": "ticket-4", "record_id": "uuid"},
+ "fields": ["intent"], "existing": {"intent": "refund"}, "incoming": {"intent": "other"},
+ "provenance": {...}, "detected_at": "2026-11-17T14:02:14+00:00"}
+```
+
+- `item_id` and `input_hash` name the gold item.
+- `existing` is the labels `gold.jsonl` holds. `incoming` is the labels that
+  were not added. `fields` names the fields where they differ.
+- `input_ref` and `provenance` are the incoming item's: its record, `source`,
+  queue, workflow execution, adjudication, review events and reviewers, and
+  the model failure for an append. `provenance.promoted_at` is when the
+  promotion ran, the same as `detected_at`.
+
+The file is written like `gold.jsonl`: through `workspace_files`, one line
+per conflict, LF line ends, fixed field order, sorted label keys, and the
+same escapes for U+0085, U+2028 and U+2029. New conflicts go after the
+file's lines. A line that is still open keeps its bytes, a CRLF end included.
+
+A conflict is the same as one the file holds when its item, incoming labels,
+`provenance.source` and `provenance.queue_id` match, so running an append
+from the same queue again adds no line. Another label set, another source or
+another queue for the item adds a line. Two queues that send the same labels
+for one input each keep a line, with their own reviewers, workflow execution
+and model failure.
+
+Conflicts are not gold. Writing `conflicts.jsonl` never changes
+`gold.jsonl`, `version`, `content_hash` or `item_count`. `gold.yaml` does not
+name the file or count its lines. The header describes `gold.jsonl` alone, a
+count there would go stale whenever someone edits `conflicts.jsonl`, and
+rewriting the header for a conflict would show a gold change in git where
+there is none. The file is found by its place beside `gold.jsonl`.
+
+A person settles a conflict in one of two ways: edit the item in `gold.jsonl`
+to the incoming labels, or delete the line from `conflicts.jsonl`. A conflict
+whose item `gold.jsonl` no longer holds is settled too. Every read leaves
+settled lines out. A hand edit that gives the item a third label set leaves
+the conflict open, and reads show the item's current labels as `existing`.
+A git merge can leave several rows for one item. Every row counts, whatever
+their order: a row with the incoming labels settles the conflict, and
+`existing` changes only when no row holds it, to the item's last row.
+The next promote, append or dedupe writes the file again. It drops settled
+lines and renders afresh each line whose `existing` changed. When the last
+conflict is settled the file stays, empty. There is no resolve command.
+
+`gold show` and `GET /api/v1/gold-sets/{id}` list the open conflicts under
+`open_conflicts`, and so does each promote, append and dedupe report. The
+gold view in the GUI lists them in a table under Conflicts: the record, the
+gold labels, the incoming labels with the differing fields marked, the
+source and queue, and when the conflict was found. A `conflicts.jsonl` line
+that does not parse answers `409 GOLD_SET_INVALID` with its line number, as
+a bad `gold.jsonl` line does.
 
 ## What may be promoted
 

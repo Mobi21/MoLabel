@@ -1,9 +1,10 @@
 """Gold sets: released labels kept as files in the workspace.
 
 A set is ``gold/<slug>/gold.yaml``, the header, and ``gold/<slug>/gold.jsonl``,
-one item per line. ``docs/architecture/gold-sets.md`` gives the rules this
-module implements: the item shape and its hashes, the version rule, and what a
-duplicate and a conflict are.
+one item per line. ``gold/<slug>/conflicts.jsonl`` keeps the open conflicts.
+``docs/architecture/gold-sets.md`` gives the rules this module implements: the
+item shape and its hashes, the version rule, and what a duplicate and a
+conflict are.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 GOLD_DIRECTORY = "gold"
 HEADER_FILENAME = "gold.yaml"
 ITEMS_FILENAME = "gold.jsonl"
+CONFLICTS_FILENAME = "conflicts.jsonl"
 FORMAT_VERSION = 1
 
 _ITEM_NAMESPACE = uuid.UUID("9b1c4d57-3f0e-5a8e-9c61-6d2f7a40b8e3")
@@ -218,10 +220,14 @@ class GoldItem(GoldModel):
         )
 
     def line(self) -> str:
-        line = json.dumps(self.model_dump(mode="json"), ensure_ascii=False)
-        for separator, escape in _LINE_SEPARATOR_ESCAPES.items():
-            line = line.replace(separator, escape)
-        return line
+        return _json_line(self)
+
+
+def _json_line(model: BaseModel) -> str:
+    line = json.dumps(model.model_dump(mode="json"), ensure_ascii=False)
+    for separator, escape in _LINE_SEPARATOR_ESCAPES.items():
+        line = line.replace(separator, escape)
+    return line
 
 
 def render_items(items: Iterable[GoldItem]) -> bytes:
@@ -424,13 +430,134 @@ class GoldConflict(BaseModel):
     other: GoldItem = Field(description="The item with the other labels")
 
 
-def _conflict(gold: GoldItem, other: GoldItem) -> GoldConflict:
-    fields = sorted(
+def _differing(first: dict[str, Any], second: dict[str, Any]) -> list[str]:
+    return sorted(
         name
-        for name in gold.expected.keys() | other.expected.keys()
-        if gold.expected.get(name) != other.expected.get(name)
+        for name in first.keys() | second.keys()
+        if first.get(name) != second.get(name)
     )
+
+
+def _conflict(gold: GoldItem, other: GoldItem) -> GoldConflict:
+    fields = _differing(gold.expected, other.expected)
     return GoldConflict(item_id=gold.item_id, fields=fields, gold=gold, other=other)
+
+
+class GoldOpenConflict(GoldModel):
+    """A line of ``conflicts.jsonl``: labels for an input the set holds otherwise."""
+
+    item_id: str
+    input_hash: str
+    input_ref: GoldInputRef = Field(
+        description="The record the incoming labels are for"
+    )
+    fields: list[str] = Field(description="The fields whose labels differ")
+    existing: dict[str, Any] = Field(description="The labels gold.jsonl holds")
+    incoming: dict[str, Any] = Field(description="The labels that were not added")
+    provenance: GoldProvenance = Field(
+        description="Where the incoming labels came from"
+    )
+    detected_at: str
+
+    @classmethod
+    def of(cls, conflict: GoldConflict, *, detected_at: str) -> Self:
+        other = conflict.other
+        return cls(
+            item_id=conflict.item_id,
+            input_hash=conflict.gold.input_hash,
+            input_ref=other.input_ref,
+            fields=conflict.fields,
+            existing=conflict.gold.expected,
+            incoming=other.expected,
+            provenance=other.provenance,
+            detected_at=detected_at,
+        )
+
+    @property
+    def key(self) -> tuple[str, str, str, str]:
+        """What makes two lines the same conflict: item, incoming labels, source, queue.
+
+        Each queue's line keeps its own reviewers, workflow execution and model
+        failure; a re-run of one queue matches its own line.
+        """
+        return (
+            self.item_id,
+            _sha256(self.incoming),
+            self.provenance.source,
+            self.provenance.queue_id,
+        )
+
+
+@dataclass(frozen=True)
+class GoldConflictLog:
+    """``conflicts.jsonl`` as read: each line's bytes and its conflict.
+
+    The log is not gold. Writing it never changes ``gold.jsonl`` or the header.
+    """
+
+    lines: tuple[tuple[bytes, GoldOpenConflict], ...]
+    """Each line's bytes up to its LF, the CR of a CRLF end kept, and its conflict."""
+    data: bytes
+
+    @classmethod
+    def read(cls, data: bytes) -> Self:
+        """The log these bytes hold. Raises ``GoldFileError`` on a bad line."""
+        lines = []
+        for number, raw in enumerate(data.split(b"\n"), start=1):
+            if not raw.strip():
+                continue
+            try:
+                conflict = GoldOpenConflict.model_validate(json.loads(raw))
+            except ValueError as exc:
+                raise GoldFileError(str(exc), number) from exc
+            lines.append((raw, conflict))
+        return cls(lines=tuple(lines), data=data)
+
+    def _open(
+        self, items: Sequence[GoldItem]
+    ) -> Iterable[tuple[bytes, GoldOpenConflict]]:
+        """The lines *items* still contradict, with ``existing`` as they hold it.
+
+        Every row of an item counts, since a git merge can leave several. A
+        line whose item the set no longer holds, or holds in some row with the
+        incoming labels, is settled. A line whose ``existing`` no row holds is
+        rendered afresh with the item's last row.
+        """
+        held: dict[str, list[dict[str, Any]]] = {}
+        for item in items:
+            held.setdefault(item.item_id, []).append(item.expected)
+        for raw, conflict in self.lines:
+            labels = held.get(conflict.item_id, [])
+            if not labels or conflict.incoming in labels:
+                continue
+            if conflict.existing not in labels:
+                conflict = conflict.model_copy(
+                    update={
+                        "existing": labels[-1],
+                        "fields": _differing(labels[-1], conflict.incoming),
+                    }
+                )
+                raw = _json_line(conflict).encode("utf-8")
+            yield raw, conflict
+
+    def open(self, items: Sequence[GoldItem]) -> tuple[GoldOpenConflict, ...]:
+        """The conflicts *items* have not settled, in the order they were found."""
+        return tuple(conflict for _raw, conflict in self._open(items))
+
+    def recorded(
+        self, items: Sequence[GoldItem], conflicts: Iterable[GoldConflict], *, now: str
+    ) -> Self:
+        """The log without settled lines and with *conflicts* it lacks appended."""
+        kept = list(self._open(items))
+        seen = {conflict.key for _raw, conflict in kept}
+        for found in conflicts:
+            conflict = GoldOpenConflict.of(found, detected_at=now)
+            if conflict.key not in seen:
+                seen.add(conflict.key)
+                kept.append((_json_line(conflict).encode("utf-8"), conflict))
+        return type(self)(
+            lines=tuple(kept), data=b"".join(raw + b"\n" for raw, _ in kept)
+        )
 
 
 def _ref(item: GoldItem) -> GoldItemRef:
