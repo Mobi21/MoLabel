@@ -1,0 +1,39 @@
+  from starlette.testclient import TestClient as TestClient  # noqa
+machine: {'platform': 'Windows-11-10.0.26300-SP0', 'cpu': 'AMD Ryzen 7 7800X3D 8-Core Processor', 'logical_cpus': 16, 'python': '3.12.14', 'sqlite': '3.53.1', 'git_rev': '263298d'}
+sizes=[100000] runs=7 warmup=1 paths=['ingest']
+  ingest_api_jsonl                   n=100000   median=  13.3526s p95=  14.0796s work=100000 errors=0
+  profile -> benchmarks\results\profile-ingest_api_jsonl-100000.txt
+  ingest_loader_jsonl                n=100000   median=   0.9192s p95=   0.9439s work=100000 errors=0
+  profile -> benchmarks\results\profile-ingest_loader_jsonl-100000.txt
+  ingest_loader_csv                  n=100000   median=   0.8964s p95=   1.0135s work=100000 errors=0
+  profile -> benchmarks\results\profile-ingest_loader_csv-100000.txt
+wrote benchmarks\results\baseline-100k-ingest.json (144.4s wall)
+| path | n | runs | median s | p95 s | work | errors |
+|---|---:|---:|---:|---:|---:|---:|
+| ingest_api_jsonl | 100000 | 7 | 13.3526 | 14.0796 | 100000 | 0 |
+| ingest_loader_jsonl | 100000 | 7 | 0.9192 | 0.9439 | 100000 | 0 |
+| ingest_loader_csv | 100000 | 7 | 0.8964 | 1.0135 | 100000 | 0 |
+  from starlette.testclient import TestClient as TestClient  # noqa
+machine: {'platform': 'Windows-11-10.0.26300-SP0', 'cpu': 'AMD Ryzen 7 7800X3D 8-Core Processor', 'logical_cpus': 16, 'python': '3.12.14', 'sqlite': '3.53.1', 'git_rev': '263298d'}
+sizes=[1000000] runs=3 warmup=1 paths=['ingest', 'agreement', 'benchmark', 'export']
+  ingest_api_jsonl                   n=1000000  median= 135.5409s p95= 138.6684s work=1000000 errors=0
+  ingest_loader_jsonl                n=1000000  median=   8.8639s p95=   9.3693s work=1000000 errors=0
+  ingest_loader_csv                  n=1000000  median=   9.2880s p95=   9.3137s work=1000000 errors=0
+  agreement_service_inter_annotator  n=1000000  median=  41.4072s p95=  45.3924s work=3000000 errors=0
+  agreement_service_human_agent      n=1000000  median= 171.3292s p95= 171.5614s work=6000000 errors=0
+  benchmark_clinc150                 n=1000000  median=  24.3638s p95=  24.5153s work=1000000 errors=0
+  benchmark_banking77                n=1000000  median=  53.2620s p95=  53.7789s work=1000000 errors=0
+  export_orchestrator_jsonl          n=1000000  median=   9.2035s p95=   9.3164s work=1000000 errors=0
+wrote benchmarks\results\baseline-1m.json (1855.6s wall)
+| path | n | runs | median s | p95 s | work | errors |
+|---|---:|---:|---:|---:|---:|---:|
+| ingest_api_jsonl | 1000000 | 3 | 135.5409 | 138.6684 | 1000000 | 0 |
+| ingest_loader_jsonl | 1000000 | 3 | 8.8639 | 9.3693 | 1000000 | 0 |
+| ingest_loader_csv | 1000000 | 3 | 9.288 | 9.3137 | 1000000 | 0 |
+| agreement_service_inter_annotator | 1000000 | 3 | 41.4072 | 45.3924 | 3000000 | 0 |
+| agreement_service_human_agent | 1000000 | 3 | 171.3292 | 171.5614 | 6000000 | 0 |
+| benchmark_clinc150 | 1000000 | 3 | 24.3638 | 24.5153 | 1000000 | 0 |
+| benchmark_banking77 | 1000000 | 3 | 53.262 | 53.7789 | 1000000 | 0 |
+| export_orchestrator_jsonl | 1000000 | 3 | 9.2035 | 9.3164 | 1000000 | 0 |
+
+[exited with code 0]

@@ -65,34 +65,36 @@ gold data. Generated files and databases live in a temp directory.
 
 **Sizes.** `n` is records in the dataset. The queue therefore holds `3n`
 tasks and `2n` review events. 1M runs only the paths that do not need the
-seeded reviewed database, with three timed runs instead of seven.
+seeded reviewed database, with three timed runs instead of seven; seeding a
+1M reviewed queue is 3M tasks and 2M events, which the query paths above
+already show to be super-linear, so they stop at 100k.
 
 ## Results
 
-Median / p95 seconds of seven runs. "not run" means the path was left out at
-that size, "error" that the server answered 500.
+Median / p95 seconds of seven runs, or of the number of runs in brackets.
+"not run" means the path was left out at that size, "error" that the server
+answered 500. The 1M column covers the paths that need no seeded reviewed
+database. Two independent 1k and 10k baseline passes (`baseline-1k-10k.json`
+and `baseline-1k-10k-clean.json`) put the run-to-run spread of a median at
+5% to 20%, so a gain under 1.3x is inside the noise.
 
-| path | n=1,000 | n=10,000 | n=100,000 |
-|---|---:|---:|---:|
-| ingest_api_jsonl | 0.146 / 0.159 | 1.597 / 2.176 | 13.444 / 14.024 |
-| ingest_loader_jsonl | 0.005 / 0.005 | 0.092 / 0.126 | 0.897 / 1.010 |
-| ingest_loader_csv | 0.005 / 0.005 | 0.099 / 0.111 | 0.923 / 1.010 |
-| query_datasets | 0.002 / 0.002 | 0.002 / 0.002 | 0.002 / 0.002 |
-| query_records | 0.003 / 0.004 | 0.009 / 0.009 | 0.070 / 0.089 |
-| query_queues | 0.582 / 0.614 | 168.132 / 168.132 (1 run) | not run |
-| query_queue_status | 0.003 / 0.003 | 0.005 / 0.006 | 0.033 / 0.037 |
-| query_my_tasks | 0.069 / 0.085 | 2.786 / 2.989 | 29.427 / 29.799 |
-| agreement_service_inter_annotator | 0.028 / 0.101 | 0.362 / 0.407 | 4.145 / 4.309 |
-| agreement_service_human_agent | 0.168 / 0.186 | 1.549 / 1.577 | 17.623 / 18.038 |
-| agreement_api | 0.235 / 0.287 | 2.663 / 2.731 | error (7/7 runs) |
-| benchmark_clinc150 | 0.018 / 0.018 | 0.175 / 0.223 | 2.073 / 2.091 |
-| benchmark_banking77 | 0.036 / 0.036 | 0.411 / 0.421 | 4.604 / 4.836 |
-| export_orchestrator_jsonl | 0.008 / 0.008 | 0.070 / 0.073 | 0.838 / 0.883 |
-| export_workflow_step | 0.090 / 0.105 | 1.015 / 1.029 | 10.050 / 10.281 |
-
-The 100k ingest row is from `baseline-100k.log`, the first 100k pass, which
-ran ingest before the agreement endpoint failed; the rerun in
-`baseline-100k-ingest.json` replaces it when the table is regenerated.
+| path | n=1,000 | n=10,000 | n=100,000 | n=1,000,000 |
+|---|---:|---:|---:|---:|
+| ingest_api_jsonl | 0.146 / 0.159 | 1.597 / 2.176 | 13.353 / 14.080 | 135.541 / 138.668 (3 runs) |
+| ingest_loader_jsonl | 0.005 / 0.005 | 0.092 / 0.126 | 0.919 / 0.944 | 8.864 / 9.369 (3 runs) |
+| ingest_loader_csv | 0.005 / 0.005 | 0.099 / 0.111 | 0.896 / 1.014 | 9.288 / 9.314 (3 runs) |
+| query_datasets | 0.002 / 0.002 | 0.002 / 0.002 | 0.002 / 0.002 | not run |
+| query_records | 0.003 / 0.004 | 0.009 / 0.009 | 0.070 / 0.089 | not run |
+| query_queues | 0.582 / 0.614 | 168.132 / 168.132 (1 run) | not run | not run |
+| query_queue_status | 0.003 / 0.003 | 0.005 / 0.006 | 0.033 / 0.037 | not run |
+| query_my_tasks | 0.069 / 0.085 | 2.786 / 2.989 | 29.427 / 29.799 | not run |
+| agreement_service_inter_annotator | 0.028 / 0.101 | 0.362 / 0.407 | 4.145 / 4.309 | 41.407 / 45.392 (3 runs) |
+| agreement_service_human_agent | 0.168 / 0.186 | 1.549 / 1.577 | 17.623 / 18.038 | 171.329 / 171.561 (3 runs) |
+| agreement_api | 0.235 / 0.287 | 2.663 / 2.731 | error (7/7 runs) | not run |
+| benchmark_clinc150 | 0.018 / 0.018 | 0.175 / 0.223 | 2.073 / 2.091 | 24.364 / 24.515 (3 runs) |
+| benchmark_banking77 | 0.036 / 0.036 | 0.411 / 0.421 | 4.604 / 4.836 | 53.262 / 53.779 (3 runs) |
+| export_orchestrator_jsonl | 0.008 / 0.008 | 0.070 / 0.073 | 0.838 / 0.883 | 9.204 / 9.316 (3 runs) |
+| export_workflow_step | 0.090 / 0.105 | 1.015 / 1.029 | 10.050 / 10.281 | not run |
 
 What each path runs:
 
