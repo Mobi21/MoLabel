@@ -7,7 +7,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from filelock import Timeout
 
 from molabel.app.workspace_config import workspace_lock
 
@@ -18,15 +17,22 @@ def test_writers_with_different_data_dirs_share_one_workspace_lock(
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    monkeypatch.setenv("MOLABEL_DATA_DIR", str(tmp_path / "data-a"))
-    server_lock = workspace_lock(workspace)
-    monkeypatch.setenv("MOLABEL_DATA_DIR", str(tmp_path / "data-b"))
-    cli_lock = workspace_lock(workspace)
+    events = []
 
-    with server_lock, pytest.raises(Timeout):
-        cli_lock.acquire(timeout=0)
-    with cli_lock:
-        assert cli_lock.is_locked
+    def cli_write() -> None:
+        with workspace_lock(workspace):
+            events.append("cli wrote")
+
+    monkeypatch.setenv("MOLABEL_DATA_DIR", str(tmp_path / "data-a"))
+    with workspace_lock(workspace):
+        monkeypatch.setenv("MOLABEL_DATA_DIR", str(tmp_path / "data-b"))
+        cli = threading.Thread(target=cli_write)
+        cli.start()
+        cli.join(timeout=0.5)
+        events.append("server released")
+    cli.join()
+
+    assert events == ["server released", "cli wrote"]
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")

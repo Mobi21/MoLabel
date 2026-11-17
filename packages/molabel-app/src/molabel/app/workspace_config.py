@@ -123,20 +123,23 @@ def _state_path(root: Path, *names: str) -> Path:
 
 
 def _state_dir(root: Path, name: str) -> Path:
-    """The folder ``.molabel/<name>/`` in the workspace at *root*, created.
+    """The folder ``.molabel/<name>/`` in the workspace at *root*, created."""
+    folder = _state_path(root, name)
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
 
-    ``.molabel/`` ignores itself in git. Its ``.gitignore`` is rewritten
-    whenever it does not hold exactly ``*``, so a write cut short is
-    repaired by the next one.
+
+def _ignore_state_dir(root: Path) -> None:
+    """Make ``.molabel/`` ignore itself in git. Call it holding ``workspace_lock``.
+
+    Its ``.gitignore`` is rewritten whenever it does not hold exactly ``*``,
+    so a write cut short is repaired by the next one. On Windows a rewrite
+    fails while another writer reads the file, hence the lock.
     """
-    _state_path(root).mkdir(parents=True, exist_ok=True)
     ignore = _state_path(root, ".gitignore")
     if not (ignore.is_file() and ignore.read_bytes() == _IGNORE_ALL):
         temp = _state_path(root, f".gitignore.{uuid.uuid4().hex}.tmp")
         _write_atomically(ignore, _IGNORE_ALL, temp)
-    folder = _state_path(root, name)
-    folder.mkdir(exist_ok=True)
-    return folder
 
 
 def _write_atomically(path: Path, content: str | bytes, temp: Path) -> None:
@@ -337,8 +340,9 @@ class WorkspaceFiles:
                 _write_atomically(path, original, self._temp_for(path))
 
 
-def workspace_lock(root: Path) -> FileLock:
-    """The OS-level lock every writer of files in the workspace at *root* holds.
+@contextmanager
+def workspace_lock(root: Path) -> Iterator[None]:
+    """Hold the OS-level lock every writer of files in the workspace at *root* holds.
 
     Take it before any database write, so writers wait for each other in one
     order and a rollback in ``workspace_files`` can only undo its own writes.
@@ -346,7 +350,9 @@ def workspace_lock(root: Path) -> FileLock:
     its data directory, under ``.molabel/``, which ignores itself in git.
     """
     _state_dir(root, "locks")
-    return FileLock(_state_path(root, "locks", "workspace.lock"))
+    with FileLock(_state_path(root, "locks", "workspace.lock")):
+        _ignore_state_dir(root)
+        yield
 
 
 @contextmanager
