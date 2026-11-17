@@ -534,7 +534,13 @@ def run_gold(
     )
     check(
         promoted["counts"]
-        == {"added": 1, "duplicates": 0, "conflicts": 0, "skipped": 0},
+        == {
+            "added": 1,
+            "duplicates": 0,
+            "conflicts": 0,
+            "skipped": 0,
+            "corrected": 0,
+        },
         "gold promote added the adjudicated record",
     )
 
@@ -583,7 +589,13 @@ def run_gold(
     )
     check(
         appended["counts"]
-        == {"added": 1, "duplicates": 0, "conflicts": 1, "skipped": 4},
+        == {
+            "added": 1,
+            "duplicates": 0,
+            "conflicts": 1,
+            "skipped": 4,
+            "corrected": 0,
+        },
         "gold append added ticket-6 and reported ticket-4 as a conflict",
     )
     (added,) = appended["added"]
