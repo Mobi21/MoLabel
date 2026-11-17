@@ -27,12 +27,11 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplateDocument = {
       id: 'full_quality_pipeline',
       name: 'Full Quality Pipeline',
       description:
-        'Ingest, calibration, agent run, human review, adjudication, quality check, export.',
+        'Ingest, agent run, human review, adjudication, quality check, export.',
       file: 'full_quality_pipeline.yaml',
       version: '1.0.0',
       task_family: 'general_quality',
       capabilities: [
-        'human_calibration',
         'agreement_analysis',
         'human_adjudication',
         'release_validation',
@@ -124,7 +123,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplateDocument = {
       id: 'psychology_survey_codebook',
       name: 'Psychology Survey Codebook',
       description:
-        'Psychology and qualitative research workflow with codebook calibration, MiniMax-assisted coding, evidence spans, agreement analysis, adjudication, export, and release proof.',
+        'Psychology and qualitative research workflow with a codebook, MiniMax-assisted coding, evidence spans, agreement analysis, adjudication, export, and release proof.',
       file: 'psychology_survey_codebook.yaml',
       version: '1.0.0',
       task_family: 'psychology_research',
@@ -132,7 +131,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplateDocument = {
         'codebook_management',
         'pii_redaction',
         'agent_labeling',
-        'human_calibration',
         'human_review',
         'agreement_analysis',
         'human_adjudication',

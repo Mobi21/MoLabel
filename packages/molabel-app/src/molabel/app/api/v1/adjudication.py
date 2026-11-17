@@ -15,11 +15,8 @@ own review of the record is in. Closing a queue's copies, through
 leaves the claimed ones open.
 
 Every endpoint reads only a queue of the caller's workspace, and answers 404
-for a queue of any other.
-
-The detect, build, queue, and resolve endpoints in ``queue.py`` take review
-events from the caller and keep nothing. The CLI's adjudication commands use
-them.
+for a queue of any other. The GUI and the CLI's ``molabel adjudication``
+commands both use these endpoints.
 """
 
 from __future__ import annotations

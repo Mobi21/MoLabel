@@ -1,8 +1,8 @@
-"""Queue claim endpoints (SE-006 through SE-010) and adjudication.
+"""Queue claim endpoints (SE-006 through SE-010).
 
 Handles queue claiming, review submission, skipping, draft saving,
-queue status, mission control reviewer visibility, and adjudication
-(AJ-001 through AJ-007).
+queue status, and mission control reviewer visibility. Adjudication lives
+in ``adjudication.py``.
 
 Uses raw SQL queries via ``sqlalchemy.text()`` (through the claims service)
 to avoid triggering SQLAlchemy mapper configuration for the full model graph.
@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from molabel.app.middleware.session import CurrentReviewer
@@ -34,17 +34,11 @@ from molabel.app.services.claims import (
     skip_task,
     submit_correction,
     submit_review,
+    task_in_workspace,
 )
 from molabel.app.utils import get_engine
-from molabel.core.adjudication.adjudication_service import (
-    AdjudicationQueueItem as AdjQueueItem,
-)
-from molabel.core.adjudication.adjudication_service import (
-    AdjudicationService,
-)
 from molabel.core.types import (
     CANONICAL_REVIEW_DECISION,
-    AdjudicationResolution,
     DeprecatedReviewDecision,
     ReviewDecision,
 )
@@ -401,6 +395,27 @@ def _add_notification_headers(
         response.headers["X-MoLabel-Expired-Count"] = str(len(notifications))
 
 
+def _workspace_queue(request: Request, queue_id: str, reviewer: CurrentReviewer) -> str:
+    if not queue_in_workspace(get_engine(request), queue_id, reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Review queue not found")
+    return queue_id
+
+
+def _workspace_task(
+    request: Request, task_id: uuid.UUID, reviewer: CurrentReviewer
+) -> uuid.UUID:
+    if not task_in_workspace(get_engine(request), task_id, reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Review task not found")
+    return task_id
+
+
+WorkspaceQueueId = Annotated[str, Depends(_workspace_queue)]
+"""A queue of the caller's workspace. Any other queue answers 404."""
+
+WorkspaceTaskId = Annotated[uuid.UUID, Depends(_workspace_task)]
+"""A review task of the caller's workspace. Any other task answers 404."""
+
+
 def _canonical_decision(
     decision: ReviewDecision | DeprecatedReviewDecision | None,
 ) -> tuple[ReviewDecision | None, list[str]]:
@@ -426,7 +441,7 @@ def _canonical_decision(
 async def claim_next_item(
     request: Request,
     response: Response,
-    queue_id: str,
+    queue_id: WorkspaceQueueId,
     reviewer: CurrentReviewer,
 ) -> ClaimResponse:
     """Claim the next available item from a queue (SE-006).
@@ -469,7 +484,7 @@ async def claim_next_item(
 async def submit_review_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     body: SubmitRequest,
     reviewer: CurrentReviewer,
 ) -> SubmitResponse:
@@ -539,7 +554,7 @@ async def submit_review_endpoint(
 async def skip_task_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     reviewer: CurrentReviewer,
 ) -> SkipResponse:
     """Skip a claimed task, returning it to the queue.
@@ -585,7 +600,7 @@ async def skip_task_endpoint(
 async def release_claim_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     reviewer: CurrentReviewer,
 ) -> ReleaseResponse:
     """Release a claim on a task back to the available pool."""
@@ -614,7 +629,7 @@ async def release_claim_endpoint(
 async def save_draft_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     body: DraftRequest,
     reviewer: CurrentReviewer,
 ) -> DraftResponse:
@@ -653,7 +668,7 @@ async def save_draft_endpoint(
 async def reveal_ai_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     reviewer: CurrentReviewer,
 ) -> RevealAIResponse:
     """Reveal agent output for a claimed task (RV-002).
@@ -695,7 +710,7 @@ async def reveal_ai_endpoint(
 async def submit_correction_endpoint(
     request: Request,
     response: Response,
-    task_id: uuid.UUID,
+    task_id: WorkspaceTaskId,
     body: CorrectionRequest,
     reviewer: CurrentReviewer,
 ) -> CorrectionResponse:
@@ -747,24 +762,26 @@ async def list_queues_endpoint(
     reviewer: CurrentReviewer,
     workspace_id: str | None = None,
 ) -> QueueListResponse:
-    """List review queues, optionally limited to one workspace."""
+    """List the review queues of the caller's workspace.
+
+    ``workspace_id`` names that workspace. Any other answers 404.
+    """
+    if workspace_id is not None and workspace_id != str(reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Workspace not found")
     _add_notification_headers(response, reviewer.id)
-    queues = list_queues(get_engine(request), workspace_id, reviewer.id)
+    queues = list_queues(get_engine(request), reviewer.workspace_id, reviewer.id)
     return QueueListResponse(items=[QueueSummary(**queue) for queue in queues])
 
 
 @router.get("/queues/{queue_id}/my-tasks", response_model=ReviewerTasksResponse)
 async def list_my_queue_tasks_endpoint(
     request: Request,
-    queue_id: str,
+    queue_id: WorkspaceQueueId,
     reviewer: CurrentReviewer,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
 ) -> ReviewerTasksResponse:
     """List the caller's latest tasks in a queue, to step back through them."""
-    engine = get_engine(request)
-    if not queue_in_workspace(engine, queue_id, reviewer.workspace_id):
-        raise HTTPException(status_code=404, detail="Review queue not found")
-    items = reviewer_queue_tasks(engine, queue_id, reviewer.id, limit)
+    items = reviewer_queue_tasks(get_engine(request), queue_id, reviewer.id, limit)
     return ReviewerTasksResponse(
         queue_id=queue_id,
         items=[ReviewerTaskSummary(**item) for item in items],
@@ -797,7 +814,7 @@ async def get_review_task_endpoint(
 async def get_queue_status_endpoint(
     request: Request,
     response: Response,
-    queue_id: str,
+    queue_id: WorkspaceQueueId,
     reviewer: CurrentReviewer,
 ) -> QueueStatusResponse:
     """Get queue status including item counts and active reviewers."""
@@ -822,7 +839,7 @@ async def get_queue_status_endpoint(
 @router.post("/queues/{queue_id}/close-copies", response_model=CloseCopiesResponse)
 async def close_queue_copies(
     request: Request,
-    queue_id: str,
+    queue_id: WorkspaceQueueId,
     reviewer: CurrentReviewer,
 ) -> CloseCopiesResponse:
     """Close every unclaimed copy of a queue, so its review ends with the copies in.
@@ -834,10 +851,9 @@ async def close_queue_copies(
     rater. A claimed copy stays open, because a reviewer holds it. A queue of
     another workspace answers 404.
     """
-    engine = get_engine(request)
-    if not queue_in_workspace(engine, queue_id, reviewer.workspace_id):
-        raise HTTPException(status_code=404, detail="Review queue not found")
-    return CloseCopiesResponse(queue_id=queue_id, **close_open_copies(engine, queue_id))
+    return CloseCopiesResponse(
+        queue_id=queue_id, **close_open_copies(get_engine(request), queue_id)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -871,297 +887,4 @@ async def get_mission_control_reviewers(
 
     return MissionControlResponse(
         reviewers=[ReviewerVisibility(**r) for r in visibility],
-    )
-
-
-# ---------------------------------------------------------------------------
-# Adjudication Pydantic models (AJ-001 through AJ-007)
-# ---------------------------------------------------------------------------
-
-
-class DisagreementResponse(BaseModel):
-    """Response model for a detected disagreement."""
-
-    record_id: str
-    task_schema_id: str
-    conflicting_event_ids: list[str]
-    disagreement_type: str
-    fields_in_conflict: list[str]
-    reviewer_labels: dict[str, dict[str, Any]] = {}
-
-
-class AdjudicationQueueItemResponse(BaseModel):
-    """Response model for an adjudication queue item."""
-
-    id: str
-    record_id: str
-    task_schema_id: str
-    disagreement: DisagreementResponse
-    severity: str
-    adjudication_type: str
-    created_at: str
-    resolved: bool = False
-
-
-class AdjudicationQueueResponse(BaseModel):
-    """Response for the full adjudication queue."""
-
-    items: list[AdjudicationQueueItemResponse]
-    total: int = 0
-    unresolved: int = 0
-
-
-class DetectDisagreementsRequest(BaseModel):
-    """Request body for disagreement detection."""
-
-    review_events_by_record: dict[str, list[dict[str, Any]]] = Field(
-        ...,
-        description="Mapping of record_id -> list of review event dicts",
-    )
-    task_schema_id: str = Field(..., description="Task schema ID for these events")
-
-
-class DetectDisagreementsResponse(BaseModel):
-    """Response for disagreement detection."""
-
-    disagreements: list[DisagreementResponse]
-    total: int = 0
-
-
-class ResolveRequest(BaseModel):
-    """Request body for adjudication resolution."""
-
-    queue_item_id: str = Field(..., description="Adjudication queue item ID")
-    resolution: AdjudicationResolution = Field(..., description="Resolution type")
-    resolved_labels: dict[str, Any] | None = Field(
-        default=None, description="Resolved labels (required for 'resolve')"
-    )
-    rationale: str | None = Field(
-        default=None, description="Rationale for the resolution"
-    )
-
-
-class ResolveResponse(BaseModel):
-    """Response for an adjudication resolution."""
-
-    adjudication_id: str
-    record_id: str
-    resolution: str
-    resolved_labels: dict[str, Any] | None = None
-    rationale: str | None = None
-    review_event_id: str | None = None
-    message: str = "resolved"
-
-
-class FieldComparisonResponse(BaseModel):
-    """Response model for a single field comparison."""
-
-    field_name: str
-    sources: list[dict[str, Any]]
-    is_in_conflict: bool
-
-
-class ComparisonResponse(BaseModel):
-    """Response for side-by-side comparison data."""
-
-    record_id: str
-    task_schema_id: str
-    field_comparisons: list[FieldComparisonResponse]
-    event_ids: list[str]
-
-
-class BuildQueueRequest(BaseModel):
-    """Request body for building an adjudication queue from disagreements."""
-
-    disagreements: list[dict[str, Any]] = Field(
-        ..., description="List of disagreement dicts from detect endpoint"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Adjudication endpoint helpers
-# ---------------------------------------------------------------------------
-
-
-def _disagreement_to_response(d: Any) -> DisagreementResponse:
-    """Convert a Disagreement dataclass to a response model."""
-    return DisagreementResponse(
-        record_id=str(d.record_id),
-        task_schema_id=str(d.task_schema_id),
-        conflicting_event_ids=[str(eid) for eid in d.conflicting_event_ids],
-        disagreement_type=d.disagreement_type.value,
-        fields_in_conflict=d.fields_in_conflict,
-        reviewer_labels=d.reviewer_labels,
-    )
-
-
-def _queue_item_to_response(item: AdjQueueItem) -> AdjudicationQueueItemResponse:
-    """Convert an AdjudicationQueueItem to a response model."""
-    return AdjudicationQueueItemResponse(
-        id=str(item.id),
-        record_id=str(item.record_id),
-        task_schema_id=str(item.task_schema_id),
-        disagreement=_disagreement_to_response(item.disagreement),
-        severity=item.severity.value,
-        adjudication_type=item.adjudication_type.value,
-        created_at=item.created_at,
-        resolved=item.resolved,
-    )
-
-
-# Store adjudication service instances keyed by workspace.
-# NOTE: This dict is per-process. In a multi-worker deployment (e.g.
-# gunicorn with N workers), each worker has its own adjudication state.
-# Acceptable for local-first single-worker deployments. For
-# multi-worker, move state to the database or use FastAPI DI with a
-# shared lifecycle scope.
-_adjudication_services: dict[str, AdjudicationService] = {}
-
-
-def _get_adjudication_service(workspace_id: str) -> AdjudicationService:
-    """Get or create an adjudication service for a workspace."""
-    if workspace_id not in _adjudication_services:
-        _adjudication_services[workspace_id] = AdjudicationService()
-    return _adjudication_services[workspace_id]
-
-
-# ---------------------------------------------------------------------------
-# Adjudication endpoints (AJ-001 through AJ-007)
-# ---------------------------------------------------------------------------
-
-
-@router.post(
-    "/adjudication/detect",
-    response_model=DetectDisagreementsResponse,
-)
-async def detect_disagreements_endpoint(
-    request: Request,
-    response: Response,
-    body: DetectDisagreementsRequest,
-    reviewer: CurrentReviewer,
-) -> DetectDisagreementsResponse:
-    """Detect disagreements in review events (AJ-001).
-
-    Compares review events for overlapping records and identifies both
-    human-human and human-agent disagreements at the field level.
-    """
-    _add_notification_headers(response, reviewer.id)
-
-    workspace_id = str(reviewer.workspace_id) if reviewer.workspace_id else "default"
-    service = _get_adjudication_service(workspace_id)
-
-    task_schema_id = uuid.UUID(body.task_schema_id)
-    disagreements = service.detect_disagreements(
-        body.review_events_by_record, task_schema_id
-    )
-
-    return DetectDisagreementsResponse(
-        disagreements=[_disagreement_to_response(d) for d in disagreements],
-        total=len(disagreements),
-    )
-
-
-@router.post(
-    "/adjudication/queue/build",
-    response_model=AdjudicationQueueResponse,
-)
-async def build_adjudication_queue_endpoint(
-    request: Request,
-    response: Response,
-    body: DetectDisagreementsRequest,
-    reviewer: CurrentReviewer,
-) -> AdjudicationQueueResponse:
-    """Detect disagreements and build an adjudication queue (AJ-001, AJ-002).
-
-    Detects disagreements, classifies severity and type, and builds a
-    prioritized adjudication queue.
-    """
-    _add_notification_headers(response, reviewer.id)
-
-    workspace_id = str(reviewer.workspace_id) if reviewer.workspace_id else "default"
-    service = _get_adjudication_service(workspace_id)
-
-    task_schema_id = uuid.UUID(body.task_schema_id)
-    disagreements = service.detect_disagreements(
-        body.review_events_by_record, task_schema_id
-    )
-    queue = service.build_queue(disagreements)
-
-    return AdjudicationQueueResponse(
-        items=[_queue_item_to_response(item) for item in queue],
-        total=len(queue),
-        unresolved=len([i for i in queue if not i.resolved]),
-    )
-
-
-@router.get(
-    "/adjudication/queue",
-    response_model=AdjudicationQueueResponse,
-)
-async def get_adjudication_queue_endpoint(
-    request: Request,
-    response: Response,
-    reviewer: CurrentReviewer,
-) -> AdjudicationQueueResponse:
-    """Get the current adjudication queue (AJ-002)."""
-    _add_notification_headers(response, reviewer.id)
-
-    workspace_id = str(reviewer.workspace_id) if reviewer.workspace_id else "default"
-    service = _get_adjudication_service(workspace_id)
-
-    queue = service.get_queue()
-    unresolved = service.get_unresolved_queue()
-
-    return AdjudicationQueueResponse(
-        items=[_queue_item_to_response(item) for item in queue],
-        total=len(queue),
-        unresolved=len(unresolved),
-    )
-
-
-@router.post(
-    "/adjudication/resolve",
-    response_model=ResolveResponse,
-)
-async def resolve_adjudication_endpoint(
-    request: Request,
-    response: Response,
-    body: ResolveRequest,
-    reviewer: CurrentReviewer,
-) -> ResolveResponse:
-    """Resolve an adjudication queue item (AJ-003, AJ-007).
-
-    Applies a resolution and creates a review event for the audit trail.
-    """
-    _add_notification_headers(response, reviewer.id)
-
-    workspace_id = str(reviewer.workspace_id) if reviewer.workspace_id else "default"
-    service = _get_adjudication_service(workspace_id)
-
-    try:
-        result = service.resolve(
-            queue_item_id=uuid.UUID(body.queue_item_id),
-            adjudicator_id=reviewer.id,
-            resolution=body.resolution,
-            resolved_labels=body.resolved_labels,
-            rationale=body.rationale,
-            workspace_id=reviewer.workspace_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-    resolved_labels = (
-        result.resolved_labels.labels if result.resolved_labels is not None else None
-    )
-
-    return ResolveResponse(
-        adjudication_id=str(result.adjudication_id),
-        record_id=str(result.record_id),
-        resolution=result.resolution.value,
-        resolved_labels=resolved_labels,
-        rationale=result.rationale,
-        review_event_id=(
-            str(result.review_event_id) if result.review_event_id else None
-        ),
-        message="resolved",
     )

@@ -2,8 +2,9 @@ name: "Psychology Survey Codebook"
 version: 1
 description: >
   End-to-end psychology and qualitative research workflow for messy free-text
-  survey or interview responses with a versioned codebook, calibration,
-  assisted coding, review, adjudication, export, and release certification.
+  survey or interview responses with a versioned codebook, assisted coding,
+  review, adjudication, export, and release certification. Codebook
+  calibration against a gold set is planned with gold sets (P8).
 
 metadata:
   domain: psychology_research
@@ -35,18 +36,9 @@ steps:
       preserve_offsets: true
       pii_redaction: required
 
-  - id: calibrate_codebook
-    type: human_calibration
-    depends_on: [normalize_segments]
-    config:
-      codebook_ref: "workbench/codebooks/psychology-survey-codebook.yaml"
-      sample_strategy: stratified
-      minimum_reviewers: 2
-      target_agreement: 0.8
-
   - id: propose_codes
     type: agent_run
-    depends_on: [calibrate_codebook]
+    depends_on: [normalize_segments]
     config:
       task_schema_id: psychology-survey-code
       prompt_ref: psychology-survey-code-prompt

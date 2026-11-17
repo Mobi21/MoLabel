@@ -133,6 +133,41 @@ async def test_a_resolution_is_stored_and_never_counts_as_a_rater(
 
 
 @pytest.mark.asyncio
+async def test_a_resolution_survives_a_restart(client, app, tmp_path):
+    _, tokens, queue = await _start_review(client, app, tmp_path)
+    queue_id = queue["queue_id"]
+    await _review_both(client, queue_id, tokens)
+    base = f"/api/v1/adjudication/queues/{queue_id}/disagreements"
+    (item,) = (await client.get(base, headers=_as(tokens[0]))).json()["items"]
+    path = f"{base}/{item['record_id']}"
+    shown = (await client.get(path, headers=_as(tokens[0]))).json()
+    resolved = await client.post(
+        f"{path}/resolve",
+        json={
+            "resolved_labels": {"sentiment": "neutral"},
+            "rationale": "Hedged.",
+            "review_event_ids": _event_ids(shown),
+        },
+        headers=_as(tokens[0]),
+    )
+    assert resolved.status_code == 200, resolved.text
+    app.state.engine.dispose()
+
+    async with review_client(review_app(tmp_path)) as restarted:
+        listed = (await restarted.get(base, headers=_as(tokens[1]))).json()
+        reread = (await restarted.get(path, headers=_as(tokens[1]))).json()
+        record = await restarted.get(
+            f"/api/v1/datasets/{item['dataset_id']}/records/{item['record_id']}",
+            headers=_as(tokens[1]),
+        )
+
+    assert (listed["unresolved"], listed["items"][0]["status"]) == (0, "resolved")
+    assert reread["resolution"]["resolved_labels"] == {"sentiment": "neutral"}
+    assert reread["resolution"]["rationale"] == "Hedged."
+    assert record.json()["latest_label"] == {"sentiment": "neutral"}
+
+
+@pytest.mark.asyncio
 async def test_resolve_needs_labels_that_fit_the_schema(client, app, tmp_path):
     _, tokens, queue = await _start_review(client, app, tmp_path)
     await _review_both(client, queue["queue_id"], tokens)

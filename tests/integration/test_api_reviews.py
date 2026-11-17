@@ -73,9 +73,9 @@ async def test_list_review_events_with_filters(client):
 
 
 @pytest.mark.asyncio
-async def test_list_adjudication_queue_requires_auth(client):
-    """The in-memory adjudication queue requires a session cookie."""
-    resp = await client.get("/api/v1/adjudication/queue")
+async def test_list_queue_disagreements_requires_auth(client):
+    """A queue's disagreements require a session cookie."""
+    resp = await client.get("/api/v1/adjudication/queues/some-queue/disagreements")
     assert resp.status_code == 401
 
 

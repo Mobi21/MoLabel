@@ -44,15 +44,13 @@ def list_templates() -> list[dict[str, Any]]:
             "id": "full_quality_pipeline",
             "name": "Full Quality Pipeline",
             "description": (
-                "Ingest, calibration, agent run, human review, "
-                "agreement analysis, adjudication, quality check, "
-                "export, release validation."
+                "Ingest, agent run, human review, agreement analysis, "
+                "adjudication, quality check, export, release validation."
             ),
             "file": "full_quality_pipeline.yaml",
             "version": "1.0.0",
             "task_family": "general_quality",
             "capabilities": [
-                "human_calibration",
                 "agreement_analysis",
                 "human_adjudication",
                 "release_validation",
@@ -160,9 +158,9 @@ def list_templates() -> list[dict[str, Any]]:
             "id": "psychology_survey_codebook",
             "name": "Psychology Survey Codebook",
             "description": (
-                "Psychology and qualitative research workflow with codebook "
-                "calibration, MiniMax-assisted coding, evidence spans, "
-                "agreement analysis, adjudication, export, and release proof."
+                "Psychology and qualitative research workflow with a codebook, "
+                "MiniMax-assisted coding, evidence spans, agreement analysis, "
+                "adjudication, export, and release proof."
             ),
             "file": "psychology_survey_codebook.yaml",
             "version": "1.0.0",
@@ -171,7 +169,6 @@ def list_templates() -> list[dict[str, Any]]:
                 "codebook_management",
                 "pii_redaction",
                 "agent_labeling",
-                "human_calibration",
                 "human_review",
                 "agreement_analysis",
                 "human_adjudication",

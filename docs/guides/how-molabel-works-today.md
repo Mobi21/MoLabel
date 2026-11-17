@@ -353,10 +353,13 @@ Examples of supported step types include:
 
 - `data_ingest`, `data_filter`, `data_sample`, `data_deduplicate`
 - `agent_run`, `agent_compare`
-- `human_review`, `human_triage`, `human_calibration`, `human_adjudication`
+- `human_review`, `human_triage`, `human_adjudication`
 - `quality_check`, `agreement_analysis`, `drift_detection`
 - `export`, `snapshot`, `release_validation`
 - `loop`, `conditional`, `parallel`, `gate`
+
+`human_calibration`, which checks reviewers against gold labels before review,
+is planned with gold sets (P8). No shipped template uses it.
 
 At runtime each step reads from and writes to the shared workflow context. Human
 steps can pause execution. Control steps branch or orchestrate child steps.

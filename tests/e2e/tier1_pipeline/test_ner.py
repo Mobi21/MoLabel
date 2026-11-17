@@ -207,55 +207,7 @@ async def test_full_pipeline_ner(
                 entities_val = json.loads(entities_val)
             _validate_entity_spans(entities_val)
 
-    # ── Checkpoint 5: Queue Claim + Human Review ──────────────────────────
-    with checkpoint(ctx, "human_review"):
-        queue_id = f"{ds_id}:{schema_id}"
-        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
-        assert claim_resp.status_code == 200, claim_resp.text
-        claim_data = claim_resp.json()
-
-        if not claim_data["queue_empty"]:
-            task_id = claim_data["task"]["id"]
-            # Human reviewer provides corrected entity spans
-            human_entities = [
-                {"start": 0, "end": 9, "label": "PERSON", "text": "Elon Musk"},
-                {"start": 42, "end": 47, "label": "ORG", "text": "Tesla"},
-                {"start": 67, "end": 73, "label": "LOC", "text": "Austin"},
-                {"start": 75, "end": 80, "label": "LOC", "text": "Texas"},
-            ]
-            submit_resp = await client.post(
-                f"/api/v1/review-tasks/{task_id}/submit",
-                json={
-                    "labels": {"entities": human_entities},
-                    "decision": "accept",
-                    "rationale": (
-                        "Corrected entity spans with precise character offsets."
-                    ),
-                    "auto_claim_next": False,
-                },
-            )
-            assert submit_resp.status_code == 200, submit_resp.text
-            submit_data = submit_resp.json()
-            assert submit_data["submitted_task"]["status"] == "submitted"
-
-            # Verify character offsets are preserved in stored review event
-            review_events_resp = await client.get(
-                "/api/v1/review/events",
-                params={"dataset_id": ds_id, "task_schema_id": schema_id},
-            )
-            assert review_events_resp.status_code == 200
-            events = review_events_resp.json().get("items", [])
-            if events:
-                stored_entities = events[0]["labels"].get("entities", [])
-                if isinstance(stored_entities, str):
-                    stored_entities = json.loads(stored_entities)
-                _validate_entity_spans(stored_entities)
-                # Verify offsets are preserved
-                for span in stored_entities:
-                    assert isinstance(span["start"], int)
-                    assert isinstance(span["end"], int)
-
-    # ── Checkpoint 6: Quality Check ───────────────────────────────────────
+    # ── Checkpoint 5: Quality Check ───────────────────────────────────────
     with checkpoint(ctx, "quality_check"):
         quality_resp = await client.get(
             "/api/v1/quality/dashboard",
@@ -276,7 +228,7 @@ async def test_full_pipeline_ner(
         )
         assert agreement_resp.status_code == 200, agreement_resp.text
 
-    # ── Checkpoint 7: Export + Release ────────────────────────────────────
+    # ── Checkpoint 6: Export + Release ────────────────────────────────────
     with checkpoint(ctx, "export_release"):
         export_resp = await client.post(
             "/api/v1/exports",

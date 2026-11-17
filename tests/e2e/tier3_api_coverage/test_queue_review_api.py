@@ -45,28 +45,17 @@ async def test_queue_all_claim_operations(
     client: InstrumentedClient,
     ctx: TestContext,
 ) -> None:
-    """T3-10: All queue claim operations (claim returns queue_empty when no tasks)."""
+    """T3-10: Queue and task operations answer 404 for an unknown queue or task."""
 
     reviewer_id, queue_id = await _setup(client)
 
-    with checkpoint(ctx, "claim_empty_queue"):
+    with checkpoint(ctx, "claim_unknown_queue"):
         resp = await client.post(f"{BASE}/queues/{queue_id}/claim")
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        # Queue is empty since we haven't seeded any tasks
-        assert body["queue_empty"] is True or body.get("message") in (
-            "queue_empty",
-            "claimed",
-        )
+        assert resp.status_code == 404, resp.text
 
-    with checkpoint(ctx, "queue_status"):
+    with checkpoint(ctx, "unknown_queue_status"):
         resp = await client.get(f"{BASE}/queues/{queue_id}/status")
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert body["queue_id"] == queue_id
-        assert "total" in body
-        assert "available" in body
-        assert "active_reviewers" in body
+        assert resp.status_code == 404, resp.text
 
     with checkpoint(ctx, "mission_control"):
         resp = await client.get(f"{BASE}/mission-control/reviewers")
@@ -74,7 +63,6 @@ async def test_queue_all_claim_operations(
         body = resp.json()
         assert "reviewers" in body
 
-    # Simulate claim operations on a non-existent task — expect 409
     fake_task_id = "00000000-0000-0000-0000-aabbccdd0001"
 
     with checkpoint(ctx, "submit_nonexistent"):
@@ -82,30 +70,30 @@ async def test_queue_all_claim_operations(
             f"{BASE}/review-tasks/{fake_task_id}/submit",
             json={"labels": {"sentiment": "positive"}, "decision": "accept"},
         )
-        assert resp.status_code == 409, resp.text
+        assert resp.status_code == 404, resp.text
 
     with checkpoint(ctx, "skip_nonexistent"):
         resp = await client.post(f"{BASE}/review-tasks/{fake_task_id}/skip")
-        assert resp.status_code == 409, resp.text
+        assert resp.status_code == 404, resp.text
 
     with checkpoint(ctx, "release_nonexistent"):
         resp = await client.post(f"{BASE}/review-tasks/{fake_task_id}/release")
-        assert resp.status_code == 409, resp.text
+        assert resp.status_code == 404, resp.text
 
     with checkpoint(ctx, "draft_nonexistent"):
         resp = await client.post(
             f"{BASE}/review-tasks/{fake_task_id}/draft",
             json={"draft_labels": {"sentiment": "neutral"}},
         )
-        assert resp.status_code == 409, resp.text
+        assert resp.status_code == 404, resp.text
 
     with checkpoint(ctx, "reveal_ai_nonexistent"):
         resp = await client.post(f"{BASE}/review-tasks/{fake_task_id}/reveal-ai")
-        assert resp.status_code == 409, resp.text
+        assert resp.status_code == 404, resp.text
 
     with checkpoint(ctx, "correct_nonexistent"):
         resp = await client.post(
             f"{BASE}/review-tasks/{fake_task_id}/correct",
             json={"labels": {"sentiment": "negative"}, "rationale": "Correcting label"},
         )
-        assert resp.status_code == 409, resp.text
+        assert resp.status_code == 404, resp.text

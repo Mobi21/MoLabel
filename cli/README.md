@@ -21,7 +21,7 @@ The intended operating model is:
 - `workflow`: workflow creation, execution, and execution control
 - `queue`: review queue inspection, claiming, and closing unclaimed copies
 - `review`: submit, draft, reveal, release, and correction flows
-- `adjudication`: disagreement detection and resolution
+- `adjudication`: list, show, and resolve the disagreements of a review queue
 - `agent-run`: agent-run lifecycle and comparison
 - `quality`: quality dashboard, agreement, drift
 - `export`: export creation and validation
@@ -71,6 +71,39 @@ because JSON is the default.
 `tests/json-contract.test.ts` runs every command against no backend, a backend
 that answers `{}`, a backend that fails, and an unreachable backend, and checks
 this contract for each.
+
+## Adjudication
+
+Adjudication works on one review queue at a time, through the same endpoints
+as the GUI. A resolution is stored in the database, so it survives a backend
+restart, sets the record's labels for export, and shows in the GUI.
+
+```bash
+molabel adjudication list <queue-id>
+molabel adjudication show <queue-id> <record-id>
+molabel adjudication resolve <queue-id> <record-id>   --review-event-ids <id>,<id> --resolved-labels-json '{"sentiment": "neutral"}'
+```
+
+`list` shows a record only once every review copy of it in the queue is
+submitted, skipped, or closed, so no reviewer sees another's labels before
+their own review is in. `molabel queue close-copies` closes the unclaimed
+copies of a queue with more copies than reviewers.
+
+`resolve` needs `--review-event-ids`, the `review_event_id` of each
+`reviewer_labels` entry that `show` printed. When a review of the record came
+in after the read, it fails with `HTTP_409`. Run `show` again and resolve on
+what it prints. `--resolution` is `resolve` by default, which needs
+`--resolved-labels-json` or `--resolved-labels-file`. The others are
+`preserve_disagreement`, `downgrade`, and `exclude`. Another workspace's queue
+fails with `HTTP_404`.
+
+The earlier `adjudication detect`, `adjudication build`, and
+`adjudication queue` commands are gone. They took review events from the
+caller and kept their queue and resolutions in the backend's memory, so a
+resolution vanished on restart and never reached export or the GUI. `list`
+replaces `detect`, `build`, and `queue`, because the backend now finds a
+queue's disagreements from its stored reviews. `resolve` takes a queue and a
+record instead of a queue item ID.
 
 ## Labeling without an API key
 

@@ -180,7 +180,7 @@ For benchmark runs, assume the workspace is intentionally redacted. Do not try t
 
 Never read, list, or grep any path containing `authority`, `gold`, `human-labels`, `reviews`, `label-map.yaml`, `metrics.yaml`, `baselines.yaml`, `operator.yaml`, `paper.yaml`, or `scenario.yaml`. Those are hidden benchmark-authority surfaces and touching them is a blocking failure.
 
-**Do NOT run adjudication commands** (`adjudication queue`, `adjudication detect`, `adjudication build`, `adjudication resolve`). Adjudication is a separate post-benchmark process and is not part of this workflow. If the workflow status shows steps like `adjudicate`, `score`, or `snapshot` as pending/blocked, IGNORE them — proceed directly to Phase 6 (write artifacts).
+**Do NOT run adjudication commands** (`adjudication list`, `adjudication show`, `adjudication resolve`). Adjudication is a separate post-benchmark process and is not part of this workflow. If the workflow status shows steps like `adjudicate`, `score`, or `snapshot` as pending/blocked, IGNORE them — proceed directly to Phase 6 (write artifacts).
 
 **NEVER use curl, wget, httpx, requests, or any HTTP client to call MoLabel's API.** This is a blocking benchmark gate. Only use the `molabel` CLI. If a CLI command doesn't exist for what you need, skip that action — do not work around it with HTTP calls.
 

@@ -1714,35 +1714,6 @@ class GroundedCliHarness:
             "--no-auto-claim-next",
         )
 
-    async def adjudication_detect(
-        self, task_schema_id: str, events_by_record: dict[str, list[dict[str, Any]]]
-    ) -> dict[str, Any]:
-        return await self.run_json(
-            "adjudication detect",
-            "adjudication",
-            "detect",
-            "--task-schema-id",
-            task_schema_id,
-            "--events-json",
-            json.dumps(events_by_record),
-        )
-
-    async def adjudication_build(
-        self, task_schema_id: str, events_by_record: dict[str, list[dict[str, Any]]]
-    ) -> dict[str, Any]:
-        return await self.run_json(
-            "adjudication build",
-            "adjudication",
-            "build",
-            "--task-schema-id",
-            task_schema_id,
-            "--events-json",
-            json.dumps(events_by_record),
-        )
-
-    async def adjudication_queue(self) -> dict[str, Any]:
-        return await self.run_json("adjudication queue", "adjudication", "queue")
-
     def lookup_source_record_id(self, record_id: str) -> str | None:
         """Return the source/external record ID for a workflow-ingest record."""
         with self.server.engine.connect() as conn:
@@ -1753,26 +1724,6 @@ class GroundedCliHarness:
         if row is None or row[0] is None:
             return None
         return str(row[0])
-
-    async def adjudication_resolve(
-        self,
-        queue_item_id: str,
-        *,
-        resolved_labels: dict[str, Any],
-        rationale: str,
-    ) -> dict[str, Any]:
-        return await self.run_json(
-            "adjudication resolve",
-            "adjudication",
-            "resolve",
-            queue_item_id,
-            "--resolution",
-            "resolve",
-            "--resolved-labels-json",
-            json.dumps(resolved_labels),
-            "--rationale",
-            rationale,
-        )
 
 
 def resolve_auth_ref(repo_root: Path) -> str | None:

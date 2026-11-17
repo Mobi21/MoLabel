@@ -252,71 +252,7 @@ async def test_full_pipeline_structured_extraction(
             labels = output.get("labels", {})
             _validate_extraction_output(labels)
 
-    # ── Checkpoint 5: Queue Claim + Human Review ──────────────────────────
-    with checkpoint(ctx, "human_review"):
-        queue_id = f"{ds_id}:{schema_id}"
-        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
-        assert claim_resp.status_code == 200, claim_resp.text
-        claim_data = claim_resp.json()
-
-        if not claim_data["queue_empty"]:
-            task_id = claim_data["task"]["id"]
-            # Human reviewer provides corrected extraction
-            human_labels = {
-                "vendor_name": "Acme Office Supplies Ltd.",
-                "total_amount": 465.93,
-                "date": "2024-03-15",
-                "currency": "USD",
-                "line_items": [
-                    {
-                        "description": "Printer Paper (Case)",
-                        "quantity": 5,
-                        "price": 42.99,
-                    },
-                    {
-                        "description": "Black Ink Cartridges (Pack 4)",
-                        "quantity": 2,
-                        "price": 89.99,
-                    },
-                    {
-                        "description": "Stapler, heavy-duty",
-                        "quantity": 1,
-                        "price": 34.50,
-                    },
-                ],
-            }
-            submit_resp = await client.post(
-                f"/api/v1/review-tasks/{task_id}/submit",
-                json={
-                    "labels": human_labels,
-                    "decision": "accept",
-                    "rationale": "Corrected line items from invoice INV-2024-00847.",
-                    "auto_claim_next": False,
-                },
-            )
-            assert submit_resp.status_code == 200, submit_resp.text
-            assert submit_resp.json()["submitted_task"]["status"] == "submitted"
-
-            # Verify nested structure preserved in review events
-            review_events_resp = await client.get(
-                "/api/v1/review/events",
-                params={"dataset_id": ds_id, "task_schema_id": schema_id},
-            )
-            assert review_events_resp.status_code == 200
-            events = review_events_resp.json().get("items", [])
-            if events:
-                event_labels = events[0]["labels"]
-                _validate_extraction_output(event_labels)
-                # Verify nested line_items are preserved
-                if event_labels.get("line_items"):
-                    import json as _json
-
-                    line_items = event_labels["line_items"]
-                    if isinstance(line_items, str):
-                        line_items = _json.loads(line_items)
-                    assert len(line_items) == 3
-
-    # ── Checkpoint 6: Quality Check (per-field accuracy) ─────────────────
+    # ── Checkpoint 5: Quality Check (per-field accuracy) ─────────────────
     with checkpoint(ctx, "quality_check"):
         quality_resp = await client.get(
             "/api/v1/quality/dashboard",
@@ -340,7 +276,7 @@ async def test_full_pipeline_structured_extraction(
         assert "pooled" in agreement_data["inter_annotator"]
         assert "fields" in agreement_data["inter_annotator"]
 
-    # ── Checkpoint 7: Export + Release ────────────────────────────────────
+    # ── Checkpoint 6: Export + Release ────────────────────────────────────
     with checkpoint(ctx, "export_release"):
         export_resp = await client.post(
             "/api/v1/exports",

@@ -1657,9 +1657,9 @@ QUEUE_KINDS: dict[str, str] = {
 
 
 def list_queues(
-    engine: Engine, workspace_id: str | None, reviewer_id: uuid.UUID
+    engine: Engine, workspace_id: uuid.UUID, reviewer_id: uuid.UUID
 ) -> list[dict[str, Any]]:
-    """List review queues with per-status task counts.
+    """List a workspace's review queues with per-status task counts.
 
     A queue exists as the set of review tasks that share a ``queue_id``. Its
     kind comes from the workflow step that created it. ``my_remaining``
@@ -1707,12 +1707,12 @@ def list_queues(
                     )
                 FROM review_tasks t
                 LEFT JOIN task_schemas s ON s.id = t.task_schema_id
-                WHERE :workspace_id IS NULL OR t.workspace_id = :workspace_id
+                WHERE t.workspace_id = :workspace_id
                 GROUP BY t.queue_id, t.workspace_id, t.task_schema_id
                 ORDER BY MIN(t.created_at), t.queue_id
                 """
             ),
-            {"workspace_id": workspace_id, "reviewer_id": str(reviewer_id)},
+            {"workspace_id": str(workspace_id), "reviewer_id": str(reviewer_id)},
         ).all()
 
     return [
@@ -1746,6 +1746,21 @@ def queue_in_workspace(engine: Engine, queue_id: str, workspace_id: uuid.UUID) -
                 "WHERE queue_id = :queue_id AND workspace_id = :workspace_id LIMIT 1"
             ),
             {"queue_id": queue_id, "workspace_id": str(workspace_id)},
+        ).first()
+    return row is not None
+
+
+def task_in_workspace(
+    engine: Engine, task_id: uuid.UUID, workspace_id: uuid.UUID
+) -> bool:
+    """Whether the review task belongs to this workspace."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT 1 FROM review_tasks "
+                "WHERE id = :task_id AND workspace_id = :workspace_id"
+            ),
+            {"task_id": str(task_id), "workspace_id": str(workspace_id)},
         ).first()
     return row is not None
 

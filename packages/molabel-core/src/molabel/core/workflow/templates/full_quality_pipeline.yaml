@@ -1,9 +1,9 @@
 name: "Full Quality Pipeline"
 version: 1
 description: >
-  Comprehensive pipeline: ingest, calibration, agent run, human review,
-  agreement analysis, adjudication, quality check, export, and release
-  validation. Maps to the original fixed 12-step lifecycle.
+  Comprehensive pipeline: ingest, agent run, human review, agreement
+  analysis, adjudication, quality check, export, and release validation.
+  Reviewer calibration against a gold set is planned with gold sets (P8).
 
 steps:
   - id: ingest
@@ -13,12 +13,6 @@ steps:
   - id: normalize
     type: data_normalize
     config: {}
-
-  - id: calibration
-    type: human_calibration
-    config:
-      sample_size: 20
-      min_reviewers: 2
 
   - id: agent_label
     type: agent_run

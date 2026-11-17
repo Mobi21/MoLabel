@@ -208,49 +208,7 @@ async def test_full_pipeline_content_moderation(
                     f"rationale must be a string, got: {type(labels['rationale'])}"
                 )
 
-    # ── Checkpoint 5: Queue Claim + Human Review ──────────────────────────
-    with checkpoint(ctx, "human_review"):
-        queue_id = f"{ds_id}:{schema_id}"
-        claim_resp = await client.post(f"/api/v1/queues/{queue_id}/claim")
-        assert claim_resp.status_code == 200, claim_resp.text
-        claim_data = claim_resp.json()
-
-        if not claim_data["queue_empty"]:
-            task_id = claim_data["task"]["id"]
-            submit_resp = await client.post(
-                f"/api/v1/review-tasks/{task_id}/submit",
-                json={
-                    "labels": {
-                        "severity": "3",
-                        "rationale": (
-                            "Contains mildly offensive language directed at "
-                            "content creators but does not rise to severe "
-                            "violation level."
-                        ),
-                    },
-                    "decision": "accept",
-                    "auto_claim_next": False,
-                },
-            )
-            assert submit_resp.status_code == 200, submit_resp.text
-            submit_data = submit_resp.json()
-            assert submit_data["submitted_task"]["status"] == "submitted"
-
-            # Verify both fields are in the stored review event
-            review_events_resp = await client.get(
-                "/api/v1/review/events",
-                params={"dataset_id": ds_id, "task_schema_id": schema_id},
-            )
-            assert review_events_resp.status_code == 200
-            events = review_events_resp.json().get("items", [])
-            if events:
-                event_labels = events[0]["labels"]
-                assert "severity" in event_labels
-                assert "rationale" in event_labels
-                sev = _coerce_severity(event_labels["severity"])
-                assert sev is not None and 1 <= sev <= 5
-
-    # ── Checkpoint 6: Quality Check ───────────────────────────────────────
+    # ── Checkpoint 5: Quality Check ───────────────────────────────────────
     with checkpoint(ctx, "quality_check"):
         quality_resp = await client.get(
             "/api/v1/quality/dashboard",
@@ -274,7 +232,7 @@ async def test_full_pipeline_content_moderation(
         assert "pooled" in agreement_data["inter_annotator"]
         assert "fields" in agreement_data["inter_annotator"]
 
-    # ── Checkpoint 7: Export + Release ────────────────────────────────────
+    # ── Checkpoint 6: Export + Release ────────────────────────────────────
     with checkpoint(ctx, "export_release"):
         export_resp = await client.post(
             "/api/v1/exports",

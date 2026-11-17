@@ -434,14 +434,22 @@ class TestAtomicClaim:
             "loud",
         ]
 
-    def test_claim_api_empty_queue(self, client, reviewer) -> None:
-        """POST /queues/{queue_id}/claim returns queue_empty=True for empty queue."""
+    def test_claim_api_empty_queue(self, client, engine, reviewer, tasks) -> None:
+        """POST /queues/{queue_id}/claim returns queue_empty=True once all are taken."""
+        while claim_next(engine, QUEUE_ID, reviewer.id) is not None:
+            pass
         _login(client, reviewer)
         resp = client.post(f"/api/v1/queues/{QUEUE_ID}/claim")
         assert resp.status_code == 200
         data = resp.json()
         assert data["queue_empty"] is True
         assert data["task"] is None
+
+    def test_claim_api_unknown_queue(self, client, reviewer) -> None:
+        """A queue with no tasks does not exist, and answers 404."""
+        _login(client, reviewer)
+        resp = client.post(f"/api/v1/queues/{QUEUE_ID}/claim")
+        assert resp.status_code == 404
 
     def test_claim_requires_auth(self, client, tasks) -> None:
         """POST /queues/{queue_id}/claim returns 401 without session."""
@@ -802,15 +810,15 @@ class TestSubmitSkipRelease:
         assert data["message"] == "released"
         assert data["task"]["status"] == "available"
 
-    def test_submit_nonexistent_task_returns_409(self, client, reviewer) -> None:
-        """Submit on a non-existent task returns 409."""
+    def test_submit_nonexistent_task_returns_404(self, client, reviewer) -> None:
+        """Submit on a non-existent task returns 404."""
         _login(client, reviewer)
         fake_id = uuid.uuid4()
         resp = client.post(
             f"/api/v1/review-tasks/{fake_id}/submit",
             json={"labels": {"x": "y"}, "decision": "accept"},
         )
-        assert resp.status_code == 409
+        assert resp.status_code == 404
 
 
 # ===================================================================
@@ -1197,14 +1205,15 @@ class TestQueueStatus:
         assert items["second-queue"]["workspace_id"] == str(workspace.id)
         assert items["second-queue"]["task_schema_id"] == str(second[0].task_schema_id)
 
-    def test_queue_list_api_filters_by_workspace(self, client, reviewer, tasks) -> None:
-        """GET /queues omits queues that belong to other workspaces."""
+    def test_queue_list_api_refuses_another_workspace(
+        self, client, reviewer, tasks
+    ) -> None:
+        """GET /queues answers 404 for a workspace other than the caller's."""
         _login(client, reviewer)
 
         resp = client.get("/api/v1/queues", params={"workspace_id": str(uuid.uuid4())})
 
-        assert resp.status_code == 200
-        assert resp.json()["items"] == []
+        assert resp.status_code == 404
 
     def test_queue_list_api_requires_session(self, client, tasks) -> None:
         """GET /queues requires a reviewer session."""

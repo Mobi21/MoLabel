@@ -2,7 +2,8 @@ name: "Human-in-the-Loop Review"
 version: 1
 description: >
   Agent labels with human review and quality-driven refinement loop.
-  The loop continues until agreement reaches 0.90 or 5 iterations complete.
+  The loop continues until agreement reaches the quality gate's 0.80 or 5
+  iterations complete.
 
 steps:
   - id: ingest
@@ -43,7 +44,7 @@ steps:
         type: metric
         metric: "quality.agreement"
         operator: ">="
-        threshold: 0.90
+        threshold: 0.80
         max_iterations: 5
 
   - id: export_results

@@ -67,16 +67,16 @@ def _patch_agent_configs(engine: WorkflowEngine) -> None:
 @pytest.mark.e2e
 @pytest.mark.tier2
 async def test_t2_30_full_quality_pipeline_template(ctx):
-    """T2-30: All 11 steps parse, DAG is acyclic, gate step pauses correctly."""
+    """T2-30: All 10 steps parse, DAG is acyclic, gate step pauses correctly."""
     wf = parse_workflow_yaml(TEMPLATES / "full_quality_pipeline.yaml")
 
     with checkpoint(ctx, "parse"):
         assert wf.name == "Full Quality Pipeline"
-        assert len(wf.steps) == 11
+        assert len(wf.steps) == 10
 
     with checkpoint(ctx, "dag_no_cycles"):
         order = wf.topological_order()
-        assert len(order) == 11
+        assert len(order) == 10
 
     with checkpoint(ctx, "all_step_types_registered"):
         registry = create_default_registry()
@@ -100,7 +100,6 @@ async def test_t2_30_full_quality_pipeline_template(ctx):
         steps_before_gate = [
             "ingest",
             "normalize",
-            "calibration",
             "agent_label",
             "review",
             "agreement",
@@ -166,7 +165,7 @@ async def test_t2_31_iterative_refinement_template(ctx):
         term = loop_step.config["termination"]
         assert term["type"] == "metric"
         assert term["metric"] == "quality.agreement"
-        assert float(term["threshold"]) == 0.95
+        assert float(term["threshold"]) == 0.80
         assert term.get("max_iterations", 10) >= 1
 
     with checkpoint(ctx, "loop_body_steps"):

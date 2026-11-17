@@ -50,7 +50,7 @@ steps:
         type: metric
         metric: "quality.agreement"
         operator: ">="
-        threshold: 0.95
+        threshold: 0.80
         max_iterations: 10
 
   - id: final_snapshot

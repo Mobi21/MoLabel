@@ -14,7 +14,9 @@
 - Claim review work: `molabel queue claim <queue-id> --json`
 - End review on a queue with more copies than reviewers: `molabel queue close-copies <queue-id> --json`
 - Submit a review: `molabel review submit <task-id> --labels-file labels.json --decision accept --json`
-- Inspect adjudication queue: `molabel adjudication queue --json`
+- List a queue's disagreements: `molabel adjudication list <queue-id> --json`
+- Show one with every reviewer's labels: `molabel adjudication show <queue-id> <record-id> --json`
+- Resolve it on the review events `show` printed: `molabel adjudication resolve <queue-id> <record-id> --review-event-ids <id>,<id> --resolved-labels-file labels.json --json`
 - Show quality dashboard: `molabel quality dashboard --json`
 - Create an export: `molabel export create --file export.json --json`
 - Create a release: `molabel release create --file release.json --json`
