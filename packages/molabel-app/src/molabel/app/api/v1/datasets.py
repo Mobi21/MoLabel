@@ -619,6 +619,26 @@ async def import_dataset(
             str(r[1]): str(r[0]) for r in existing_rows if r[1] is not None
         }
 
+        insert_record = text(
+            """
+            INSERT INTO records (
+                id, external_id, sequence_index, content_hash,
+                stable_fields, payload, record_kind,
+                source_metadata, label_count, latest_label,
+                composite_confidence, export_eligible, flags,
+                created_at, updated_at, workspace_id,
+                dataset_id, artifact_id
+            ) VALUES (
+                :id, :external_id, :sequence_index,
+                :content_hash, :stable_fields, :payload,
+                :record_kind, :source_metadata,
+                0, NULL, NULL, 0, NULL,
+                :created_at, :updated_at, :workspace_id,
+                :dataset_id, NULL
+            )
+            """
+        )
+        new_rows: list[dict[str, Any]] = []
         for index, payload in enumerate(import_rows):
             external_id = str(
                 payload.get("id")
@@ -641,26 +661,7 @@ async def import_dataset(
                 or payload.get("input")
                 or ""
             )
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO records (
-                        id, external_id, sequence_index, content_hash,
-                        stable_fields, payload, record_kind,
-                        source_metadata, label_count, latest_label,
-                        composite_confidence, export_eligible, flags,
-                        created_at, updated_at, workspace_id,
-                        dataset_id, artifact_id
-                    ) VALUES (
-                        :id, :external_id, :sequence_index,
-                        :content_hash, :stable_fields, :payload,
-                        :record_kind, :source_metadata,
-                        0, NULL, NULL, 0, NULL,
-                        :created_at, :updated_at, :workspace_id,
-                        :dataset_id, NULL
-                    )
-                    """
-                ),
+            new_rows.append(
                 {
                     "id": record_id,
                     "external_id": external_id,
@@ -676,10 +677,12 @@ async def import_dataset(
                     "updated_at": now_iso,
                     "workspace_id": workspace_id,
                     "dataset_id": str(dataset_id),
-                },
+                }
             )
             existing_by_external[external_id] = record_id
             records_imported += 1
+        if new_rows:
+            conn.execute(insert_record, new_rows)
 
         # Update dataset counts
         total = records_imported + len(existing_rows)

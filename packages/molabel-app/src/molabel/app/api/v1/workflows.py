@@ -1246,6 +1246,25 @@ class _WorkflowDataLoader:
         records: list[_LoadedRecord] = []
         now = datetime.now(UTC).isoformat()
         lines = source_path.read_text(encoding="utf-8").splitlines()
+        insert_record = text(
+            """
+            INSERT INTO records (
+                id, external_id, sequence_index, content_hash,
+                stable_fields, payload, record_kind, source_metadata,
+                label_count, latest_label, composite_confidence,
+                export_eligible, flags, created_at, updated_at,
+                workspace_id, dataset_id, artifact_id
+            )
+            VALUES (
+                :id, :external_id, :sequence_index, :content_hash,
+                :stable_fields, :payload, :record_kind,
+                :source_metadata, 0, NULL, NULL, 0, NULL,
+                :created_at, :updated_at, :workspace_id,
+                :dataset_id, NULL
+            )
+            """
+        )
+        new_rows: list[dict[str, Any]] = []
         for index, line in enumerate(lines):
             if not line.strip():
                 continue
@@ -1264,25 +1283,7 @@ class _WorkflowDataLoader:
                 stable_fields = {
                     "text": _extract_record_text(payload),
                 }
-                self._conn.execute(
-                    text(
-                        """
-                        INSERT INTO records (
-                            id, external_id, sequence_index, content_hash,
-                            stable_fields, payload, record_kind, source_metadata,
-                            label_count, latest_label, composite_confidence,
-                            export_eligible, flags, created_at, updated_at,
-                            workspace_id, dataset_id, artifact_id
-                        )
-                        VALUES (
-                            :id, :external_id, :sequence_index, :content_hash,
-                            :stable_fields, :payload, :record_kind,
-                            :source_metadata, 0, NULL, NULL, 0, NULL,
-                            :created_at, :updated_at, :workspace_id,
-                            :dataset_id, NULL
-                        )
-                        """
-                    ),
+                new_rows.append(
                     {
                         "id": record_id,
                         "external_id": external_id,
@@ -1298,9 +1299,11 @@ class _WorkflowDataLoader:
                         "updated_at": now,
                         "workspace_id": self._workspace_id,
                         "dataset_id": dataset_id,
-                    },
+                    }
                 )
             records.append(_LoadedRecord(record_id))
+        if new_rows:
+            self._conn.execute(insert_record, new_rows)
 
         self._conn.execute(
             text(
