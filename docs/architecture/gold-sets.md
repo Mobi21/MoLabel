@@ -152,6 +152,11 @@ raters' marginals. Kappa is undefined when every value is one category, and
 the report then gives the reason, as agreement does. A missing value is
 counted as missing, not as wrong.
 
+The queue records the version and the hash of the `gold.jsonl` it was made
+from. The report scores against the set as it is now and warns when the
+version moved, when the file's hash changed under the same version, as a
+hand edit to `expected` does, and when the header does not describe the file.
+
 ## Later
 
 Inspect's dataset shape (`input`, `target`, `id`, `metadata`) and its

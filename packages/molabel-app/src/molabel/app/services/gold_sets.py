@@ -678,7 +678,7 @@ def calibration_items(
     return CalibrationItems(
         gold_set=slug,
         version=gold.header.version,
-        content_hash=gold.header.content_hash,
+        content_hash=gold.file_hash,
         task_schema=gold.header.task_schema,
         record_ids=list(by_record),
         unresolved=unresolved,

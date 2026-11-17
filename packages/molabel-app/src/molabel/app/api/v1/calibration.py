@@ -107,13 +107,27 @@ async def get_calibration_report(
             ).fetchall()
         )
 
+    slug = gold.header.gold_set_id
     made_from = summary.get("gold_version")
+    made_from_hash = summary.get("gold_content_hash")
     warnings = []
     if made_from is not None and made_from != gold.header.version:
         warnings.append(
-            f"Gold set '{gold.header.gold_set_id}' is at version "
-            f"{gold.header.version}; this queue was made from version {made_from}. "
-            "Each answer is scored against the current labels."
+            f"Gold set '{slug}' is at version {gold.header.version}; this queue "
+            f"was made from version {made_from}. Each answer is scored against "
+            "the current labels."
+        )
+    elif made_from_hash is not None and made_from_hash != gold.file_hash:
+        warnings.append(
+            f"Gold set '{slug}' changed since this queue was made, though its "
+            f"version is still {gold.header.version}. Each answer is scored "
+            "against the current labels."
+        )
+    if not gold.content_hash_matches:
+        warnings.append(
+            f"gold.jsonl of gold set '{slug}' does not match its header: it was "
+            "edited outside MoLabel, or a write stopped partway. Version "
+            f"{gold.header.version} describes the previous file."
         )
     if len(in_queue) < len(queued):
         warnings.append(

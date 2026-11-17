@@ -40,6 +40,7 @@ class CalibrationItems:
     gold_set: str
     version: int
     content_hash: str
+    """The hash of the items file read, which the header may not describe."""
     task_schema: str
     record_ids: list[str]
     unresolved: list[str]

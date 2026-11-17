@@ -244,6 +244,41 @@ async def test_the_report_warns_when_gold_moved_on_since_the_queue(
 
 
 @pytest.mark.asyncio
+async def test_the_report_warns_when_expected_labels_were_edited_by_hand(
+    client, app, tmp_path
+):
+    _, tokens, _, queue = await _gold_and_calibration_queue(client, app, tmp_path)
+    path = tmp_path / "gold" / GOLD / "gold.jsonl"
+    lines = path.read_text("utf-8").splitlines()
+    edited = json.loads(lines[0])
+    edited["expected"] = {"sentiment": "neutral"}
+    path.write_text("\n".join([json.dumps(edited), *lines[1:]]) + "\n", "utf-8")
+
+    body = (
+        await client.get(
+            f"/api/v1/calibration/queues/{queue['queue_id']}", headers=_as(tokens[0])
+        )
+    ).json()
+
+    assert body["gold_version"] == body["queue_gold_version"] == 2
+    assert any("changed since this queue was made" in w for w in body["warnings"])
+    assert any("does not match its header" in w for w in body["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_an_unchanged_gold_set_gives_no_warning(client, app, tmp_path):
+    _, tokens, _, queue = await _gold_and_calibration_queue(client, app, tmp_path)
+
+    body = (
+        await client.get(
+            f"/api/v1/calibration/queues/{queue['queue_id']}", headers=_as(tokens[0])
+        )
+    ).json()
+
+    assert body["warnings"] == []
+
+
+@pytest.mark.asyncio
 async def test_a_calibration_queue_never_feeds_gold(client, app, tmp_path):
     _, tokens, _, queue = await _gold_and_calibration_queue(client, app, tmp_path)
 
