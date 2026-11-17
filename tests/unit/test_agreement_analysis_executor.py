@@ -124,10 +124,10 @@ def test_executor_uses_metrics_service_and_writes_flat_metrics() -> None:
     assert data_source.calls[0]["record_ids"] == ["r1", "r2", "r3"]
     assert data_source.calls[0]["analysis_type"] == "both"
 
-    assert ctx.metrics["agreement.kappa"] == pytest.approx(1 / 3)
+    assert ctx.metrics["agreement.kappa"] == pytest.approx(2 / 5)
     assert ctx.metrics["agreement.percent_agreement"] == pytest.approx(2 / 3)
     assert ctx.metrics["agreement.fleiss_kappa"] == pytest.approx(1 / 3)
-    assert ctx.metrics["agreement.krippendorff_alpha"] == pytest.approx(1 / 3)
+    assert ctx.metrics["agreement.krippendorff_alpha"] == pytest.approx(4 / 9)
     assert ctx.metrics["agreement.human_agent_agreement"] == pytest.approx(2 / 3)
     assert ctx.metrics["agreement.human_agent.by_field.sentiment.agreement_rate"] == (
         pytest.approx(2 / 3)
@@ -137,10 +137,41 @@ def test_executor_uses_metrics_service_and_writes_flat_metrics() -> None:
     ] == pytest.approx(1 / 2)
 
     assert result.output is not None
-    assert result.output.summary["overall"]["cohen_kappa"] == pytest.approx(1 / 3)
+    assert result.output.summary["overall"]["cohen_kappa"] == pytest.approx(2 / 5)
     assert result.output.summary["human_agent_by_field"]["sentiment"][
         "agreement_rate"
     ] == pytest.approx(2 / 3)
+
+
+def test_executor_leaves_undefined_metrics_out_of_context() -> None:
+    executor = AgreementAnalysisExecutor()
+    ctx = _context()
+    ctx.metrics["agreement.kappa"] = 0.9
+    single_label_records = [
+        {
+            "record_id": record_id,
+            "annotations": [
+                {"source": "human", "labels": {"sentiment": "positive"}},
+                {"source": "agent", "labels": {"sentiment": "positive"}},
+            ],
+        }
+        for record_id in ("r1", "r2", "r3")
+    ]
+
+    result = executor.execute(
+        "agreement",
+        {"analysis_type": "both", "agreement_records": single_label_records},
+        ctx,
+    )
+
+    assert result.success
+    assert ctx.metrics["agreement.percent_agreement"] == pytest.approx(1.0)
+    assert "agreement.kappa" not in ctx.metrics
+    assert "agreement.fleiss_kappa" not in ctx.metrics
+    assert "agreement.krippendorff_alpha" not in ctx.metrics
+    assert result.output is not None
+    assert result.output.summary["kappa"] is None
+    assert "cohen_kappa" in result.output.summary["overall"]["null_reasons"]
 
 
 def test_validate_rejects_invalid_analysis_type() -> None:
@@ -170,7 +201,7 @@ def test_executor_human_agent_ignores_human_human_pairs() -> None:
     assert result.success
     assert len(data_source.calls) == 1
     assert ctx.metrics["agreement.percent_agreement"] == pytest.approx(0.0)
-    assert ctx.metrics["agreement.kappa"] == pytest.approx(-1.0)
+    assert ctx.metrics["agreement.kappa"] == pytest.approx(0.0)
     assert result.output is not None
     assert result.output.summary["overall"]["comparisons"] == 2
     assert result.output.summary["overall"]["percent_agreement"] == pytest.approx(0.0)

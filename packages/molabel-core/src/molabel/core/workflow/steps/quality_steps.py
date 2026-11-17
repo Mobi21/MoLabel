@@ -142,8 +142,10 @@ class QualityCheckExecutor(StepExecutor):
 class AgreementAnalysisExecutor(StepExecutor):
     """Executor for agreement_analysis steps (WF-016).
 
-    Computes inter-annotator or human-agent agreement statistics:
-    Cohen's kappa, Fleiss' kappa, per-field agreement, confusion matrices.
+    Computes inter-annotator or human-agent agreement statistics: percent
+    agreement, Cohen's kappa, Fleiss' kappa, Krippendorff's alpha, per-field
+    agreement and confusion matrices. A metric the data leave undefined is
+    removed from context.metrics rather than written as a number.
     """
 
     def validate(
@@ -193,18 +195,22 @@ class AgreementAnalysisExecutor(StepExecutor):
                 error_trace=str(e)[:2000],
             )
 
-        context.metrics["agreement.kappa"] = analysis_result.overall.cohen_kappa
-        context.metrics["agreement.percent_agreement"] = (
-            analysis_result.overall.percent_agreement
-        )
-        context.metrics["agreement.fleiss_kappa"] = analysis_result.overall.fleiss_kappa
-        context.metrics["agreement.krippendorff_alpha"] = (
-            analysis_result.overall.krippendorff_alpha
-        )
+        overall = analysis_result.overall
+        flat_metrics = {
+            "agreement.kappa": overall.cohen_kappa,
+            "agreement.percent_agreement": overall.percent_agreement,
+            "agreement.fleiss_kappa": overall.fleiss_kappa,
+            "agreement.krippendorff_alpha": overall.krippendorff_alpha,
+        }
         if analysis_result.human_agent is not None:
-            context.metrics["agreement.human_agent_agreement"] = (
+            flat_metrics["agreement.human_agent_agreement"] = (
                 analysis_result.human_agent.percent_agreement
             )
+        for key, value in flat_metrics.items():
+            if value is None:
+                context.metrics.pop(key, None)
+            else:
+                context.metrics[key] = value
 
         for field_name, breakdown in analysis_result.human_agent_by_field.items():
             metric_prefix = f"agreement.human_agent.by_field.{_metric_key(field_name)}"
@@ -241,7 +247,7 @@ class AgreementAnalysisExecutor(StepExecutor):
                     "human_agent_agreement": (
                         analysis_result.human_agent.percent_agreement
                         if analysis_result.human_agent is not None
-                        else 0.0
+                        else None
                     ),
                     "overall": analysis_result.overall.model_dump(),
                     "human_agent": (
@@ -417,18 +423,16 @@ def _normalize_agreement_result(
                 "overall": {
                     "comparisons": int(result.get("comparisons", 0)),
                     "agreements": int(result.get("agreements", 0)),
-                    "percent_agreement": float(result.get("percent_agreement", 0.0)),
-                    "cohen_kappa": float(result.get("kappa", 0.0)),
-                    "fleiss_kappa": float(result.get("fleiss_kappa", 0.0)),
-                    "krippendorff_alpha": float(result.get("krippendorff_alpha", 0.0)),
+                    "percent_agreement": result.get("percent_agreement"),
+                    "cohen_kappa": result.get("kappa"),
+                    "fleiss_kappa": result.get("fleiss_kappa"),
+                    "krippendorff_alpha": result.get("krippendorff_alpha"),
                 },
                 "human_agent": (
                     {
                         "comparisons": int(result.get("human_agent_comparisons", 0)),
                         "agreements": int(result.get("human_agent_agreements", 0)),
-                        "percent_agreement": float(
-                            result.get("human_agent_agreement", 0.0)
-                        ),
+                        "percent_agreement": result.get("human_agent_agreement"),
                     }
                     if "human_agent_agreement" in result
                     else None

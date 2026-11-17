@@ -151,7 +151,8 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 **`agreement_analysis`**
 
 - Inputs: reads `record_sets[active_record_set_id]`; reads `review_queue_ids` to find review events; reads `agent_run_ids` to find agent outputs; reads `config.analysis_type` (inter_annotator, human_agent, or both)
-- Outputs: writes `step_outputs[step_id]` with detailed agreement report (Cohen's kappa, Fleiss' kappa, per-field agreement, confusion matrices); writes `metrics["agreement.kappa"]`, `metrics["agreement.percent_agreement"]`, `metrics["agreement.human_agent_agreement"]`
+- Outputs: writes `step_outputs[step_id]` with the agreement report (percent agreement, Cohen's kappa, Fleiss' kappa, Krippendorff's alpha, `null_reasons`, per-field human-agent agreement, confusion matrix); writes `metrics["agreement.kappa"]` (Cohen's kappa), `metrics["agreement.percent_agreement"]`, `metrics["agreement.fleiss_kappa"]`, `metrics["agreement.krippendorff_alpha"]` and `metrics["agreement.human_agent_agreement"]`
+- Null metrics: a metric the data leave undefined is null in the report and removed from `metrics`. [Agreement metrics](../guides/agreement-metrics.md) gives each formula and the cases that make it null
 - Side effects: stores agreement report as a derived artifact; writes audit entry
 
 **`drift_detection`**
