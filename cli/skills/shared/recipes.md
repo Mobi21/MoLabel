@@ -18,6 +18,11 @@
 - List a queue's disagreements: `molabel adjudication list <queue-id> --json`
 - Show one with every reviewer's labels: `molabel adjudication show <queue-id> <record-id> --json`
 - Resolve it on the review events `show` printed: `molabel adjudication resolve <queue-id> <record-id> --review-event-ids <id>,<id> --resolved-labels-file labels.json --json`
+- Create a gold set for a task schema: `molabel gold create <slug> --task-schema <task-schema-id> --json`
+- Promote a queue's adjudicated and agreed records: `molabel gold promote <slug> --queue <queue-id> --json`
+- Append the records the model got wrong: `molabel gold append <slug> --execution <execution-id> --json`
+- Show a gold set's version, newest items and conflicts: `molabel gold show <slug> --json`
+- Export a gold set's lines: `molabel gold export <slug> --raw`
 - Show quality dashboard: `molabel quality dashboard --json`
 - Create an export: `molabel export create --file export.json --json`
 - Create a release: `molabel release create --file release.json --json`

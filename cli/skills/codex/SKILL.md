@@ -27,6 +27,7 @@ Use this skill when Codex is operating a MoLabel workspace through the public CL
 5. Use `molabel dataset ...`, `molabel task-schema ...`, and `molabel prompt ...` to prepare the project.
 6. Use `molabel workflow ...` and `molabel agent-run ...` to execute agent work.
 7. Use `molabel queue ...`, `molabel review ...`, and `molabel adjudication ...` for human-in-review and disagreement handling.
+   Use `molabel gold ...` to promote reviewed records and append model failures into a gold set.
 8. Use `molabel quality ...`, `molabel export ...`, and `molabel release ...` to finish the governed delivery flow.
 9. Use `molabel artifact ...` only when working with canonical files directly.
 

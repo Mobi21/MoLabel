@@ -23,6 +23,7 @@ The intended operating model is:
 - `queue`: review queue inspection, claiming, and closing unclaimed copies
 - `review`: submit, draft, reveal, release, and correction flows
 - `adjudication`: list, show, and resolve the disagreements of a review queue
+- `gold`: create gold sets, promote reviewed records, append failures, dedupe, and export
 - `agent-run`: agent-run lifecycle and comparison
 - `quality`: quality dashboard, agreement, drift
 - `export`: export creation and validation
@@ -115,6 +116,35 @@ resolution vanished on restart and never reached export or the GUI. `list`
 replaces `detect`, `build`, and `queue`, because the backend now finds a
 queue's disagreements from its stored reviews. `resolve` takes a queue and a
 record instead of a queue item ID.
+
+## Gold sets
+
+A gold set is `gold/<slug>/gold.yaml` and `gold/<slug>/gold.jsonl` in the
+workspace, for you to commit. MoLabel writes the files and never runs git.
+`docs/architecture/gold-sets.md` gives the item shape and the rules.
+
+```bash
+molabel gold create ticket-gold --task-schema ticket-triage
+molabel gold promote ticket-gold --queue <queue-id>
+molabel gold append ticket-gold --execution <execution-id>
+molabel gold show ticket-gold
+molabel gold dedupe ticket-gold
+molabel gold export ticket-gold --raw > ticket-gold.jsonl
+molabel gold export ticket-gold --out exports/ticket-gold.jsonl
+```
+
+`promote` takes the records an adjudication resolved with labels and the
+records whose counted reviewers gave identical labels. With
+`--allow-single-reviewer` it also takes a record one reviewer labelled, and
+marks it `single_reviewer`. `--record <id>` limits it to records of
+`--queue`. `append` takes only the records whose human label contradicts the
+agent proposal. Both report `added`, `duplicates`, `conflicts` and `skipped`,
+and say why each skipped record was left out. A second run adds nothing and
+writes nothing. Other labels for an input the set holds are a conflict,
+which is reported and never overwrites the item. `export` prints the JSONL
+inside its JSON result, prints the lines alone with `--raw`, or writes them
+to a workspace path with `--out`. A set of another workspace fails with
+`HTTP_404`.
 
 ## Labeling without an API key
 

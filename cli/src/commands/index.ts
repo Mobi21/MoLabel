@@ -10,6 +10,7 @@ import { registerCodebookCommands } from './codebook.js'
 import { registerCoreCommands } from './core.js'
 import { registerDatasetCommands } from './dataset.js'
 import { registerExportCommands } from './export.js'
+import { registerGoldCommands } from './gold.js'
 import { registerModelProfileCommands } from './model-profile.js'
 import { registerPromptCommands } from './prompt.js'
 import { registerProviderCommands } from './provider.js'
@@ -43,6 +44,7 @@ export function registerCommands(
   registerQueueCommands(program, runtime)
   registerReviewCommands(program, runtime)
   registerAdjudicationCommands(program, runtime)
+  registerGoldCommands(program, runtime)
   registerAgentRunCommands(program, runtime)
   registerQualityCommands(program, runtime)
   registerExportCommands(program, runtime)

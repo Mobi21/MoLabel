@@ -455,6 +455,81 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       ],
     },
     {
+      name: 'gold list',
+      group: 'gold',
+      description: "List the gold sets of the session's workspace",
+    },
+    {
+      name: 'gold create',
+      group: 'gold',
+      description:
+        'Create an empty gold set for a task schema as gold/<slug>/gold.yaml and gold.jsonl, at version 1',
+      flags: [
+        { name: '--task-schema', description: "The task schema's id or slug" },
+        { name: '--name', description: 'A display name' },
+      ],
+    },
+    {
+      name: 'gold show',
+      group: 'gold',
+      description:
+        'Show a gold set: version, item count, newest items, duplicates and conflicts',
+    },
+    {
+      name: 'gold promote',
+      group: 'gold',
+      description:
+        'Promote the adjudicated and agreed records of a queue or workflow execution; a second promotion changes nothing, and other labels for a promoted input are a reported conflict',
+      flags: [
+        { name: '--queue', description: 'A review queue' },
+        {
+          name: '--execution',
+          description: 'A workflow execution; every review queue it made',
+        },
+        { name: '--record', description: 'Only this record of --queue' },
+        {
+          name: '--allow-single-reviewer',
+          description:
+            'Also take a record one reviewer labelled, marked single_reviewer',
+        },
+      ],
+    },
+    {
+      name: 'gold append',
+      group: 'gold',
+      description:
+        'Append the reviewed records whose human label contradicts the agent proposal, deduped against the set',
+      flags: [
+        { name: '--queue', description: 'A review queue' },
+        {
+          name: '--execution',
+          description: 'A workflow execution; every review queue it made',
+        },
+        {
+          name: '--allow-single-reviewer',
+          description:
+            'Also take a record one reviewer labelled, marked single_reviewer',
+        },
+      ],
+    },
+    {
+      name: 'gold dedupe',
+      group: 'gold',
+      description:
+        'Remove exact repeats from a gold set and report the conflicts left for a person',
+    },
+    {
+      name: 'gold export',
+      group: 'gold',
+      description:
+        'Export a gold set as JSONL: in the JSON result, as plain lines with --raw, or to a workspace path',
+      flags: [
+        { name: '--format', description: 'jsonl' },
+        { name: '--out', description: 'Write to this path in the workspace' },
+        { name: '--overwrite', description: 'Replace the file at --out' },
+      ],
+    },
+    {
       name: 'agent-run list',
       group: 'agent-run',
       description: 'List agent runs',
