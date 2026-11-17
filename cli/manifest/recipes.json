@@ -8,6 +8,20 @@
     {
       "name": "Inspect workflow templates",
       "steps": ["molabel workflow templates --json"]
+    },
+    {
+      "name": "Adjudicate two reviewers",
+      "steps": [
+        "molabel reviewer create --display-name \"Reviewer 2\" --json",
+        "molabel workflow create --file workflow.yaml --json",
+        "molabel workflow run <selector> --json",
+        "molabel queue claim <queue-id> --json",
+        "molabel review submit <task-id> --decision accept --json",
+        "molabel session switch <reviewer-id> --json",
+        "molabel adjudication list <queue-id> --json",
+        "molabel adjudication show <queue-id> <record-id> --json",
+        "molabel adjudication resolve <queue-id> <record-id> --review-event-ids <id>,<id> --resolved-labels-file labels.json --json"
+      ]
     }
   ]
 }

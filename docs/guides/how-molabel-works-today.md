@@ -283,7 +283,8 @@ a model comparison. When every compared model ran on the offline provider, the
 `agent_compare` step's summary sets `offline_smoke_run: true` and its result's
 `warnings` say so.
 `cli/README.md` describes the heuristic, and `scripts/smoke_no_key.py` runs
-import, offline pre-label, review, and export with no key in CI.
+import, offline pre-label, review, export, and a two-reviewer adjudication
+with no key in CI.
 
 ### 6.4 Human Review
 

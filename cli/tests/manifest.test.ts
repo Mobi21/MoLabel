@@ -9,6 +9,7 @@ describe('manifests', () => {
       (command) => command.name,
     )
     expect(commandNames).toContain('doctor')
+    expect(commandNames).toContain('reviewer create')
     expect(commandNames).toContain('benchmark facts')
     expect(commandNames).toContain('benchmark inspect')
     expect(commandNames).toContain('provider list')

@@ -4,6 +4,10 @@ It then creates the agent_comparison template, which leaves a model unset,
 once with no model and once on the offline provider. It runs the offline one
 to review and checks that it is marked an offline smoke run.
 
+Last, it adjudicates two reviewers through the CLI alone. It creates a second
+reviewer, runs a workflow whose review gives each record two copies, has the
+reviewers disagree on one record, and resolves that disagreement.
+
 Starts the real backend with uvicorn on a temporary data directory, with
 every provider key unset, and drives the built CLI (cli/dist/bin/molabel.js)
 through the whole flow. Prints each command and its exit code, and exits 1 on
@@ -56,6 +60,8 @@ EDITS = {
     "ticket-4": {"intent": "other", "urgent": False},
     "ticket-6": {"intent": "shipping", "urgent": False},
 }
+SECOND_REVIEWER_EDITS = {"ticket-4": {"intent": "other", "urgent": False}}
+RESOLVED = {"intent": "refund", "urgent": False}
 
 
 class SmokeFailure(Exception):
@@ -153,7 +159,7 @@ class Cli:
             ) from exc
 
 
-def run_flow(molabel: Cli, workspace: Path) -> Path:
+def run_flow(molabel: Cli, workspace: Path) -> tuple[Path, str, str]:
     doctor = molabel("doctor")
     provider_types = {item["provider_type"] for item in doctor["providers"]}
     check("offline" in provider_types, "doctor lists the offline provider")
@@ -308,7 +314,7 @@ def run_flow(molabel: Cli, workspace: Path) -> Path:
     check(len(rows) == 6, "export holds 6 records")
     exported = {row["external_id"]: row["labels"] for row in rows}
     check(exported == reviewed, "export holds the reviewed labels, edits included")
-    return export_path
+    return export_path, dataset_id, schema_id
 
 
 def run_comparison(molabel: Cli) -> None:
@@ -354,6 +360,149 @@ def run_comparison(molabel: Cli) -> None:
     )
 
 
+def review_queue(molabel: Cli, queue_id: str, edits: dict[str, Any]) -> list[str]:
+    reviewed = []
+    while not (claim := molabel("queue", "claim", queue_id))["queue_empty"]:
+        task = claim["task"]
+        external_id = task["record_external_id"]
+        decision = (
+            ["--decision", "edit", "--labels-json", json.dumps(edits[external_id])]
+            if external_id in edits
+            else ["--decision", "accept"]
+        )
+        submitted = molabel(
+            "review", "submit", task["id"], *decision, "--no-auto-claim-next"
+        )
+        check(
+            submitted["submitted_task"]["status"] == "submitted",
+            f"{external_id}: review stored",
+        )
+        reviewed.append(external_id)
+    return sorted(reviewed)
+
+
+def run_adjudication(
+    molabel: Cli, workspace: Path, dataset_id: str, schema_id: str
+) -> None:
+    first = molabel("session", "whoami")["reviewer_id"]
+    second = molabel("reviewer", "create", "--display-name", "Reviewer 2")
+    check(
+        second["display_name"] == "Reviewer 2" and second["id"] != first,
+        "reviewer create added a second reviewer",
+    )
+
+    definition = workspace / "two-reviewers.json"
+    definition.write_text(
+        json.dumps(
+            {
+                "name": "Two-reviewer triage",
+                "steps": [
+                    {
+                        "id": "ingest",
+                        "type": "data_ingest",
+                        "config": {"dataset_id": dataset_id},
+                    },
+                    {
+                        "id": "agent_label",
+                        "type": "agent_run",
+                        "config": {
+                            "provider_type": "offline",
+                            "model": "offline-heuristic",
+                            "prompt_ref": "prompts/default.yaml",
+                            "task_schema_id": schema_id,
+                        },
+                    },
+                    {
+                        "id": "review",
+                        "type": "human_review",
+                        "config": {"overlap_count": 2, "breakpoint": True},
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    workflow = molabel("workflow", "create", "--file", definition.name)
+    execution = molabel("workflow", "run", workflow["workflow_slug"])
+    check(
+        execution["status"] == "paused" and execution["current_step_id"] == "review",
+        "the two-reviewer workflow runs to review",
+    )
+    queue_ids = molabel(
+        "workflow", "execution", workflow["workflow_slug"], execution["execution_id"]
+    )["context"]["review_queue_ids"]
+    check(len(queue_ids) == 1, "the review step made one queue")
+    queue_id = queue_ids[0]
+    queue = next(
+        q for q in molabel("queue", "list")["items"] if q["queue_id"] == queue_id
+    )
+    check(queue["total"] == 12, "overlap_count: 2 gives each of 6 records 2 copies")
+
+    check(
+        review_queue(molabel, queue_id, {}) == sorted(OFFLINE_PROPOSALS),
+        "the first reviewer reviewed one copy of every record",
+    )
+    molabel("session", "switch", second["id"])
+    check(
+        molabel("session", "whoami")["reviewer_id"] == second["id"],
+        "session switch acts as the second reviewer",
+    )
+    check(
+        review_queue(molabel, queue_id, SECOND_REVIEWER_EDITS)
+        == sorted(OFFLINE_PROPOSALS),
+        "the second reviewer reviewed the other copy of every record",
+    )
+
+    disagreements = molabel("adjudication", "list", queue_id)
+    check(
+        [
+            (d["record_external_id"], d["fields_in_conflict"])
+            for d in disagreements["items"]
+        ]
+        == [("ticket-4", ["intent"])],
+        "the reviewers disagree on ticket-4's intent alone",
+    )
+    record_id = disagreements["items"][0]["record_id"]
+    detail = molabel("adjudication", "show", queue_id, record_id)
+    labels = {
+        entry["reviewer_id"]: entry["labels"] for entry in detail["reviewer_labels"]
+    }
+    check(
+        labels
+        == {
+            first: OFFLINE_PROPOSALS["ticket-4"],
+            second["id"]: SECOND_REVIEWER_EDITS["ticket-4"],
+        },
+        "show prints each reviewer's labels",
+    )
+    event_ids = ",".join(
+        entry["review_event_id"] for entry in detail["reviewer_labels"]
+    )
+    molabel(
+        "adjudication",
+        "resolve",
+        queue_id,
+        record_id,
+        "--review-event-ids",
+        event_ids,
+        "--resolved-labels-json",
+        json.dumps(RESOLVED),
+        "--rationale",
+        "The ticket asks for money back.",
+    )
+
+    after = molabel("adjudication", "list", queue_id)
+    check(
+        after["unresolved"] == 0 and after["items"][0]["status"] == "resolved",
+        "a fresh adjudication list shows the disagreement resolved",
+    )
+    stored = molabel("adjudication", "show", queue_id, record_id)["resolution"]
+    check(
+        stored["resolution"] == "resolve" and stored["resolved_labels"] == RESOLVED,
+        "a fresh adjudication show reads the stored resolution and its labels",
+    )
+
+
 def main() -> int:
     if not CLI.is_file():
         print(f"FAIL: {CLI} is missing. Run `npm ci && npm run build` in cli/.")
@@ -390,8 +539,9 @@ def main() -> int:
                 keyless_env(MOLABEL_BASE_URL=base_url, XDG_CONFIG_HOME=str(config)),
                 cwd=workspace,
             )
-            export_path = run_flow(molabel, workspace)
+            export_path, dataset_id, schema_id = run_flow(molabel, workspace)
             run_comparison(molabel)
+            run_adjudication(molabel, workspace, dataset_id, schema_id)
             check(
                 export_path.resolve().is_relative_to(workspace.resolve()),
                 "the export stays inside the workspace",
