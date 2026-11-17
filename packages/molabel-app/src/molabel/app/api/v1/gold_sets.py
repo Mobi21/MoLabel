@@ -1,7 +1,8 @@
 """Gold sets -- /api/v1/gold-sets.
 
 A gold set is ``gold/<slug>/gold.yaml`` and ``gold.jsonl`` in the session's
-workspace, listed in the manifest (``docs/architecture/gold-sets.md``). Every
+workspace, listed in the manifest, with its open conflicts in
+``conflicts.jsonl`` beside them (``docs/architecture/gold-sets.md``). Every
 endpoint reads only the session's workspace: a set, queue or workflow
 execution of another workspace answers 404. The CLI's ``molabel gold``
 commands and the GUI use these endpoints.
@@ -33,6 +34,7 @@ from molabel.core.gold.model import (
     GoldConflict,
     GoldItem,
     GoldItemRef,
+    GoldOpenConflict,
     GoldSetHeader,
     GoldSetSource,
     StaleLine,
@@ -55,6 +57,11 @@ ITEMS_CONSISTENT = (
     "content_hash its content does not give, as a hand edit to input or "
     "expected leaves it. MoLabel reads the content; the next promotion or "
     "append renders those lines afresh"
+)
+OPEN_CONFLICTS = (
+    "The conflicts in conflicts.jsonl that gold.jsonl has not settled, oldest "
+    "first: other labels for an input the set holds, which a promotion or "
+    "append found and did not add"
 )
 
 
@@ -114,21 +121,28 @@ class GoldSetDetail(GoldSetSummary):
         description="Exact repeats, which gold dedupe removes"
     )
     conflicts: list[GoldConflict] = Field(
-        description="Items with one input and different labels, left for a person"
+        description="Items of gold.jsonl with one input and different labels"
     )
+    open_conflicts: list[GoldOpenConflict] = Field(description=OPEN_CONFLICTS)
+
+
+def _stored_summary(stored: StoredGoldSet) -> GoldSetSummary:
+    gold = stored.gold
+    return _summary(stored.definition_path, gold.header, gold.file_hash)
 
 
 def _detail(stored: StoredGoldSet) -> GoldSetDetail:
     gold = stored.gold
     found = dedupe(gold.items)
     return GoldSetDetail(
-        **_summary(stored.definition_path, gold.header, gold.file_hash).model_dump(),
+        **_stored_summary(stored).model_dump(),
         sources=gold.header.sources,
         items_consistent=gold.items_consistent,
         stale_items=_stale_items(gold.stale),
         recent_additions=list(reversed(gold.items[-RECENT_ADDITIONS:])),
         duplicates=list(found.removed),
         conflicts=list(found.conflicts),
+        open_conflicts=list(stored.open_conflicts),
     )
 
 
@@ -174,7 +188,9 @@ class GoldWriteReport(BaseModel):
     """What a promotion or append added, and what it left out and why."""
 
     gold_set: GoldSetSummary
-    written: bool = Field(description="False when the files did not change")
+    written: bool = Field(
+        description="False when gold.jsonl and gold.yaml did not change"
+    )
     counts: GoldWriteCounts
     corrected: list[GoldStaleItem] = Field(
         description="Stale lines the write rendered afresh with the id and hashes "
@@ -182,8 +198,11 @@ class GoldWriteReport(BaseModel):
     )
     added: list[GoldItem]
     duplicates: list[GoldItemRef]
-    conflicts: list[GoldConflict]
+    conflicts: list[GoldConflict] = Field(
+        description="This write's candidates with other labels than gold holds"
+    )
     skipped: list[Skipped]
+    open_conflicts: list[GoldOpenConflict] = Field(description=OPEN_CONFLICTS)
 
 
 class GoldDedupeReport(BaseModel):
@@ -191,6 +210,7 @@ class GoldDedupeReport(BaseModel):
     written: bool
     removed: list[GoldItemRef]
     conflicts: list[GoldConflict]
+    open_conflicts: list[GoldOpenConflict] = Field(description=OPEN_CONFLICTS)
 
 
 class GoldExportRequest(BaseModel):
@@ -280,9 +300,7 @@ def _write_report(request, gold_set_id, body, reviewer, *, failures_only):
         failures_only=failures_only,
     )
     return GoldWriteReport(
-        gold_set=_summary(
-            write.definition_path, write.gold.header, write.gold.file_hash
-        ),
+        gold_set=_stored_summary(write.stored),
         written=write.written,
         counts=GoldWriteCounts(
             added=len(write.added),
@@ -296,6 +314,7 @@ def _write_report(request, gold_set_id, body, reviewer, *, failures_only):
         duplicates=list(write.duplicates),
         conflicts=list(write.conflicts),
         skipped=list(write.skipped),
+        open_conflicts=list(write.stored.open_conflicts),
     )
 
 
@@ -340,12 +359,11 @@ async def dedupe_gold_set_endpoint(
     """Remove exact repeats, keeping the first, and report the conflicts left."""
     result = dedupe_gold_set(get_engine(request), reviewer.workspace_id, gold_set_id)
     return GoldDedupeReport(
-        gold_set=_summary(
-            result.definition_path, result.gold.header, result.gold.file_hash
-        ),
+        gold_set=_stored_summary(result.stored),
         written=result.written,
         removed=list(result.removed),
         conflicts=list(result.conflicts),
+        open_conflicts=list(result.stored.open_conflicts),
     )
 
 

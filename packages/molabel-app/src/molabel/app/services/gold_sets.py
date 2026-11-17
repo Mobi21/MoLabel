@@ -9,6 +9,7 @@ evidence ``reviewed_records`` reads from the review database.
 
 from __future__ import annotations
 
+import posixpath
 import uuid
 from collections import defaultdict
 from collections.abc import Sequence
@@ -40,14 +41,17 @@ from molabel.core.agents.queue_binding import deserialize_agent_output_ids
 from molabel.core.database import hyphenated_id
 from molabel.core.gold.calibration import CalibrationItems
 from molabel.core.gold.model import (
+    CONFLICTS_FILENAME,
     GOLD_DIRECTORY,
     HEADER_FILENAME,
     ITEMS_FILENAME,
     GoldConflict,
+    GoldConflictLog,
     GoldFileError,
     GoldInputRef,
     GoldItem,
     GoldItemRef,
+    GoldOpenConflict,
     GoldSet,
     GoldSetHeader,
     GoldSetSource,
@@ -105,12 +109,17 @@ def _read_header(folder: WorkspaceFolder, entry: GoldSetManifestEntry) -> GoldSe
         raise _invalid(entry, f"its header does not parse: {exc}") from exc
 
 
+def _beside_header(definition_path: str, filename: str) -> str:
+    return posixpath.join(posixpath.dirname(definition_path), filename)
+
+
+def _set_file(folder: WorkspaceFolder, definition_path: str, filename: str) -> bytes:
+    path = resolve_in_workspace(folder.path, _beside_header(definition_path, filename))
+    return path.read_bytes() if path.is_file() else b""
+
+
 def _items_data(folder: WorkspaceFolder, entry: GoldSetManifestEntry) -> bytes:
-    header_path = resolve_in_workspace(folder.path, entry.definition_path)
-    items_path = resolve_in_workspace(
-        folder.path, f"{header_path.parent.as_posix()}/{ITEMS_FILENAME}"
-    )
-    return items_path.read_bytes() if items_path.is_file() else b""
+    return _set_file(folder, entry.definition_path, ITEMS_FILENAME)
 
 
 def list_gold_sets(
@@ -133,6 +142,12 @@ class StoredGoldSet:
 
     gold: GoldSet
     definition_path: str
+    conflicts: GoldConflictLog = GoldConflictLog(lines=(), data=b"")
+    """``conflicts.jsonl`` beside the header, empty when there is none."""
+
+    @property
+    def open_conflicts(self) -> tuple[GoldOpenConflict, ...]:
+        return self.conflicts.open(self.gold.items)
 
 
 def read_gold_set(folder: WorkspaceFolder, slug: str) -> StoredGoldSet:
@@ -150,15 +165,39 @@ def read_gold_set(folder: WorkspaceFolder, slug: str) -> StoredGoldSet:
         gold = GoldSet.read(header, _items_data(folder, entry))
     except GoldFileError as exc:
         raise _invalid(entry, f"{ITEMS_FILENAME} {exc}", line=exc.line) from exc
-    return StoredGoldSet(gold=gold, definition_path=entry.definition_path)
+    try:
+        conflicts = GoldConflictLog.read(
+            _set_file(folder, entry.definition_path, CONFLICTS_FILENAME)
+        )
+    except GoldFileError as exc:
+        raise _invalid(entry, f"{CONFLICTS_FILENAME} {exc}", line=exc.line) from exc
+    return StoredGoldSet(
+        gold=gold, definition_path=entry.definition_path, conflicts=conflicts
+    )
 
 
-def _write(files: WorkspaceFiles, stored: StoredGoldSet, gold: GoldSet) -> str:
-    return files.write_gold_set(
-        gold.header.gold_set_id,
-        header=gold.header.model_dump(mode="json"),
-        items=gold.data,
+def _write(
+    files: WorkspaceFiles,
+    stored: StoredGoldSet,
+    gold: GoldSet | None,
+    conflicts: GoldConflictLog,
+) -> StoredGoldSet:
+    """Write the files that changed: the gold set, then its conflict log."""
+    if gold is not None:
+        files.write_gold_set(
+            gold.header.gold_set_id,
+            header=gold.header.model_dump(mode="json"),
+            items=gold.data,
+            definition_path=stored.definition_path,
+        )
+    if file_hash(conflicts.data) != file_hash(stored.conflicts.data):
+        files.write_file(
+            _beside_header(stored.definition_path, CONFLICTS_FILENAME), conflicts.data
+        )
+    return StoredGoldSet(
+        gold=gold or stored.gold,
         definition_path=stored.definition_path,
+        conflicts=conflicts,
     )
 
 
@@ -451,8 +490,7 @@ def reviewed_records(
 class GoldWrite:
     """A set after a promotion, and what happened to each record."""
 
-    definition_path: str
-    gold: GoldSet
+    stored: StoredGoldSet
     written: bool
     corrected: tuple[StaleLine, ...]
     """The stale lines the write rendered afresh."""
@@ -512,11 +550,12 @@ def promote_to_gold(
             now=promoted_at,
             sources=[sources[q] for q in sources if q in contributing],
         )
-        if revised is not None:
-            _write(files, stored, revised)
+        conflicts = stored.conflicts.recorded(
+            merged.items, merged.conflicts, now=promoted_at
+        )
+        after = _write(files, stored, revised, conflicts)
     return GoldWrite(
-        definition_path=stored.definition_path,
-        gold=revised or gold,
+        stored=after,
         written=revised is not None,
         corrected=gold.stale if revised is not None else (),
         added=merged.added,
@@ -557,8 +596,7 @@ def _check_source(conn: Any, source: QueueSource, gold: GoldSet) -> None:
 
 @dataclass(frozen=True)
 class GoldDedupe:
-    definition_path: str
-    gold: GoldSet
+    stored: StoredGoldSet
     written: bool
     removed: tuple[GoldItemRef, ...]
     conflicts: tuple[GoldConflict, ...]
@@ -570,14 +608,14 @@ def dedupe_gold_set(engine: Any, workspace_id: uuid.UUID, slug: str) -> GoldDedu
     with workspace_files(folder) as files:
         stored = read_gold_set(folder, slug)
         deduped = dedupe(stored.gold.items)
+        now = _now()
         revised = (
-            stored.gold.revised(deduped.items, now=_now()) if deduped.removed else None
+            stored.gold.revised(deduped.items, now=now) if deduped.removed else None
         )
-        if revised is not None:
-            _write(files, stored, revised)
+        conflicts = stored.conflicts.recorded(deduped.items, (), now=now)
+        after = _write(files, stored, revised, conflicts)
     return GoldDedupe(
-        definition_path=stored.definition_path,
-        gold=revised or stored.gold,
+        stored=after,
         written=revised is not None,
         removed=deduped.removed,
         conflicts=deduped.conflicts,
