@@ -102,7 +102,7 @@ jobs:
         working-directory: cli
         run: npm ci && npm run build
 
-      - name: Import, offline pre-label, review, and export with no API key
+      - name: Import, offline pre-label, review, export, and adjudicate two reviewers with no API key
         run: uv run python scripts/smoke_no_key.py
 
   e2e-gui:

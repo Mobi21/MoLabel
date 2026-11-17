@@ -58,3 +58,6 @@ cli/dist/
 
 # OS
 .DS_Store
+
+# Raw cProfile dumps (benchmarks/bench_hot_paths.py --profile)
+benchmarks/results/profile-*.txt

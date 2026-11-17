@@ -17,6 +17,7 @@ import { registerQualityCommands } from './quality.js'
 import { registerQueueCommands } from './queue.js'
 import { registerReleaseCommands } from './release.js'
 import { registerReviewCommands } from './review.js'
+import { registerReviewerCommands } from './reviewer.js'
 import { registerRunCommands } from './run.js'
 import { registerSessionCommands } from './session.js'
 import { registerSkillCommands } from './skill.js'
@@ -30,6 +31,7 @@ export function registerCommands(
 ): void {
   registerCoreCommands(program, runtime)
   registerSessionCommands(program, runtime)
+  registerReviewerCommands(program, runtime)
   registerWorkspaceCommands(program, runtime)
   registerBenchmarkCommands(program, runtime)
   registerProviderCommands(program, runtime)

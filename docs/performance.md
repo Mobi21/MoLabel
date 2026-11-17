@@ -48,8 +48,18 @@ uv run python benchmarks/explain_query_plans.py --sizes 1000,3000
 uv run python benchmarks/render_results.py benchmarks/results/baseline-*.json
 ```
 
-The results, logs and profiles of those runs are in
-[`benchmarks/results/`](../benchmarks/results/). The first pass,
+`--profile` dumps only the largest size a command runs, and the query
+command skips `query_queues` at 100k. To regenerate the 10k query profiles,
+including the queue listing, run:
+
+```sh
+uv run python benchmarks/bench_hot_paths.py --sizes 10000 --runs 7 --profile --paths query --label profile-query-10k
+```
+
+The results and logs of those runs are in
+[`benchmarks/results/`](../benchmarks/results/). The raw cProfile dumps are
+not committed. Each command above with `--profile` writes them there again,
+as `profile-<path>-<n>.txt` for the largest size it runs. The first pass,
 `baseline-1k-10k.json`, seeded every size into one database and is kept
 only for its log, which records the writer failure described under
 [Queue listing](#queue-listing). Its database-backed numbers were taken
@@ -123,8 +133,9 @@ What each path runs:
 
 ## What each number is
 
-The limiter named for each path comes from its cProfile in
-`benchmarks/results/profile-<path>-<n>.txt`, or from the SQLite plan in
+The limiter named for each path comes from its cProfile, which the
+baseline commands above write to `benchmarks/results/profile-<path>-<n>.txt`,
+or from the SQLite plan in
 `benchmarks/results/explain-query-plans-baseline.txt`. Profiled runs are
 slower than timed runs because of profiler overhead, so shares are of the
 profiled total.
@@ -322,8 +333,12 @@ under 1.3x as unproven.
 
 What bounds each path now:
 
-- **Ingest.** The 100k profile after the fix (`profile-ingest_api_jsonl-100000.txt`,
-  6.6 s profiled) has SQLite's own `executemany` at 3.46 s, which is the
+- **Ingest.** The 100k profile after the fix (6.6 s profiled, written to
+  `benchmarks/results/profile-ingest_api_jsonl-100000.txt` by
+  `uv run python benchmarks/bench_hot_paths.py --sizes 100000 --runs 1
+  --warmup 0 --profile --paths ingest --no-seed --skip
+  ingest_loader_csv,ingest_loader_jsonl --label profile-ingest-fixed-100k`)
+  has SQLite's own `executemany` at 3.46 s, which is the
   primary key and seven index B-trees taking 100k random UUID keys, then
   `json.dumps` at 1.0 s over 400k calls, bind construction at 0.4 s and
   `uuid4` at 0.3 s. Into an empty database the endpoint takes 4.0 s; the
@@ -404,7 +419,10 @@ Alembic-only schema changes from P2 are unchanged.
 written, so enforcement refuses new dangling rows and leaves old ones in
 place. The API answers such a refusal with `409 CONFLICT` and the database's
 message ("FOREIGN KEY constraint failed") instead of a 500; before #16 the
-same request silently wrote the orphan. Alembic's batch mode copies and
+same request silently wrote the orphan. A repeated unique or primary key gets
+the same 409. Any other refused write, such as a NOT NULL or CHECK failure,
+is a server bug, so it stays a 500 with its traceback in the server log.
+Alembic's batch mode copies and
 drops tables, which other tables' foreign keys would refuse, so
 `upgrade_database` turns the pragma off on the migration's connection,
 outside the transaction where the pragma takes effect, and back on after.
@@ -512,7 +530,8 @@ because the readers run until the writer finishes.
 and asserts a fresh pooled connection reports `wal` and `foreign_keys = 1`,
 that a review event whose keys point nowhere is refused with
 `IntegrityError`, that a write to a missing workspace through the API
-answers 409, that an in-memory URL shares one connection with foreign keys
+answers 409, that only a foreign key or unique failure answers 409 while a
+NOT NULL or CHECK failure answers 500, that an in-memory URL shares one connection with foreign keys
 on, and that rows written before enforcement are counted by
 `foreign_key_violations` and kept. `tests/integration/test_cli_status_integrity.py`
 asserts `GET /api/v1/cli/status` lists them per table and parent, and

@@ -11,6 +11,7 @@ The intended operating model is:
 ## Command Groups
 
 - `session`: reviewer identity and session control
+- `reviewer`: create reviewer profiles
 - `workspace`: workspace detection and bootstrap
 - `provider`: provider discovery, health, and model listing
 - `model-profile`: model profile CRUD and connectivity checks
@@ -77,6 +78,16 @@ this contract for each.
 Adjudication works on one review queue at a time, through the same endpoints
 as the GUI. A resolution is stored in the database, so it survives a backend
 restart, sets the record's labels for export, and shows in the GUI.
+
+A queue has disagreements only when two reviewers review the same record, so
+a workflow's `human_review` step needs `overlap_count: 2` and the workspace
+needs a second reviewer. `reviewer create` adds one to the current workspace
+and prints the new profile. `session switch` makes the CLI act as it.
+
+```bash
+molabel reviewer create --display-name "Reviewer 2"
+molabel session switch <reviewer-id>
+```
 
 ```bash
 molabel adjudication list <queue-id>
@@ -160,7 +171,10 @@ whose foreign keys point at missing rows, per table and parent. The server
 refuses new ones; rows written before it enforced foreign keys are kept and
 listed here.
 `scripts/smoke_no_key.py` runs the full flow with no key against a real
-backend, and CI runs it in the `smoke-no-key` job.
+backend, and CI runs it in the `smoke-no-key` job. It ends with a
+two-reviewer adjudication driven by the CLI alone: `reviewer create`,
+`session switch`, and `adjudication list`, `show` and `resolve` on a queue
+with two copies of each record.
 
 ## Development
 

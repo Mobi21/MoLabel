@@ -52,6 +52,19 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       description: 'Switch the active CLI session to a different reviewer',
     },
     {
+      name: 'reviewer create',
+      group: 'reviewer',
+      description:
+        'Create a reviewer profile, such as the second reviewer of an overlap queue',
+      flags: [
+        { name: '--display-name', description: 'Name the reviewer goes by' },
+        {
+          name: '--workspace-id',
+          description: "Workspace ID (default: the current workspace's)",
+        },
+      ],
+    },
+    {
       name: 'workspace detect',
       group: 'workspace',
       description: 'Detect the nearest MoLabel workspace',

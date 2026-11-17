@@ -4,6 +4,7 @@
 - Check backend: `molabel doctor --json`
 - Show command contract: `molabel manifest --json`
 - List reviewer profiles: `molabel session list-reviewers --json`
+- Add a second reviewer for an overlap queue: `molabel reviewer create --display-name "Reviewer 2" --json`, then act as it with `molabel session switch <reviewer-id> --json`
 - List datasets: `molabel dataset list --json`
 - Create a task schema from JSON: `molabel task-schema create --file schema.json --json`
 - Create a prompt from JSON: `molabel prompt create --file prompt.json --json`

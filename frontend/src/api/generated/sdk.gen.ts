@@ -1924,7 +1924,11 @@ export const getMissionControlReviewers = <
 /**
  * List Review Events
  *
- * List review events with filtering (API-063).
+ * List review events with filtering (API-063). It lists none yet.
+ *
+ * It needs a session, and a filter that names a row of another workspace
+ * answers 404, as every review endpoint does for a queue or task of
+ * another workspace.
  */
 export const listReviewEvents = <ThrowOnError extends boolean = false>(
   options?: Options<ListReviewEventsData, ThrowOnError>,

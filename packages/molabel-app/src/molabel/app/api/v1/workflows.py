@@ -10,7 +10,7 @@ import hashlib
 import json
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -55,6 +55,7 @@ from molabel.core.types import (
     ProviderType,
     WorkflowExecutionStatus,
     WorkflowStepExecutionStatus,
+    WorkflowStepType,
 )
 from molabel.core.types import ReviewTaskStatus as ReviewTaskStatusEnum
 from molabel.core.workflow.context import WorkflowContext
@@ -895,6 +896,41 @@ _BUILTIN_PROFILE_TRAITS: dict[str, tuple[str, list[str], float | None]] = {
 }
 _RUNNABLE_PROVIDERS = frozenset(ProviderType) - {ProviderType.custom}
 _AGENT_STEP_TYPES = frozenset({"agent_run", "agent_labeling"})
+
+
+class CalibrationNotAvailableError(Exception):
+    """A workflow has a human_calibration step, which needs P8's gold sets."""
+
+    def __init__(self, step_id: str) -> None:
+        super().__init__(
+            f"Step '{step_id}' is a human_calibration step, which checks "
+            "reviewers against gold labels. Calibration comes with gold sets in "
+            "P8, so MoLabel cannot run it yet. Remove the step, or review the "
+            "records with human_review."
+        )
+        self.step_id = step_id
+
+
+async def calibration_not_available_error_handler(
+    _request: Request, exc: CalibrationNotAvailableError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content=ErrorResponse(
+            error=ErrorDetail(
+                code="CALIBRATION_NOT_AVAILABLE",
+                message=str(exc),
+                details={"step_id": exc.step_id},
+            )
+        ).model_dump(mode="json"),
+    )
+
+
+def _refuse_calibration(steps: Iterable[tuple[str, str]]) -> None:
+    """Refuse every (step id, step type) whose type is human_calibration."""
+    for step_id, step_type in steps:
+        if step_type == WorkflowStepType.human_calibration:
+            raise CalibrationNotAvailableError(step_id)
 
 
 class UnresolvedModelError(Exception):
@@ -2449,6 +2485,7 @@ async def create_workflow(
     _reviewer: CurrentReviewer,
 ) -> WorkflowDetail:
     """Create a new workflow definition (API-021) and write its file."""
+    _refuse_calibration((step.step_id, step.step_type) for step in body.steps)
     engine = get_engine(request)
     folder = workspace_folder(engine, body.workspace_id)
     workflow_id = str(uuid.uuid4())
@@ -2495,6 +2532,7 @@ async def update_workflow(
     _reviewer: CurrentReviewer,
 ) -> WorkflowDetail:
     """Update a workflow definition (API-022) and rewrite its file."""
+    _refuse_calibration((step.step_id, step.step_type) for step in body.steps or [])
     engine = get_engine(request)
     now = datetime.now(UTC).isoformat()
 
@@ -2586,6 +2624,9 @@ async def execute_workflow(
         ).first()
         if wf_row is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
+        _refuse_calibration(
+            (step.id, step.type) for step in _build_workflow_definition(wf_row).steps
+        )
 
         exec_id = str(uuid.uuid4())
         initial_context = dict(body.context or {}) if body and body.context else {}

@@ -64,6 +64,9 @@ Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 - Backups are kept for 30 days, then cleaned up
 - If a migration fails, the user can restore from the backup via the Settings screen
 
+### One-way revisions
+Revisions 005 and 006 rewrite ids in place and keep no copy of the old spelling, so they are one-way. Their `downgrade()` changes nothing and logs a warning that says so. To return to the data from before the upgrade, stop the server and restore the backup that `upgrade_database` wrote beside the database before it ran. The backup takes the database file's own name: `<database name>.backup.<timestamp>.sqlite`, so `molabel.backup.<timestamp>.sqlite` for the default `molabel.db`, and `custom-name.backup.<timestamp>.sqlite` for a database set through `MOLABEL_DB_URL` as `custom-name.db`.
+
 ## Multi-Skip Upgrades
 - Alembic handles multi-version jumps natively (runs all pending migrations in sequence)
 - Each migration declares its dependency chain via Alembic's revision graph
@@ -110,4 +113,5 @@ Revision 005 rewrites every 32-hex value in a UUID column. A 32-hex hash stored 
 ## Testing
 - Fixture schemas at known versions are stored in `fixtures/migrations/`. `pre-alembic-create-all.sql` is the schema `create_all` produced before Alembic owned it
 - `tests/integration/test_schema_migrations.py` starts the server on a fresh database and on each fixture, and checks that the result is at head and that autogenerate finds no difference from the models. A model change without a matching migration fails it
+- `tests/integration/test_schema_migrations.py` also downgrades a database at head to `004` and checks that 006 and 005 each log the one-way warning
 - `tests/integration/test_json_id_migration.py` runs revision 006 on each container above and resumes a paused workflow on a database written before 005

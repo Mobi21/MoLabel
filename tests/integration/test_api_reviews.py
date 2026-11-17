@@ -1,35 +1,55 @@
 """Integration tests for review event and adjudication endpoints.
 
-Tests verify routing, response models, and status codes for
-review event listing and adjudication endpoints.
+Tests verify routing, response models, status codes, and that review event
+listing reads only the session's workspace.
 """
 
 from __future__ import annotations
 
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 
-from molabel.app.api.v1.adjudication import router as adjudication_router
-from molabel.app.api.v1.reviews import router as reviews_router
-from molabel.app.main import create_app
+from tests.integration.review_flow import (
+    _as,
+    _start_review,
+    review_app,
+    review_client,
+)
+from tests.integration.test_api_review_workspaces import _outsider
 
 
 @pytest.fixture()
-def app():
-    """Create a test app with reviews and adjudication routers registered."""
-    application = create_app()
-    application.include_router(reviews_router, prefix="/api/v1")
-    application.include_router(adjudication_router, prefix="/api/v1")
-    return application
+def app(tmp_path):
+    return review_app(tmp_path)
 
 
 @pytest_asyncio.fixture()
 async def client(app):
-    """Async HTTP client wired to the test application."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    async with review_client(app) as c:
         yield c
+
+
+def _filters_of(app, workspace_id):
+    """A record, dataset, task schema and reviewer id of the workspace."""
+    with app.state.engine.connect() as conn:
+        record_id, dataset_id = conn.execute(
+            text("SELECT id, dataset_id FROM records WHERE workspace_id = :w LIMIT 1"),
+            {"w": workspace_id},
+        ).one()
+        task_schema_id, reviewer_id = (
+            conn.execute(
+                text(f"SELECT id FROM {table} WHERE workspace_id = :w LIMIT 1"),
+                {"w": workspace_id},
+            ).scalar_one()
+            for table in ("task_schemas", "reviewer_profiles")
+        )
+    return {
+        "record_id": record_id,
+        "dataset_id": dataset_id,
+        "task_schema_id": task_schema_id,
+        "reviewer_id": reviewer_id,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -38,33 +58,57 @@ async def client(app):
 
 
 @pytest.mark.asyncio
-async def test_list_review_events_returns_paginated(client):
-    """API-063: List review events returns paginated response."""
+async def test_listing_review_events_needs_a_session(client):
     resp = await client.get("/api/v1/review/events")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_review_events_returns_paginated(client, app, tmp_path):
+    """API-063: List review events returns paginated response."""
+    _, tokens, _ = await _start_review(client, app, tmp_path)
+
+    resp = await client.get("/api/v1/review/events", headers=_as(tokens[0]))
+
     assert resp.status_code == 200
     body = resp.json()
-    assert "items" in body
     assert isinstance(body["items"], list)
     assert "cursor" in body
     assert "has_more" in body
 
 
 @pytest.mark.asyncio
-async def test_list_review_events_with_filters(client):
-    """API-063: List review events accepts all documented filter params."""
+async def test_list_review_events_with_filters(client, app, tmp_path):
+    """API-063: Every filter may name a row of the caller's workspace."""
+    workspace_id, tokens, _ = await _start_review(client, app, tmp_path)
+
     resp = await client.get(
         "/api/v1/review/events",
-        params={
-            "record_id": "rec-1",
-            "reviewer_id": "rev-1",
-            "task_schema_id": "ts-1",
-            "is_draft": "false",
-            "dataset_id": "ds-1",
-        },
+        params={**_filters_of(app, workspace_id), "is_draft": "false"},
+        headers=_as(tokens[0]),
     )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["items"] == []
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["items"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "name", ["record_id", "dataset_id", "task_schema_id", "reviewer_id"]
+)
+async def test_a_filter_naming_another_workspace_answers_404(
+    client, app, tmp_path, name
+):
+    workspace_id, _, _ = await _start_review(client, app, tmp_path)
+    outsider = _outsider(app, tmp_path)
+
+    resp = await client.get(
+        "/api/v1/review/events",
+        params={name: _filters_of(app, workspace_id)[name]},
+        headers=_as(outsider),
+    )
+
+    assert resp.status_code == 404, resp.text
 
 
 # ---------------------------------------------------------------------------
