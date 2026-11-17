@@ -63,13 +63,21 @@ def queue_review_events(conn: Any, queue_ids: Sequence[str]) -> list[ReviewEvent
     ]
 
 
+IN_LIST_CHUNK = 500
+"""Ids per IN list, well under SQLite's 32,766 bound variables."""
+
+
 def _proposals(conn: Any, where: str, values: list[str]) -> list[AgentProposal]:
-    rows = conn.execute(
-        text(
-            f"SELECT record_id, agent_run_id, labels FROM agent_outputs WHERE {where}"
-        ).bindparams(bindparam("values", expanding=True)),
-        {"values": values},
-    ).fetchall()
+    statement = text(
+        f"SELECT record_id, agent_run_id, labels FROM agent_outputs WHERE {where}"
+    ).bindparams(bindparam("values", expanding=True))
+    rows = [
+        row
+        for start in range(0, len(values), IN_LIST_CHUNK)
+        for row in conn.execute(
+            statement, {"values": values[start : start + IN_LIST_CHUNK]}
+        ).fetchall()
+    ]
     return [
         AgentProposal(
             record_id=str(row[0]),
