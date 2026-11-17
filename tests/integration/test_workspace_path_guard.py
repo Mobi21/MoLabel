@@ -13,12 +13,11 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
-from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
 
 from molabel.app import workspace_paths
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
+from molabel.core.database import engine_from_url
 from molabel.core.migration_runner import upgrade_database
 
 SECRET = "path-guard-secret"
@@ -43,11 +42,7 @@ def layout(tmp_path: Path) -> dict[str, Path]:
 @pytest.fixture()
 def app(layout: dict[str, Path]):
     application = create_app()
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = engine_from_url("sqlite:///:memory:")
     upgrade_database(engine)
     application.state.engine = engine
     application.state.app_secret = SECRET
@@ -487,8 +482,24 @@ async def test_release_gate_reads_the_summary_it_checked_when_a_link_is_swapped(
 
 def _completed_execution(app) -> str:
     execution_id = str(uuid.uuid4())
+    workflow_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     with app.state.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO workflow_definitions (id, workflow_slug, version, "
+                "name, steps, is_template, file_path, is_active, workspace_id, "
+                "created_at, updated_at) VALUES (:id, :slug, 1, 'Completed', "
+                "'[]', 0, :file_path, 1, :wid, :now, :now)"
+            ),
+            {
+                "id": workflow_id,
+                "slug": f"completed-{workflow_id[:8]}",
+                "file_path": f"workbench/workflows/completed-{workflow_id[:8]}.yaml",
+                "wid": app.state.test_workspace_id,
+                "now": now,
+            },
+        )
         conn.execute(
             text(
                 "INSERT INTO workflow_executions (id, workflow_definition_id, "
@@ -498,7 +509,7 @@ def _completed_execution(app) -> str:
             ),
             {
                 "id": execution_id,
-                "wf": str(uuid.uuid4()),
+                "wf": workflow_id,
                 "wid": app.state.test_workspace_id,
                 "now": now,
             },

@@ -1385,6 +1385,10 @@ export type CliStatusResponse = {
    */
   legacy_databases?: Array<LegacyDatabase>
   /**
+   * Foreign Key Violations
+   */
+  foreign_key_violations?: Array<ForeignKeyViolation>
+  /**
    * Checked At
    */
   checked_at?: string
@@ -2979,6 +2983,26 @@ export type FirstReviewerInfo = {
    * Avatar Color
    */
   avatar_color: string | null
+}
+
+/**
+ * ForeignKeyViolation
+ *
+ * Rows of one table whose foreign key points at a missing row of another.
+ */
+export type ForeignKeyViolation = {
+  /**
+   * Table
+   */
+  table: string
+  /**
+   * Parent
+   */
+  parent: string
+  /**
+   * Rows
+   */
+  rows: number
 }
 
 /**

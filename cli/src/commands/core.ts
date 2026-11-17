@@ -49,6 +49,12 @@ async function runDoctor(options: CliRuntimeOptions): Promise<void> {
   const providers = client
     ? await safeGetJson<{ providers?: unknown[] }>(client, '/api/v1/providers')
     : null
+  const status = client
+    ? await safeGetJson<{ foreign_key_violations?: unknown[] }>(
+        client,
+        '/api/v1/cli/status',
+      )
+    : null
 
   await emit(
     {
@@ -59,6 +65,9 @@ async function runDoctor(options: CliRuntimeOptions): Promise<void> {
       },
       session: whoami,
       providers: providers?.providers ?? null,
+      database: status
+        ? { foreign_key_violations: status.foreign_key_violations ?? [] }
+        : null,
     },
     outputMode(options),
   )

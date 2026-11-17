@@ -19,8 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from molabel.app.api.v1 import router as v1_router
@@ -43,6 +42,7 @@ from molabel.app.workspace_paths import (
     WorkspacePathError,
     workspace_path_error_handler,
 )
+from molabel.core.database import engine_from_url
 from molabel.core.migration_runner import upgrade_database
 
 # ---------------------------------------------------------------------------
@@ -68,20 +68,13 @@ logger = logging.getLogger(__name__)
 
 
 def _create_engine_from_env():
-    """Create the server's SQLAlchemy engine (see ``server_db_url``).
+    """The server's engine for ``server_db_url()``, from the shared factory.
 
-    In-memory databases (used in tests) get a StaticPool so the same
-    connection is reused across requests within a single process.
+    ``molabel.core.database.engine_from_url`` sets WAL and foreign keys on
+    every connection. In-memory databases (used in tests) get a StaticPool so
+    the same connection is reused across requests within a single process.
     """
-    db_url = server_db_url()
-    # Normalise async driver URLs to their sync equivalents — the app uses
-    # synchronous SQLAlchemy throughout.
-    db_url = db_url.replace("sqlite+aiosqlite", "sqlite")
-    in_memory = ":memory:" in db_url or db_url in {"sqlite://", "sqlite:///"}
-    kwargs = {"connect_args": {"check_same_thread": False}}
-    if in_memory:
-        kwargs["poolclass"] = StaticPool  # type: ignore[assignment]
-    return create_engine(db_url, **kwargs)  # type: ignore[arg-type]
+    return engine_from_url(server_db_url())
 
 
 def _cors_origins_from_env() -> list[str]:
@@ -107,7 +100,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     SE-007: Claim expiry background task.
     """
     engine = _create_engine_from_env()
-    upgrade_database(engine)
+    try:
+        upgrade_database(engine)
+    except BaseException:
+        # A refused database keeps only its own file: closing the pool lets
+        # SQLite remove the WAL and shared-memory files it opened beside it.
+        engine.dispose()
+        raise
     for legacy in legacy_databases(engine, [launch_folder_database()]):
         logger.warning("LEGACY DATABASE NOT LOADED: %s", legacy.message)
     app.state.engine = engine
@@ -177,6 +176,21 @@ def create_app() -> FastAPI:
                     code="VALIDATION_ERROR",
                     message="Request validation failed",
                     details={"errors": exc.errors()},
+                )
+            ).model_dump(mode="json"),
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_error_handler(
+        _request: Request, exc: IntegrityError
+    ) -> JSONResponse:
+        """A write the database refused: a key to a missing row, or a repeated key."""
+        return JSONResponse(
+            status_code=409,
+            content=ErrorResponse(
+                error=ErrorDetail(
+                    code="CONFLICT",
+                    message=f"The database refused the write: {exc.orig}",
                 )
             ).model_dump(mode="json"),
         )

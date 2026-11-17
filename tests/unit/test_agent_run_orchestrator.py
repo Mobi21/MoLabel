@@ -6,11 +6,10 @@ import uuid
 from typing import Any
 
 import pytest
-from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine, select
+from sqlmodel import select
 
 from molabel.core.agents.agent_run_orchestrator import AgentRunOrchestrator
-from molabel.core.database import get_session
+from molabel.core.database import engine_from_url, get_session
 from molabel.core.migration_runner import upgrade_database
 from molabel.core.models.agent_event import AgentEvent
 from molabel.core.models.agent_run import AgentRun
@@ -32,11 +31,7 @@ from molabel.core.workflow.steps.agent_steps import AgentRunExecutor
 @pytest.fixture()
 def db_engine():
     """In-memory SQLite engine with all MoLabel tables."""
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = engine_from_url("sqlite:///:memory:")
     upgrade_database(engine)
     return engine
 

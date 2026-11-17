@@ -20,10 +20,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
 
-from molabel.core.database import get_session
+from molabel.core.database import engine_from_url, get_session
 from molabel.core.migration_runner import upgrade_database
 from molabel.core.types import ReviewEventSource, TrustLevel
 
@@ -35,11 +33,7 @@ from molabel.core.types import ReviewEventSource, TrustLevel
 @pytest.fixture()
 def db_engine():
     """In-memory SQLite engine with all MoLabel tables."""
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = engine_from_url("sqlite:///:memory:")
     upgrade_database(engine)
     return engine
 

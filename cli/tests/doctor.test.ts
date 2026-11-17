@@ -37,6 +37,24 @@ describe('doctor', () => {
     })
   })
 
+  it('lists rows whose foreign keys point at missing rows', async () => {
+    const dangling = { table: 'review_events', parent: 'records', rows: 2 }
+    const api = await startMockApi({
+      'GET /health': () => ({ body: { status: 'ok' } }),
+      'GET /api/v1/cli/status': () => ({
+        body: { ok: true, foreign_key_violations: [dangling] },
+      }),
+    })
+    openApis.push(api)
+
+    const result = await runCliCapture(['--base-url', api.url, 'doctor'])
+
+    expect(result.exitCode).toBe(0)
+    expect(parseStdoutJson(result)).toMatchObject({
+      database: { foreign_key_violations: [dangling] },
+    })
+  })
+
   it('reports no providers when no backend is configured', async () => {
     const result = await runCliCapture(['doctor'])
 
@@ -44,6 +62,7 @@ describe('doctor', () => {
     expect(parseStdoutJson(result)).toMatchObject({
       backend: { configured: false },
       providers: null,
+      database: null,
     })
   })
 })

@@ -45,6 +45,7 @@ from molabel.app.workspace_paths import (
     resolve_in_workspace,
 )
 from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
+from molabel.core.database import ForeignKeyViolation, foreign_key_violations
 from molabel.core.manifest import load_manifest
 
 router = APIRouter(prefix="", tags=["cli"])
@@ -72,6 +73,7 @@ class CLIStatusResponse(BaseModel):
     detection_mode: str | None = None
     workspace_count: int = 0
     legacy_databases: list[LegacyDatabase] = Field(default_factory=list)
+    foreign_key_violations: list[ForeignKeyViolation] = Field(default_factory=list)
     checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -170,10 +172,13 @@ async def status(
         ).first()
     workspace_count = int(workspace_count_row[0]) if workspace_count_row else 0
     legacy = legacy_databases(engine, [launch_folder_database()])
+    violations = foreign_key_violations(engine)
 
     if path is None:
         return CLIStatusResponse(
-            workspace_count=workspace_count, legacy_databases=legacy
+            workspace_count=workspace_count,
+            legacy_databases=legacy,
+            foreign_key_violations=violations,
         )
 
     workspace_path = new_workspace_root(path)
@@ -181,6 +186,7 @@ async def status(
         return CLIStatusResponse(
             workspace_count=workspace_count,
             legacy_databases=legacy,
+            foreign_key_violations=violations,
             workspace_detected=False,
             workspace_root=str(workspace_path),
         )
@@ -189,6 +195,7 @@ async def status(
     return CLIStatusResponse(
         workspace_count=workspace_count,
         legacy_databases=legacy,
+        foreign_key_violations=violations,
         workspace_detected=bool(detection.is_project),
         workspace_name=detection.suggested_name,
         workspace_root=str(workspace_path),

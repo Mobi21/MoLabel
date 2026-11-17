@@ -154,7 +154,11 @@ and `details.error.details.usable_providers` lists the providers the backend
 can use, with their models. Set `provider_type` on the step, or create a
 profile for the model with `molabel model-profile create`.
 
-`molabel doctor` lists the providers the backend can use under `providers`.
+`molabel doctor` lists the providers the backend can use under `providers`,
+and under `database.foreign_key_violations` the rows of the server database
+whose foreign keys point at missing rows, per table and parent. The server
+refuses new ones; rows written before it enforced foreign keys are kept and
+listed here.
 `scripts/smoke_no_key.py` runs the full flow with no key against a real
 backend, and CI runs it in the `smoke-no-key` job.
 
