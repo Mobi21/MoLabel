@@ -65,6 +65,7 @@ class ReviewerProfileResponse(BaseModel):
     created_at: datetime
     last_active_at: datetime | None
     preferences: dict[str, Any] | None
+    workspace_id: uuid.UUID
 
     model_config = {"from_attributes": True}
 
@@ -85,6 +86,7 @@ def _row_to_response(row) -> ReviewerProfileResponse:
         created_at=parse_datetime(row[6]) or datetime.now(UTC),
         last_active_at=parse_datetime(row[7]),
         preferences=None,  # row[5] is preferences JSON, skip for now
+        workspace_id=uuid.UUID(str(row[8])),
     )
 
 
@@ -94,7 +96,7 @@ def _row_to_response(row) -> ReviewerProfileResponse:
 
 _SELECT_COLUMNS = (
     "id, display_name, avatar_color, is_operator, is_active, "
-    "preferences, created_at, last_active_at"
+    "preferences, created_at, last_active_at, workspace_id"
 )
 
 

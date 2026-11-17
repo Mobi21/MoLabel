@@ -53,7 +53,8 @@ class AgentProposal:
     labels: dict[str, Any]
 
 
-def _rated_labels(event: ReviewEventLabels) -> dict[str, Any] | None:
+def rated_labels(event: ReviewEventLabels) -> dict[str, Any] | None:
+    """The labels an event rates, or None when its decision gives no value."""
     decision = (
         None if event.decision is None else canonical_review_decision(event.decision)
     )
@@ -62,7 +63,10 @@ def _rated_labels(event: ReviewEventLabels) -> dict[str, Any] | None:
     return None
 
 
-def _counted_events(events: Iterable[ReviewEventLabels]) -> list[ReviewEventLabels]:
+def counted_review_events(
+    events: Iterable[ReviewEventLabels],
+) -> list[ReviewEventLabels]:
+    """Each reviewer's counted event per record: the latest correction-chain head."""
     events = list(events)
     superseded = {event.supersedes_event_id for event in events}
     latest: dict[tuple[str, str], ReviewEventLabels] = {}
@@ -81,8 +85,8 @@ def agreement_records_from_reviews(
     """Group the counted human values and agent proposals by record."""
     in_scope = set(record_ids)
     annotations: dict[str, list[AgreementAnnotation]] = defaultdict(list)
-    for event in _counted_events(events):
-        labels = _rated_labels(event)
+    for event in counted_review_events(events):
+        labels = rated_labels(event)
         if labels is not None and event.record_id in in_scope:
             annotations[event.record_id].append(
                 AgreementAnnotation(

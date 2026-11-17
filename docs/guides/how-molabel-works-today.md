@@ -69,17 +69,20 @@ the everyday human authoring surface.
 
 ### 2.3 Frontend
 
-The frontend in `frontend/` is the manual control room. Its job is inspection,
-review, and operational visibility:
+The frontend in `frontend/` is the review GUI, a keyboard-first queue on the
+REST API. It has four screens behind a reviewer picker:
 
-- browsing data and workflow state,
-- manual review and adjudication,
-- queue operations,
-- observability and mission-control style status.
+- a queue list with each queue's kind and progress,
+- item review, one record at a time, with blind proposals hidden until revealed,
+- adjudication of a queue's disagreements, side by side, once every review
+  copy of the record is in or closed, with a button that closes the unclaimed
+  copies of a queue with more copies than reviewers,
+- calibration: per-field Krippendorff's alpha, skipped fields, and reviewers
+  against the AI proposal.
 
-This repo contains the React application, but it is not ready as a public or
-primary operating surface yet. Treat it as a work-in-progress control-room UI,
-not as a completed production shell.
+Dataset browsing, workflow building, and everything else stay in the CLI. The
+picker starts a session for an existing reviewer profile; there is no password
+or workspace registration.
 
 ### 2.4 Assistant Surface Status
 

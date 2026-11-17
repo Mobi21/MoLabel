@@ -71,6 +71,7 @@ class MeResponse(BaseModel):
     created_at: datetime
     last_active_at: datetime | None
     preferences: dict[str, Any] | None
+    workspace_id: uuid.UUID
 
 
 class NeedsSessionResponse(BaseModel):
@@ -203,6 +204,7 @@ async def get_me(reviewer: CurrentReviewer) -> MeResponse:
         created_at=reviewer.created_at,
         last_active_at=reviewer.last_active_at,
         preferences=reviewer.preferences,
+        workspace_id=reviewer.workspace_id,
     )
 
 

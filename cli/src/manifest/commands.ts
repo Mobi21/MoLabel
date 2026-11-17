@@ -370,6 +370,12 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       description: 'Claim the next available review task',
     },
     {
+      name: 'queue close-copies',
+      group: 'queue',
+      description:
+        'Close the unclaimed copies of a queue; claimed copies stay open',
+    },
+    {
       name: 'review submit',
       group: 'review',
       description: 'Submit a review task',
@@ -444,6 +450,17 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       name: 'quality dashboard',
       group: 'quality',
       description: 'Show quality dashboard metrics',
+    },
+    {
+      name: 'quality agreement',
+      group: 'quality',
+      description:
+        'Measure inter-annotator and human-agent agreement from review events',
+      flags: [
+        { name: '--queue-id', description: 'Measure one review queue' },
+        { name: '--task-schema-id', description: 'Measure one task schema' },
+        { name: '--dataset-id', description: 'Measure one dataset' },
+      ],
     },
     {
       name: 'export list',

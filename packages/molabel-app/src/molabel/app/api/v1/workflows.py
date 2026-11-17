@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import bindparam, text
+from sqlalchemy import text
 
 from molabel.app.api.v1.model_profiles import SHARED_PROFILE_WORKSPACE
 from molabel.app.middleware.session import CurrentReviewer
@@ -28,6 +28,10 @@ from molabel.app.schemas import (
     ErrorResponse,
     PaginatedResponse,
     QueryParams,
+)
+from molabel.app.services.review_events import (
+    queue_review_events,
+    run_agent_proposals,
 )
 from molabel.app.utils import get_engine
 from molabel.app.workspace_config import WORKFLOW, workspace_files, workspace_folder
@@ -44,11 +48,7 @@ from molabel.core.providers.offline_adapter import (
     OFFLINE_MODEL_ID,
 )
 from molabel.core.quality.agreement_metrics import AgreementRecord
-from molabel.core.quality.review_agreement import (
-    AgentProposal,
-    ReviewEventLabels,
-    agreement_records_from_reviews,
-)
+from molabel.core.quality.review_agreement import agreement_records_from_reviews
 from molabel.core.types import (
     BlindReviewPolicy,
     ProviderType,
@@ -1999,17 +1999,8 @@ class _WorkflowExporter:
         }
 
 
-def _utc(value: Any) -> datetime:
-    parsed = datetime.fromisoformat(str(value))
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
-
-
 class _ReviewAgreementSource:
-    """Agreement records from a workflow's review events and agent proposals.
-
-    ``molabel.core.quality.review_agreement`` decides which event counts and
-    which labels each decision rates.
-    """
+    """Agreement records from a workflow's review events and agent proposals."""
 
     def __init__(self, conn: Any) -> None:
         self._conn = conn
@@ -2024,45 +2015,11 @@ class _ReviewAgreementSource:
         config: dict[str, Any],
     ) -> list[AgreementRecord]:
         del analysis_type, config
-        output_rows = self._conn.execute(
-            text(
-                "SELECT record_id, agent_run_id, labels FROM agent_outputs "
-                "WHERE agent_run_id IN :run_ids"
-            ).bindparams(bindparam("run_ids", expanding=True)),
-            {"run_ids": list(agent_run_ids)},
-        ).fetchall()
-        event_rows = self._conn.execute(
-            text(
-                "SELECT e.id, e.record_id, e.reviewer_id, e.decision, e.labels, "
-                "e.supersedes_event_id, e.created_at "
-                "FROM review_events e "
-                "JOIN review_tasks t ON t.id = e.review_task_id "
-                "WHERE e.source = 'human' AND e.reviewer_id IS NOT NULL "
-                "AND t.queue_id IN :queue_ids"
-            ).bindparams(bindparam("queue_ids", expanding=True)),
-            {"queue_ids": list(review_queue_ids)},
-        ).fetchall()
-        events = [
-            ReviewEventLabels(
-                event_id=str(row[0]),
-                record_id=str(row[1]),
-                reviewer_id=str(row[2]),
-                decision=row[3],
-                labels=_json_loads(row[4]) or {},
-                supersedes_event_id=str(row[5]) if row[5] else None,
-                created_at=_utc(row[6]),
-            )
-            for row in event_rows
-        ]
-        proposals = [
-            AgentProposal(
-                record_id=str(row[0]),
-                agent_run_id=str(row[1]),
-                labels=_json_loads(row[2]) or {},
-            )
-            for row in output_rows
-        ]
-        return agreement_records_from_reviews(events, proposals, record_ids=record_ids)
+        return agreement_records_from_reviews(
+            queue_review_events(self._conn, review_queue_ids),
+            run_agent_proposals(self._conn, agent_run_ids),
+            record_ids=record_ids,
+        )
 
 
 def _materialize_review_queue(
@@ -2159,15 +2116,11 @@ def _assert_human_queue_complete(
     if not queue_id:
         return
 
-    remaining, copies, reviewers = conn.execute(
+    remaining, unclaimed = conn.execute(
         text(
-            "SELECT "
-            "(SELECT count(*) FROM review_tasks "
-            " WHERE queue_id = :queue_id AND status != 'submitted'), "
-            "(SELECT coalesce(max(n), 0) FROM (SELECT count(*) AS n FROM review_tasks "
-            " WHERE queue_id = :queue_id GROUP BY record_id)), "
-            "(SELECT count(DISTINCT claimed_by) FROM review_tasks "
-            " WHERE queue_id = :queue_id AND status = 'submitted')"
+            "SELECT count(*), coalesce(sum(status = 'available'), 0) "
+            "FROM review_tasks "
+            "WHERE queue_id = :queue_id AND status NOT IN ('submitted', 'closed')"
         ),
         {"queue_id": queue_id},
     ).one()
@@ -2176,10 +2129,11 @@ def _assert_human_queue_complete(
             f"Review queue '{queue_id}' is not complete; "
             f"{int(remaining)} task(s) still need submission"
         )
-        if int(copies) > max(int(reviewers), 1):
+        if int(unclaimed) > 0:
             detail += (
-                f". {copies} copies need {copies} distinct reviewers; "
-                f"{reviewers} have submitted"
+                f". {int(unclaimed)} of them are unclaimed; close them with "
+                f"molabel queue close-copies {queue_id} to finish with the "
+                "reviews in"
             )
         raise HTTPException(status_code=409, detail=detail)
 

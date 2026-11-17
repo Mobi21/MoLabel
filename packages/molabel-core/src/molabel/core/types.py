@@ -276,6 +276,8 @@ class ReviewTaskStatus(StrEnum):
     claimed = "claimed"
     submitted = "submitted"
     skipped = "skipped"
+    # An unclaimed copy the queue stopped offering, never reviewed.
+    closed = "closed"
 
 
 class DatasetHealthStatus(StrEnum):

@@ -83,11 +83,10 @@ async def test_quality_dashboard_agreement_drift(
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert "overall" in body
-        assert "cohens_kappa" in body["overall"]
-        assert "per_field" in body
-        assert "per_reviewer" in body
-        assert "confusion_matrices" in body
+        assert "krippendorff_alpha" in body["inter_annotator"]["pooled"]
+        assert "cohen_kappa" in body["inter_annotator"]["pooled"]
+        assert "fields" in body["inter_annotator"]
+        assert "skipped_fields" in body["human_agent"]
 
     with checkpoint(ctx, "agreement_metrics_with_filters"):
         resp = await client.get(

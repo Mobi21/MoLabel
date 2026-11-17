@@ -1801,6 +1801,37 @@ The review system supports blind human review, AI reveal tracking, drafts, and m
 
 ---
 
+#### Queue endpoints the review GUI uses
+
+These run today. The `/review/...` endpoints below are the planned shape and
+are not all built.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/queues?workspace_id=` | Each queue with its `kind` (`review`, `triage`, `calibrate`, `adjudicate`, or null), `task_schema_title`, `blind_review_policy`, status counts, and the caller's `my_remaining` and `my_submitted` |
+| POST | `/queues/{queue_id}/claim` | Claim the next task, with the agent output the blind policy allows |
+| POST | `/queues/{queue_id}/close-copies` | Close every `available` copy, and return how many it `closed` and how many stay `claimed` |
+| GET | `/queues/{queue_id}/my-tasks?limit=` | The caller's latest tasks in the queue, oldest first, a held claim last |
+| GET | `/review-tasks/{task_id}` | A task the caller claimed, submitted, or skipped, with the agent output its claim or reveal showed and the caller's counted `review` |
+| POST | `/review-tasks/{task_id}/submit` | Submit `accept`, `edit`, or `reject` with labels |
+| POST | `/review-tasks/{task_id}/skip` | Skip the task |
+| POST | `/review-tasks/{task_id}/reveal-ai` | Reveal the agent output and record which one was shown |
+| POST | `/review-tasks/{task_id}/correct` | Append a correction to the caller's submitted review |
+
+A read never reveals a blind proposal. `GET /review-tasks/{task_id}` shows only
+the output whose id the claim or reveal stored as `shown_agent_output_id`.
+
+A closed copy is never reviewed. No reviewer can claim it, and it has no
+review event, so it never counts as a rater. Adjudication and the workflow's
+`human_review` advance count it as done. A claimed copy stays open, because a
+reviewer holds it. The queue list and `GET /queues/{queue_id}/status` count
+closed copies as `closed`.
+
+`my-tasks`, `close-copies` and `GET /review-tasks/{task_id}` read only the
+caller's workspace. A queue or task of another workspace answers 404.
+
+---
+
 #### `GET /review/queue`
 
 Get the next available item for the current reviewer (identified by `molabel_session` cookie). The item is atomically claimed for this reviewer upon retrieval — no other reviewer can receive the same item.
@@ -1814,7 +1845,7 @@ Get the next available item for the current reviewer (identified by `molabel_ses
 
 **Response:** `200 OK`
 
-The claim-based model ensures exactly one item is returned and atomically assigned. Review task status values are: `available`, `claimed`, `submitted`, `skipped`. When a claim expires, the task status is set back to `available` (not to a separate `expired` state), and `claim_expired_count` is incremented to track how many times this happened.
+The claim-based model ensures exactly one item is returned and atomically assigned. Review task status values are: `available`, `claimed`, `submitted`, `skipped`, `closed`. When a claim expires, the task status is set back to `available` (not to a separate `expired` state), and `claim_expired_count` is incremented to track how many times this happened.
 
 ```python
 class ReviewQueueItem(BaseModel):
@@ -1965,124 +1996,123 @@ List review events with filtering. Used for review history views.
 
 ### Adjudication
 
-Adjudication resolves disagreements between reviewers or between human and agent labels.
+Adjudication resolves disagreements between the reviewers of a queue. A
+disagreement is derived on every read from the queue's counted review events,
+the values agreement rates: each reviewer's latest correction-chain head, where
+`accept`, `edit`, and no decision rate the stored labels, and `reject` gives no
+value. A record whose reviewers' values differ on a field disagrees.
+
+A resolution is a row in `adjudications`, keyed to the review events it covers.
+A new review on the record makes a new disagreement to resolve. Resolving with
+labels also appends a review event with no review task (AJ-007), so it never
+counts as a rater, and sets the record's `latest_label`, which export reads.
+Both rows take the queue's workspace.
+
+A record is adjudicated only once every review task the queue holds for it is
+submitted, skipped, or closed. While a copy is `available` or `claimed`, the
+record's disagreement is not listed and its detail answers 404. So no reviewer
+sees the other reviewers' labels, or on a blind queue the agent proposal,
+before their own review of the record is in. `POST
+/queues/{queue_id}/close-copies` closes the `available` copies of a queue with
+more copies than reviewers.
+
+Each endpoint below reads only a queue of the caller's workspace. A queue of
+another workspace answers 404.
+
+The detect, build, queue, and resolve endpoints in `queue.py` take review events
+from the caller and keep nothing in the database. The CLI's `adjudication`
+commands use them.
 
 ---
 
-#### `GET /adjudication/queue`
+#### `GET /adjudication/queues/{queue_id}/disagreements`
 
-Get the disagreement queue.
-
-**Query params:** standard pagination + filters
-
-| Param            | Type   | Description                          |
-|------------------|--------|--------------------------------------|
-| `task_schema_id` | string | Filter by task schema                |
-| `dataset_id`     | string | Filter by dataset                    |
-| `severity`       | string | `low`, `medium`, `high`              |
-
-**Response:** `200 OK`
+The queue's disagreements, most severe first.
 
 ```python
-class AdjudicationQueueItem(BaseModel):
-    adjudication_id: str
-    record_id: str
-    dataset_id: str
-    task_schema_id: str
-    status: str                          # "pending" | "in_progress"
-    disagreement_type: str               # "human_human" | "human_agent" | "multi_reviewer"
-    disagreement_severity: str           # "low" | "medium" | "high"
-    disagreeing_fields: list[str]
-    reviewer_count: int
-    agent_output_count: int
-    created_at: datetime
+class DisagreementQueue(BaseModel):
+    queue_id: str
+    items: list[DisagreementSummary]
+    total: int
+    unresolved: int
 
-PaginatedResponse[AdjudicationQueueItem]
+class DisagreementSummary(BaseModel):
+    record_id: str
+    record_external_id: str | None
+    task_schema_id: str
+    dataset_id: str
+    severity: str                        # "low" | "medium" | "high"
+    adjudication_type: str               # "factual" | "subjective" | "edge_case" | "policy_gap"
+    fields_in_conflict: list[str]
+    reviewer_count: int
+    status: str                          # "pending" | "resolved"
+    adjudication_id: str | None
 ```
 
 ---
 
-#### `GET /adjudication/{adjudication_id}`
+#### `GET /adjudication/queues/{queue_id}/disagreements/{record_id}`
 
-Get full adjudication detail with all reviewer labels, agent labels, and context.
-
-**Response:** `200 OK`
+One disagreement side by side. 404 when the reviewers agree on the record, or
+a review copy of it is still open.
 
 ```python
-class AdjudicationDetail(BaseModel):
-    adjudication_id: str
-    record_id: str
-    dataset_id: str
-    task_schema_id: str
-    status: str
-    record_data: dict[str, Any]                    # source data
+class DisagreementDetail(DisagreementSummary):
+    record_view: dict[str, Any] | None   # reviewer-safe stable fields and payload
+    record_text: str | None
     reviewer_labels: list[ReviewerLabelSet]
-    agent_labels: list[AgentLabelSet]
+    agent_labels: list[AgentLabelSet]    # proposals the record's tasks are bound to
     disagreeing_fields: list[FieldDisagreement]
-    policy_excerpt: str | None                      # relevant adjudication policy text
-    history: list[AdjudicationHistoryEntry]
-    created_at: datetime
-    resolved_at: datetime | None
+    resolution: AdjudicationOutcome | None
 
 class ReviewerLabelSet(BaseModel):
     reviewer_id: str
     reviewer_name: str
     review_event_id: str
-    decision: str                # "accept" | "edit" | "reject"
+    decision: str | None
     labels: dict[str, Any]
     rationale: str | None
     ai_was_revealed: bool
-    created_at: datetime
+    created_at: str
 
 class AgentLabelSet(BaseModel):
+    agent_output_id: str
     agent_run_id: str
-    agent_role: str
-    model_profile_id: str
-    model_identifier: str
     labels: dict[str, Any]
     confidence: float | None
-    created_at: datetime
 
 class FieldDisagreement(BaseModel):
     field_name: str
-    values: dict[str, Any]               # source -> value (e.g., "reviewer_1": 3, "reviewer_2": 4, "agent": 3)
-    spread: float | None                 # numeric distance for ordinal fields
+    values: dict[str, Any]               # reviewer_id -> value
 
-class AdjudicationHistoryEntry(BaseModel):
-    action: str
-    actor: str
-    details: dict[str, Any] | None
-    timestamp: datetime
+class AdjudicationOutcome(BaseModel):
+    adjudication_id: str
+    resolution: str                      # "resolve" | "preserve_disagreement" | "downgrade" | "exclude"
+    resolved_labels: dict[str, Any] | None
+    rationale: str | None
+    adjudicator_id: str
+    adjudicator_name: str | None
+    review_event_id: str | None
+    resolved_at: str
 ```
 
 ---
 
-#### `POST /adjudication/{adjudication_id}/resolve`
+#### `POST /adjudication/queues/{queue_id}/disagreements/{record_id}/resolve`
 
-Submit an adjudication resolution.
-
-**Request:**
-
-```python
-class AdjudicationResolve(BaseModel):
-    resolution_type: str                    # "resolve" | "preserve_disagreement" | "downgrade" | "exclude"
-    resolved_labels: dict[str, Any] | None  # required for "resolve"
-    reasoning: str
-    tier: str | None = None                 # for downgrade decisions
-```
-
-**Response:** `200 OK`
+Store a resolution and return the updated `DisagreementDetail`. `resolve` needs
+`resolved_labels`, which are normalized and validated against the task schema
+(422 when invalid). `review_event_ids` names the `review_event_id` of each
+`reviewer_labels` entry the caller read. 409 when the disagreement's review
+events differ from them or it is gone, so the caller reloads it, and 409 when
+it is already resolved.
 
 ```python
-class AdjudicationResult(BaseModel):
-    adjudication_id: str
-    record_id: str
-    resolution_type: str
+class ResolveDisagreement(BaseModel):
+    resolution: str = "resolve"
     resolved_labels: dict[str, Any] | None
-    reasoning: str
-    resolved_by: str
-    tier: str | None
-    resolved_at: datetime
+    rationale: str | None
+    review_event_ids: list[str]          # required
 ```
 
 ---
@@ -2131,43 +2161,46 @@ class QualityTrendPoint(BaseModel):
 
 #### `GET /quality/agreement`
 
-Detailed agreement metrics.
+Agreement measured from the review events of the tasks in scope.
+`AgreementMetricsService` in molabel-core computes it, with the same record
+source as the `agreement_analysis` step: each reviewer and each agent run is one
+rater, and a reviewer's value is the labels their counted review event stores.
+The agent raters are the outputs the queue's tasks are bound to. A scope over
+more than one task schema answers 422. Every label field of the schema in scope
+is reported, measured or skipped. [Agreement metrics](../guides/agreement-metrics.md) gives each formula
+and the cases that make a metric null.
 
-This endpoint does not compute metrics yet. It returns null for every metric, 0
-for `sample_size` and empty maps. `AgreementMetricsService` in molabel-core
-computes the metrics today, through the `agreement_analysis` workflow step.
-[Agreement metrics](../guides/agreement-metrics.md) gives each formula and the
-cases that make a metric null.
+**Query params:** `workspace_id` (required), `queue_id`, `dataset_id`, `task_schema_id` (optional)
 
-**Query params:** `workspace_id` (required), `dataset_id` (optional), `task_schema_id` (optional)
+`workspace_id` must be the caller's workspace. Any other answers 404.
 
 **Response:** `200 OK`
 
 ```python
-class AgreementMetrics(BaseModel):
-    overall: AgreementDetail
-    per_field: dict[str, AgreementDetail]
-    per_reviewer: dict[str, ReviewerAgreement]
-    per_label_value: dict[str, dict[str, float]]   # field -> value -> agreement rate
-    confusion_matrices: dict[str, list[list[int]]]  # field -> matrix
+class AgreementReport(BaseModel):
+    workspace_id: str
+    queue_id: str | None
+    dataset_id: str | None
+    task_schema_id: str | None
+    record_count: int                                # records with a rated value
+    reviewer_count: int
+    inter_annotator: AgreementScope                  # reviewers against each other
+    human_agent: AgreementScope                      # each reviewer value paired with each proposal
+    warnings: list[str]
 
-class AgreementDetail(BaseModel):
-    cohens_kappa: float | None          # Cohen's kappa for two raters, each with its own marginals
-    percent_agreement: float | None     # matching value pairs / all value pairs within units
-    krippendorffs_alpha: float | None   # Krippendorff's alpha, nominal difference, n(n-1) expected term
-    sample_size: int
-
-class ReviewerAgreement(BaseModel):
-    reviewer_id: str
-    reviewer_name: str
-    agreement_with_consensus: float | None
-    agreement_with_agent: float | None
-    records_reviewed: int
-    avg_review_time: float | None
+class AgreementScope(BaseModel):
+    pooled: AgreementMetricSummary                   # every field pooled into one variable
+    fields: dict[str, AgreementMetricSummary]        # field -> that field alone
+    skipped_fields: dict[str, str | None]            # field with a null alpha -> why
 ```
 
-Until this endpoint computes metrics, read them from the `summary` of an
-`agreement_analysis` step's result. Every metric is computed once per label
+Before it computed anything, the endpoint returned `cohens_kappa`,
+`krippendorffs_alpha`, `sample_size`, `per_field`, `per_reviewer`,
+`per_label_value`, and `confusion_matrices`, all null or empty. No client read
+them, so they are gone rather than kept as aliases.
+
+The `agreement_analysis` step records the same metrics in its result's
+`summary`. Every metric is computed once per label
 field and once pooled over all fields. A pooled coefficient is not an average
 of the per-field ones.
 
@@ -2973,9 +3006,9 @@ The local FastAPI server supports multiple concurrent reviewer sessions (PRD Sec
 | POST | `/review/events/draft` | Save draft |
 | POST | `/review/events/{id}/reveal-ai` | Record AI reveal |
 | GET | `/review/events` | Review history |
-| GET | `/adjudication/queue` | Disagreement queue |
-| GET | `/adjudication/{id}` | Adjudication detail |
-| POST | `/adjudication/{id}/resolve` | Submit resolution |
+| GET | `/adjudication/queues/{qid}/disagreements` | A queue's disagreements |
+| GET | `/adjudication/queues/{qid}/disagreements/{rid}` | Disagreement detail |
+| POST | `/adjudication/queues/{qid}/disagreements/{rid}/resolve` | Store a resolution |
 | GET | `/quality/dashboard` | Quality dashboard |
 | GET | `/quality/agreement` | Agreement metrics |
 | GET | `/quality/drift` | Drift detection |

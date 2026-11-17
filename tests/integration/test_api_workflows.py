@@ -2183,7 +2183,7 @@ async def test_an_accept_with_no_labels_and_no_proposal_shown_gives_no_value(
 
 
 @pytest.mark.asyncio
-async def test_an_overlap_queue_needs_as_many_reviewers_as_copies(
+async def test_closing_the_unclaimed_copies_lets_a_short_staffed_overlap_queue_advance(
     client, app, tmp_path
 ):
     _, tokens, queue_id, advance_path = await _start_three_record_review(
@@ -2199,18 +2199,26 @@ async def test_an_overlap_queue_needs_as_many_reviewers_as_copies(
     for token in tokens[:2]:
         while (task := await _claim(client, queue_id, token)) is not None:
             await _accept(client, task, token, {"sentiment": "neutral"})
+    held = await _claim(client, queue_id, tokens[2])
 
     refused = await client.post(advance_path, headers=headers)
 
     assert refused.status_code == 409
-    assert (
-        "3 copies need 3 distinct reviewers; 2 have submitted"
-        in (refused.json()["error"]["message"])
+    message = refused.json()["error"]["message"]
+    assert "3 task(s) still need submission" in message
+    assert f"molabel queue close-copies {queue_id}" in message
+
+    closed = await client.post(
+        f"/api/v1/queues/{queue_id}/close-copies", headers=headers
     )
+    assert closed.json() == {"queue_id": queue_id, "closed": 2, "claimed": 1}
+    held_open = await client.post(advance_path, headers=headers)
+    assert held_open.status_code == 409
+    message = held_open.json()["error"]["message"]
+    assert "1 task(s) still need submission" in message
+    assert "close-copies" not in message
 
-    while (task := await _claim(client, queue_id, tokens[2])) is not None:
-        await _accept(client, task, tokens[2], {"sentiment": "neutral"})
-
+    await _accept(client, held, tokens[2], {"sentiment": "neutral"})
     assert (await client.post(advance_path, headers=headers)).status_code == 200
 
 

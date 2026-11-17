@@ -8,11 +8,17 @@ produces audit-trail review events.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+from molabel.core.quality.review_agreement import (
+    ReviewEventLabels,
+    counted_review_events,
+    rated_labels,
+)
 from molabel.core.types import AdjudicationResolution, ReviewEventSource
 
 # ---------------------------------------------------------------------------
@@ -735,6 +741,33 @@ class AdjudicationService:
         # Sort by relevance score descending
         excerpts.sort(key=lambda e: -e.relevance_score)
         return excerpts
+
+
+def disagreements_from_reviews(
+    events: Iterable[ReviewEventLabels],
+    task_schema_id: uuid.UUID,
+) -> list[AdjudicationQueueItem]:
+    """Classify the human-human disagreements among a queue's counted reviews.
+
+    Each reviewer gives a record the value agreement rates: the labels of
+    their counted event, the head of its correction chain. A record whose
+    values differ on a field disagrees, and the items come back most severe
+    first, as ``AdjudicationService.build_queue`` orders them.
+    """
+    by_record: dict[str, list[dict[str, Any]]] = {}
+    for event in counted_review_events(events):
+        labels = rated_labels(event)
+        if labels is not None:
+            by_record.setdefault(event.record_id, []).append(
+                {
+                    "id": event.event_id,
+                    "reviewer_id": event.reviewer_id,
+                    "source": ReviewEventSource.human.value,
+                    "labels": labels,
+                }
+            )
+    service = AdjudicationService()
+    return service.build_queue(service.detect_disagreements(by_record, task_schema_id))
 
 
 def _hashable_value(val: Any) -> Any:

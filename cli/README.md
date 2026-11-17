@@ -19,7 +19,7 @@ The intended operating model is:
 - `task-schema`: task schema creation and inspection
 - `prompt`: prompt creation and inspection
 - `workflow`: workflow creation, execution, and execution control
-- `queue`: review queue inspection and claiming
+- `queue`: review queue inspection, claiming, and closing unclaimed copies
 - `review`: submit, draft, reveal, release, and correction flows
 - `adjudication`: disagreement detection and resolution
 - `agent-run`: agent-run lifecycle and comparison

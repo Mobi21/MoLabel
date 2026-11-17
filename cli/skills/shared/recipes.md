@@ -12,6 +12,7 @@
 - Run a workflow: `molabel workflow run <selector> --json`
 - Inspect executions: `molabel workflow execution <selector> <execution-id> --json`
 - Claim review work: `molabel queue claim <queue-id> --json`
+- End review on a queue with more copies than reviewers: `molabel queue close-copies <queue-id> --json`
 - Submit a review: `molabel review submit <task-id> --labels-file labels.json --decision accept --json`
 - Inspect adjudication queue: `molabel adjudication queue --json`
 - Show quality dashboard: `molabel quality dashboard --json`

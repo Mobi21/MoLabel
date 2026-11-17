@@ -276,7 +276,7 @@ async def test_full_pipeline_pairwise_comparison(
         )
         assert agreement_resp.status_code == 200, agreement_resp.text
         agreement_data = agreement_resp.json()
-        assert "overall" in agreement_data
+        assert "pooled" in agreement_data["inter_annotator"]
 
     # ── Checkpoint 7: Export + Release ────────────────────────────────────
     with checkpoint(ctx, "export_release"):

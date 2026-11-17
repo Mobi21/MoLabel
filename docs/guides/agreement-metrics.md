@@ -204,11 +204,31 @@ A `human_review` step with `overlap_count: 2` creates two tasks per record, and
 the queue never hands one reviewer both. The step resumes once every task is
 submitted, so each record then has two reviewers.
 
-A step with `overlap_count: N` needs N distinct reviewers. With fewer, each
-reviewer submits one copy of every record, the queue then looks empty to all of
-them, and the remaining copies stay `available`. The step cannot resume, and
-advancing it returns 409 with a message such as "3 copies need 3 distinct
-reviewers; 2 have submitted". A new reviewer can claim the remaining copies.
+With fewer reviewers than copies, each reviewer submits one copy of every
+record, the queue then looks empty to all of them, and the remaining copies stay
+`available`. Advancing the step returns 409 and names the unclaimed copies.
+Close them with `molabel queue close-copies <queue-id>`, or the adjudication
+screen's Close button, and the step resumes with the reviews in. A closed copy
+is never reviewed, so it never counts as a rater and adds no value to
+agreement. A claimed copy stays open until its reviewer submits, skips, or
+releases it. Adjudication lists a record once none of its copies is
+`available` or `claimed`, so closing the copies also lets it list the records
+the reviewers disagree on.
+
+## Measuring a queue
+
+`GET /api/v1/quality/agreement?workspace_id=...&queue_id=...`, the CLI's
+`molabel quality agreement --queue-id <id>`, and the GUI's calibration screen
+measure a queue outside any workflow, from the same review events. They run
+`analyze` twice: `inter_annotator` for the reviewers against each other and
+`human_agent` for each reviewer value paired with each proposal the queue's
+tasks are bound to. Each scope lists its `skipped_fields`, the fields whose
+Krippendorff's alpha is null, with the reason.
+
+The scope holds at most one task schema. Two schemas name different fields, and
+a reviewer's labels for one record under each are two values, not one. A scope
+over more than one, such as a workspace with two schemas, returns 422; pass
+`task_schema_id` or `queue_id`.
 
 ## Workflow outputs
 

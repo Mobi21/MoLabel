@@ -28,7 +28,13 @@ from molabel.core.review.queue_ordering import (
     OrderingConfig,
     build_priority_sql_expression,
 )
-from molabel.core.types import BlindReviewPolicy, ReviewDecision, ReviewEventSource
+from molabel.core.types import (
+    BlindReviewPolicy,
+    ReviewDecision,
+    ReviewEventSource,
+    ReviewTaskStatus,
+    canonical_review_decision,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +180,7 @@ def _extract_record_text(payload: dict[str, Any] | None) -> str | None:
     return rendered if rendered != "{}" else None
 
 
-def _resolve_task_schema_version(conn, task_schema_id: str) -> int:
+def load_task_schema_version(conn, task_schema_id: str) -> int:
     """Best-effort lookup of the task schema version for review events."""
     try:
         row = conn.execute(
@@ -370,6 +376,26 @@ def _validate_structured_submission_labels(
     return errors
 
 
+def prepare_review_labels(
+    conn,
+    *,
+    task_schema_id: str,
+    record_id: str,
+    labels: dict[str, Any],
+) -> dict[str, Any]:
+    """Normalize labels to the task schema, raising ValueError when invalid."""
+    normalized = _normalize_submission_labels(conn, task_schema_id, labels)
+    errors = _validate_structured_submission_labels(
+        conn,
+        record_id=record_id,
+        task_schema_id=task_schema_id,
+        labels=normalized,
+    )
+    if errors:
+        raise ValueError("; ".join(errors))
+    return normalized
+
+
 def _shown_agent_output_id(conn, task_id: uuid.UUID) -> str | None:
     """Return the agent output the task's claim or reveal showed, if any."""
     shown = conn.execute(
@@ -403,7 +429,7 @@ def _resolve_effective_submission_labels(
     return shown_labels or explicit_labels
 
 
-def _get_record_context(
+def reviewer_record_context(
     conn,
     record_id: str,
 ) -> dict[str, Any]:
@@ -579,6 +605,36 @@ def release_claim(
     return _row_to_task_dict(row)
 
 
+def close_open_copies(engine: Engine, queue_id: str) -> dict[str, int]:
+    """Close every unclaimed copy of a queue, so its review ends with the copies in.
+
+    A closed copy is never reviewed: no reviewer can claim it, and it has no
+    review event, so it never counts as a rater. A claimed copy stays open,
+    because a reviewer holds it. ``closed`` counts the copies this call
+    closed, and ``claimed`` the copies it left open.
+    """
+    now = datetime.now(UTC).isoformat()
+    with engine.begin() as conn:
+        closed = conn.execute(
+            text(
+                """
+                UPDATE review_tasks
+                SET status = 'closed', updated_at = :now
+                WHERE queue_id = :queue_id AND status = 'available'
+                """
+            ),
+            {"queue_id": queue_id, "now": now},
+        ).rowcount
+        claimed = conn.execute(
+            text(
+                "SELECT count(*) FROM review_tasks "
+                "WHERE queue_id = :queue_id AND status = 'claimed'"
+            ),
+            {"queue_id": queue_id},
+        ).scalar_one()
+    return {"closed": int(closed), "claimed": int(claimed)}
+
+
 # ---------------------------------------------------------------------------
 # Submit review
 # ---------------------------------------------------------------------------
@@ -637,22 +693,15 @@ def submit_review(
             return None
 
         task_schema_id = str(row[3])
-        effective_labels = _normalize_submission_labels(
+        effective_labels = prepare_review_labels(
             conn,
-            task_schema_id,
-            effective_labels,
-        )
-        validation_errors = _validate_structured_submission_labels(
-            conn,
-            record_id=str(row[2]),
             task_schema_id=task_schema_id,
+            record_id=str(row[2]),
             labels=effective_labels,
         )
-        if validation_errors:
-            raise ValueError("; ".join(validation_errors))
         labels_json = json.dumps(effective_labels)
         review_event_id = uuid.uuid4()
-        task_schema_version = _resolve_task_schema_version(conn, task_schema_id)
+        task_schema_version = load_task_schema_version(conn, task_schema_id)
         decision_value = (
             normalized_decision.value if normalized_decision is not None else None
         )
@@ -1113,28 +1162,24 @@ def _get_blind_review_policy(
     return BlindReviewPolicy(str(row[0]))
 
 
-def _get_agent_output_for_task(
+def _select_agent_output(
     conn,
-    record_id: str,
-    task_schema_id: str,
+    where: str,
+    params: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Fetch the most recent agent output for a record + task schema.
-
-    Returns a dict representation, or None if no agent output exists.
-    """
+    """Fetch the newest agent output matching ``where`` as a dict, or None."""
     try:
         row = conn.execute(
             text(
                 f"""
                 SELECT {_AGENT_OUTPUT_COLUMNS}
                 FROM agent_outputs
-                WHERE record_id = :record_id
-                  AND task_schema_id = :task_schema_id
+                WHERE {where}
                 ORDER BY created_at DESC
                 LIMIT 1
                 """
             ),
-            {"record_id": record_id, "task_schema_id": task_schema_id},
+            params,
         ).first()
     except SQLAlchemyError:
         return None
@@ -1185,6 +1230,19 @@ def _get_agent_output_for_task(
     }
 
 
+def _get_agent_output_for_task(
+    conn,
+    record_id: str,
+    task_schema_id: str,
+) -> dict[str, Any] | None:
+    """Fetch the most recent agent output for a record + task schema."""
+    return _select_agent_output(
+        conn,
+        "record_id = :record_id AND task_schema_id = :task_schema_id",
+        {"record_id": record_id, "task_schema_id": task_schema_id},
+    )
+
+
 def apply_blind_review_policy(
     engine: Engine,
     task_dict: dict[str, Any],
@@ -1205,7 +1263,7 @@ def apply_blind_review_policy(
     ai_revealed = task_dict.get("ai_revealed", False)
 
     with engine.begin() as conn:
-        task_dict.update(_get_record_context(conn, record_id))
+        task_dict.update(reviewer_record_context(conn, record_id))
         policy = _get_blind_review_policy(conn, task_schema_id)
         shows_output = policy == BlindReviewPolicy.show_agent_outputs or (
             policy == BlindReviewPolicy.hide_agent_outputs_by_default and ai_revealed
@@ -1316,7 +1374,7 @@ def reveal_ai(
     updated_task = _row_to_task_dict(updated_row)
 
     with engine.connect() as conn:
-        updated_task.update(_get_record_context(conn, updated_task["record_id"]))
+        updated_task.update(reviewer_record_context(conn, updated_task["record_id"]))
 
     updated_task["agent_output"] = agent_output
     updated_task["blind_review_policy"] = policy.value
@@ -1407,15 +1465,12 @@ def submit_correction(
             explicit_labels=labels,
             decision=normalized_decision,
         )
-        normalized_labels = _normalize_submission_labels(conn, task_schema_id, labels)
-        validation_errors = _validate_structured_submission_labels(
+        normalized_labels = prepare_review_labels(
             conn,
-            record_id=record_id,
             task_schema_id=task_schema_id,
-            labels=normalized_labels,
+            record_id=record_id,
+            labels=labels,
         )
-        if validation_errors:
-            raise ValueError("; ".join(validation_errors))
         labels_json = json.dumps(normalized_labels)
 
         # Capture the previous labels for audit
@@ -1562,12 +1617,7 @@ def get_queue_status(
             {"queue_id": queue_id},
         ).all()
 
-    status_counts: dict[str, int] = {
-        "available": 0,
-        "claimed": 0,
-        "submitted": 0,
-        "skipped": 0,
-    }
+    status_counts = {status.value: 0 for status in ReviewTaskStatus}
     for row in counts:
         status_counts[str(row[0])] = int(row[1])
 
@@ -1592,36 +1642,77 @@ def get_queue_status(
         "claimed": status_counts["claimed"],
         "submitted": status_counts["submitted"],
         "skipped": status_counts["skipped"],
+        "closed": status_counts["closed"],
         "active_reviewers": active_reviewers,
     }
 
 
-def list_queues(engine: Engine, workspace_id: str | None) -> list[dict[str, Any]]:
+QUEUE_KINDS: dict[str, str] = {
+    "human_review": "review",
+    "human_triage": "triage",
+    "human_calibration": "calibrate",
+    "human_adjudication": "adjudicate",
+}
+"""The queue kind of each workflow step type that creates a queue."""
+
+
+def list_queues(
+    engine: Engine, workspace_id: str | None, reviewer_id: uuid.UUID
+) -> list[dict[str, Any]]:
     """List review queues with per-status task counts.
 
-    A queue exists as the set of review tasks that share a ``queue_id``.
+    A queue exists as the set of review tasks that share a ``queue_id``. Its
+    kind comes from the workflow step that created it. ``my_remaining``
+    counts the records the reviewer can still claim or holds a claim on, and
+    ``my_submitted`` the tasks the reviewer submitted.
     """
     with engine.connect() as conn:
         rows = conn.execute(
             text(
                 """
                 SELECT
-                    queue_id,
-                    workspace_id,
-                    task_schema_id,
+                    t.queue_id,
+                    t.workspace_id,
+                    t.task_schema_id,
                     COUNT(*),
-                    SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN status = 'claimed' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END),
-                    MIN(created_at)
-                FROM review_tasks
-                WHERE :workspace_id IS NULL OR workspace_id = :workspace_id
-                GROUP BY queue_id, workspace_id, task_schema_id
-                ORDER BY MIN(created_at), queue_id
+                    SUM(CASE WHEN t.status = 'available' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN t.status = 'claimed' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN t.status = 'submitted' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN t.status = 'skipped' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN t.status = 'closed' THEN 1 ELSE 0 END),
+                    MIN(t.created_at),
+                    SUM(
+                        CASE WHEN t.claimed_by = :reviewer_id
+                              AND t.status = 'submitted' THEN 1 ELSE 0 END
+                    ),
+                    COUNT(DISTINCT CASE
+                        WHEN t.claimed_by = :reviewer_id AND t.status = 'claimed'
+                            THEN t.record_id
+                        WHEN t.status = 'available' AND t.record_id NOT IN (
+                            SELECT m.record_id
+                            FROM review_tasks m
+                            WHERE m.queue_id = t.queue_id
+                              AND m.claimed_by = :reviewer_id
+                              AND m.status IN ('claimed', 'submitted', 'skipped')
+                        ) THEN t.record_id
+                    END),
+                    s.title,
+                    s.blind_review_policy,
+                    (
+                        SELECT x.step_type
+                        FROM workflow_step_executions x
+                        WHERE json_extract(x.result, '$.summary.queue_id')
+                              = t.queue_id
+                        LIMIT 1
+                    )
+                FROM review_tasks t
+                LEFT JOIN task_schemas s ON s.id = t.task_schema_id
+                WHERE :workspace_id IS NULL OR t.workspace_id = :workspace_id
+                GROUP BY t.queue_id, t.workspace_id, t.task_schema_id
+                ORDER BY MIN(t.created_at), t.queue_id
                 """
             ),
-            {"workspace_id": workspace_id},
+            {"workspace_id": workspace_id, "reviewer_id": str(reviewer_id)},
         ).all()
 
     return [
@@ -1634,7 +1725,151 @@ def list_queues(engine: Engine, workspace_id: str | None) -> list[dict[str, Any]
             "claimed": int(row[5]),
             "submitted": int(row[6]),
             "skipped": int(row[7]),
-            "created_at": str(row[8]),
+            "closed": int(row[8]),
+            "created_at": str(row[9]),
+            "my_submitted": int(row[10]),
+            "my_remaining": int(row[11]),
+            "task_schema_title": str(row[12]) if row[12] else None,
+            "blind_review_policy": str(row[13]) if row[13] else None,
+            "kind": QUEUE_KINDS.get(str(row[14])) if row[14] else None,
         }
         for row in rows
     ]
+
+
+def queue_in_workspace(engine: Engine, queue_id: str, workspace_id: uuid.UUID) -> bool:
+    """Whether the queue holds tasks of this workspace."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT 1 FROM review_tasks "
+                "WHERE queue_id = :queue_id AND workspace_id = :workspace_id LIMIT 1"
+            ),
+            {"queue_id": queue_id, "workspace_id": str(workspace_id)},
+        ).first()
+    return row is not None
+
+
+def reviewer_queue_tasks(
+    engine: Engine, queue_id: str, reviewer_id: uuid.UUID, limit: int
+) -> list[dict[str, Any]]:
+    """The reviewer's latest tasks in a queue, oldest first, a held claim last."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT t.id, t.record_id, r.external_id, t.status,
+                       t.submitted_at, t.ai_revealed,
+                       (
+                           SELECT e.decision
+                           FROM review_events e
+                           WHERE e.review_task_id = t.id
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM review_events s
+                                 WHERE s.supersedes_event_id = e.id
+                             )
+                           ORDER BY e.created_at DESC
+                           LIMIT 1
+                       )
+                FROM review_tasks t
+                LEFT JOIN records r ON r.id = t.record_id
+                WHERE t.queue_id = :queue_id
+                  AND t.claimed_by = :reviewer_id
+                  AND t.status IN ('claimed', 'submitted', 'skipped')
+                ORDER BY t.status = 'claimed' DESC,
+                         COALESCE(t.submitted_at, t.updated_at) DESC
+                LIMIT :limit
+                """
+            ),
+            {"queue_id": queue_id, "reviewer_id": str(reviewer_id), "limit": limit},
+        ).all()
+
+    return [
+        {
+            "task_id": str(row[0]),
+            "record_id": str(row[1]),
+            "record_external_id": str(row[2]) if row[2] else None,
+            "status": str(row[3]),
+            "submitted_at": str(row[4]) if row[4] else None,
+            "ai_revealed": parse_bool(row[5]),
+            "decision": canonical_review_decision(str(row[6])) if row[6] else None,
+        }
+        for row in reversed(rows)
+    ]
+
+
+def get_reviewer_task(
+    engine: Engine,
+    task_id: uuid.UUID,
+    reviewer_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+) -> dict[str, Any] | None:
+    """Read a task of the workspace the reviewer claimed, submitted, or skipped.
+
+    The agent output is the one the claim or reveal showed, so a blind task
+    the reviewer never revealed shows none. ``review`` is the reviewer's
+    counted event for the task, the head of its correction chain.
+    """
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                f"""
+                SELECT {_TASK_COLUMNS}, shown_agent_output_id
+                FROM review_tasks
+                WHERE id = :task_id
+                  AND claimed_by = :reviewer_id
+                  AND workspace_id = :workspace_id
+                  AND status IN ('claimed', 'submitted', 'skipped')
+                """
+            ),
+            {
+                "task_id": str(task_id),
+                "reviewer_id": str(reviewer_id),
+                "workspace_id": str(workspace_id),
+            },
+        ).first()
+        if row is None:
+            return None
+
+        task = _row_to_task_dict(row)
+        task.update(reviewer_record_context(conn, task["record_id"]))
+        task["blind_review_policy"] = _get_blind_review_policy(
+            conn, task["task_schema_id"]
+        ).value
+        task["agent_output"] = (
+            _select_agent_output(conn, "id = :id", {"id": str(row[20])})
+            if row[20]
+            else None
+        )
+        event = conn.execute(
+            text(
+                """
+                SELECT e.id, e.decision, e.labels, e.rationale,
+                       e.ai_was_revealed, e.created_at
+                FROM review_events e
+                WHERE e.review_task_id = :task_id
+                  AND e.reviewer_id = :reviewer_id
+                  AND NOT EXISTS (
+                      SELECT 1 FROM review_events s
+                      WHERE s.supersedes_event_id = e.id
+                  )
+                ORDER BY e.created_at DESC
+                LIMIT 1
+                """
+            ),
+            {"task_id": str(task_id), "reviewer_id": str(reviewer_id)},
+        ).first()
+
+    task["review"] = (
+        {
+            "review_event_id": str(event[0]),
+            "decision": canonical_review_decision(str(event[1])) if event[1] else None,
+            "labels": _parse_json_object(event[2]) or {},
+            "rationale": event[3],
+            "ai_was_revealed": parse_bool(event[4]),
+            "created_at": str(event[5]),
+        }
+        if event is not None
+        else None
+    )
+    return task

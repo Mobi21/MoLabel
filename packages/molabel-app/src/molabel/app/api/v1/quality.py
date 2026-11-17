@@ -1,18 +1,31 @@
 """Quality endpoints -- /api/v1/quality.
 
-Provides quality dashboard, inter-annotator agreement metrics, and
-drift detection reports for monitoring labeling quality over time.
+Provides the quality dashboard, agreement measured from review events, and
+drift detection reports. The dashboard and drift report are not computed yet.
 """
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
+from sqlalchemy import text
 
 from molabel.app.middleware.session import CurrentReviewer
+from molabel.app.services.review_events import (
+    queue_agent_proposals,
+    queue_review_events,
+)
+from molabel.app.utils import get_engine
+from molabel.core.quality.agreement_metrics import (
+    AgreementAnalysisResult,
+    AgreementMetricsService,
+    AgreementMetricSummary,
+)
+from molabel.core.quality.review_agreement import agreement_records_from_reviews
 
 router = APIRouter(prefix="/quality", tags=["quality"])
 
@@ -55,34 +68,35 @@ class QualityDashboard(BaseModel):
     recent_quality_trend: list[QualityTrendPoint] = []
 
 
-class AgreementDetail(BaseModel):
-    """Detailed agreement metrics for a single scope."""
+class AgreementScope(BaseModel):
+    """Agreement among one set of raters.
 
-    cohens_kappa: float | None = None
-    percent_agreement: float | None = None
-    krippendorffs_alpha: float | None = None
-    sample_size: int = 0
+    ``pooled`` pools every field into one variable, so it is not an average
+    of ``fields``. ``skipped_fields`` maps each field whose Krippendorff's
+    alpha is undefined to the reason.
+    """
 
-
-class ReviewerAgreement(BaseModel):
-    """Per-reviewer agreement metrics."""
-
-    reviewer_id: str
-    reviewer_name: str
-    agreement_with_consensus: float | None = None
-    agreement_with_agent: float | None = None
-    records_reviewed: int = 0
-    avg_review_time: float | None = None
+    pooled: AgreementMetricSummary
+    fields: dict[str, AgreementMetricSummary] = {}
+    skipped_fields: dict[str, str | None] = {}
 
 
-class AgreementMetrics(BaseModel):
-    """Full agreement metrics report."""
+class AgreementReport(BaseModel):
+    """Agreement measured from the review events of the queues in scope.
 
-    overall: AgreementDetail
-    per_field: dict[str, AgreementDetail] = {}
-    per_reviewer: dict[str, ReviewerAgreement] = {}
-    per_label_value: dict[str, dict[str, float]] = {}
-    confusion_matrices: dict[str, list[list[int]]] = {}
+    ``inter_annotator`` rates reviewers against each other, and
+    ``human_agent`` pairs each reviewer's value with each agent proposal.
+    """
+
+    workspace_id: str
+    queue_id: str | None = None
+    dataset_id: str | None = None
+    task_schema_id: str | None = None
+    record_count: int = 0
+    reviewer_count: int = 0
+    inter_annotator: AgreementScope
+    human_agent: AgreementScope
+    warnings: list[str] = []
 
 
 class DriftIndicator(BaseModel):
@@ -138,34 +152,109 @@ async def get_quality_dashboard(
     )
 
 
-@router.get("/agreement", response_model=AgreementMetrics)
+def _scope(result: AgreementAnalysisResult) -> AgreementScope:
+    return AgreementScope(
+        pooled=result.overall,
+        fields=result.fields,
+        skipped_fields={
+            field: summary.null_reasons.get("krippendorff_alpha")
+            for field, summary in result.fields.items()
+            if summary.krippendorff_alpha is None
+        },
+    )
+
+
+def _label_field_names(conn: Any, task_schema_id: str) -> list[str] | None:
+    raw = conn.execute(
+        text("SELECT label_fields FROM task_schemas WHERE id = :id"),
+        {"id": task_schema_id},
+    ).scalar()
+    fields = json.loads(raw) if isinstance(raw, str) else raw
+    if not isinstance(fields, list):
+        return None
+    return [field["name"] for field in fields if isinstance(field, dict)]
+
+
+@router.get("/agreement", response_model=AgreementReport)
 async def get_agreement_metrics(
+    request: Request,
     reviewer: CurrentReviewer,
     workspace_id: Annotated[str, Query(description="Workspace ID (required)")],
+    queue_id: Annotated[str | None, Query(description="Optional queue filter")] = None,
     dataset_id: Annotated[
         str | None, Query(description="Optional dataset filter")
     ] = None,
     task_schema_id: Annotated[
         str | None, Query(description="Optional task schema filter")
     ] = None,
-) -> AgreementMetrics:
-    """Get detailed inter-annotator agreement metrics.
+) -> AgreementReport:
+    """Measure agreement over the review tasks in scope.
 
-    Returns overall, per-field, per-reviewer, and per-label agreement
-    metrics including Cohen's kappa, Krippendorff's alpha, and
-    confusion matrices.
+    Each reviewer and each agent run is one rater, and a reviewer's value is
+    the labels their counted review event stores. A scope over more than one
+    task schema answers 422; pass ``task_schema_id`` or ``queue_id``. Every
+    label field of the schema in scope is reported, measured or skipped.
+    ``docs/guides/agreement-metrics.md`` gives the formulas and the rules.
+    It measures only the caller's workspace, and answers 404 for any other.
     """
-    return AgreementMetrics(
-        overall=AgreementDetail(
-            cohens_kappa=None,
-            percent_agreement=None,
-            krippendorffs_alpha=None,
-            sample_size=0,
+    if workspace_id != str(reviewer.workspace_id):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    with get_engine(request).connect() as conn:
+        tasks = conn.execute(
+            text(
+                "SELECT DISTINCT queue_id, record_id, task_schema_id "
+                "FROM review_tasks WHERE workspace_id = :workspace_id "
+                "AND (:queue_id IS NULL OR queue_id = :queue_id) "
+                "AND (:dataset_id IS NULL OR dataset_id = :dataset_id) "
+                "AND (:task_schema_id IS NULL OR task_schema_id = :task_schema_id)"
+            ),
+            {
+                "workspace_id": workspace_id,
+                "queue_id": queue_id,
+                "dataset_id": dataset_id,
+                "task_schema_id": task_schema_id,
+            },
+        ).fetchall()
+        queue_ids = sorted({str(row[0]) for row in tasks})
+        schema_ids = {str(row[2]) for row in tasks}
+        if len(schema_ids) > 1:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"The scope holds {len(schema_ids)} task schemas, whose "
+                    "fields cannot be rated together; pass task_schema_id or "
+                    "queue_id"
+                ),
+            )
+        records = agreement_records_from_reviews(
+            queue_review_events(conn, queue_ids),
+            queue_agent_proposals(conn, queue_ids),
+            record_ids=[str(row[1]) for row in tasks],
+        )
+        fields = _label_field_names(conn, schema_ids.pop()) if schema_ids else None
+
+    service = AgreementMetricsService()
+    inter_annotator = service.analyze(
+        records, analysis_type="inter_annotator", fields=fields
+    )
+    human_agent = service.analyze(records, analysis_type="human_agent", fields=fields)
+    return AgreementReport(
+        workspace_id=workspace_id,
+        queue_id=queue_id,
+        dataset_id=dataset_id,
+        task_schema_id=task_schema_id,
+        record_count=len(records),
+        reviewer_count=len(
+            {
+                annotation.rater
+                for record in records
+                for annotation in record.annotations
+                if annotation.source == "human"
+            }
         ),
-        per_field={},
-        per_reviewer={},
-        per_label_value={},
-        confusion_matrices={},
+        inter_annotator=_scope(inter_annotator),
+        human_agent=_scope(human_agent),
+        warnings=[*inter_annotator.warnings, *human_agent.warnings],
     )
 
 
