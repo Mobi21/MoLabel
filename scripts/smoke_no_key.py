@@ -611,7 +611,24 @@ def run_gold(
         and conflict["other"]["expected"] == EDITS["ticket-4"],
         "the conflict keeps the adjudicated gold label",
     )
+    conflicts = folder / "conflicts.jsonl"
+    check(conflicts.is_file(), f"the conflict is kept in {conflicts}")
+    (stored,) = [json.loads(line) for line in conflicts.read_text("utf-8").splitlines()]
+    print(f"  conflicts.jsonl: {conflicts.read_text('utf-8').strip()}")
+    check(
+        stored["item_id"] == item["item_id"]
+        and stored["existing"] == RESOLVED
+        and stored["incoming"] == EDITS["ticket-4"]
+        and stored["provenance"]["queue_id"] == review_queue,
+        "conflicts.jsonl holds ticket-4's gold and incoming labels and their queue",
+    )
+    check(
+        yaml.safe_load((folder / "gold.yaml").read_text("utf-8"))["content_hash"]
+        == _sha256(items),
+        "recording the conflict left gold.yaml describing gold.jsonl",
+    )
     once = items.read_bytes()
+    conflicts_once = conflicts.read_bytes()
 
     again = molabel(
         "gold",
@@ -629,6 +646,16 @@ def run_gold(
         "a second append adds nothing, dedupes ticket-6, and keeps version 3",
     )
     check(items.read_bytes() == once, "the second append left gold.jsonl as it was")
+    check(
+        conflicts.read_bytes() == conflicts_once
+        and [c["item_id"] for c in again["open_conflicts"]] == [item["item_id"]],
+        "the second append recorded ticket-4's conflict once",
+    )
+    shown = molabel("gold", "show", "ticket-gold")
+    check(
+        [c["incoming"] for c in shown["open_conflicts"]] == [EDITS["ticket-4"]],
+        "gold show lists the open conflict",
+    )
 
     exported = molabel("gold", "export", "ticket-gold")
     check(
