@@ -422,6 +422,44 @@ class TestConflictLog:
             ({"intent": "other"}, "adjudication"),
         ]
 
+    def test_each_queue_keeps_its_own_line_and_a_rerun_of_one_adds_none(self):
+        held = item("refund me", "refund")
+
+        def from_queue(queue_id: str, reviewer: str) -> tuple:
+            incoming = GoldItem.build(
+                task_schema=SCHEMA,
+                input={"text": "refund me"},
+                expected={"intent": "other"},
+                input_ref=GoldInputRef(record_id=f"{queue_id}-r1"),
+                provenance=provenance(
+                    queue_id=queue_id,
+                    workflow_execution_id=f"{queue_id}-run",
+                    reviewer_ids=[reviewer],
+                ),
+            )
+            return conflicts_of(held, incoming)
+
+        first = GoldConflictLog.read(b"").recorded(
+            [held], from_queue("q1", "alice"), now=NOW
+        )
+        second = GoldConflictLog.read(first.data).recorded(
+            [held], from_queue("q2", "bob"), now=NOW
+        )
+        rerun = GoldConflictLog.read(second.data).recorded(
+            [held], from_queue("q2", "bob"), now="2026-11-18T00:00:00+00:00"
+        )
+
+        assert second.data.startswith(first.data)
+        assert [
+            (
+                c.provenance.queue_id,
+                c.provenance.workflow_execution_id,
+                c.provenance.reviewer_ids,
+            )
+            for c in second.open([held])
+        ] == [("q1", "q1-run", ["alice"]), ("q2", "q2-run", ["bob"])]
+        assert rerun.data == second.data
+
     @pytest.mark.parametrize("end", [b"\r\n", b""])
     def test_an_append_keeps_an_earlier_line_and_its_line_end_byte_for_byte(self, end):
         held = item("refund me", "refund")

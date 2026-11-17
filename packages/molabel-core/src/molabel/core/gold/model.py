@@ -474,9 +474,18 @@ class GoldOpenConflict(GoldModel):
         )
 
     @property
-    def key(self) -> tuple[str, str, str]:
-        """What makes two lines the same conflict: item, incoming labels, source."""
-        return (self.item_id, _sha256(self.incoming), self.provenance.source)
+    def key(self) -> tuple[str, str, str, str]:
+        """What makes two lines the same conflict: item, incoming labels, source, queue.
+
+        Each queue's line keeps its own reviewers, workflow execution and model
+        failure; a re-run of one queue matches its own line.
+        """
+        return (
+            self.item_id,
+            _sha256(self.incoming),
+            self.provenance.source,
+            self.provenance.queue_id,
+        )
 
 
 @dataclass(frozen=True)

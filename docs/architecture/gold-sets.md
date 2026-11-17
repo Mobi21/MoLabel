@@ -139,9 +139,12 @@ per conflict, LF line ends, fixed field order, sorted label keys, and the
 same escapes for U+0085, U+2028 and U+2029. New conflicts go after the
 file's lines. A line that is still open keeps its bytes, a CRLF end included.
 
-A conflict is the same as one the file holds when its item, incoming labels
-and `provenance.source` match, so running an append again adds no line.
-Another label set or another source for the item adds a line.
+A conflict is the same as one the file holds when its item, incoming labels,
+`provenance.source` and `provenance.queue_id` match, so running an append
+from the same queue again adds no line. Another label set, another source or
+another queue for the item adds a line. Two queues that send the same labels
+for one input each keep a line, with their own reviewers, workflow execution
+and model failure.
 
 Conflicts are not gold. Writing `conflicts.jsonl` never changes
 `gold.jsonl`, `version`, `content_hash` or `item_count`. `gold.yaml` does not
