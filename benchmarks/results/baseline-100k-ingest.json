@@ -1,0 +1,80 @@
+{
+  "label": "baseline-100k-ingest",
+  "generated_at": "2026-11-17T02:10:16.509328+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "git_rev": "263298d"
+  },
+  "args": {
+    "sizes": [
+      100000
+    ],
+    "paths": [
+      "ingest"
+    ],
+    "runs": 7,
+    "warmup": 1,
+    "max_run_seconds": 120.0,
+    "skip": [],
+    "no_seed": true
+  },
+  "synthetic": {
+    "fields": 3,
+    "raters": 2,
+    "overlap": 3,
+    "rater_disagreement": 0.2,
+    "agent_disagreement": 0.1
+  },
+  "database_bytes": {
+    "100000": 964177920
+  },
+  "wall_seconds": 144.4,
+  "notes": [],
+  "profiles": [
+    "benchmarks\\results\\profile-ingest_api_jsonl-100000.txt",
+    "benchmarks\\results\\profile-ingest_loader_jsonl-100000.txt",
+    "benchmarks\\results\\profile-ingest_loader_csv-100000.txt"
+  ],
+  "timings": [
+    {
+      "path": "ingest_api_jsonl",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 13.3526,
+      "p95_s": 14.0796,
+      "min_s": 12.5622,
+      "max_s": 14.0796,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "ingest_loader_jsonl",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 0.9192,
+      "p95_s": 0.9439,
+      "min_s": 0.8146,
+      "max_s": 0.9439,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "ingest_loader_csv",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 0.8964,
+      "p95_s": 1.0135,
+      "min_s": 0.8739,
+      "max_s": 1.0135,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    }
+  ]
+}

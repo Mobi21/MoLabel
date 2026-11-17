@@ -1,0 +1,71 @@
+# cProfile of one agreement_service_inter_annotator run at n=100000, not counted in timings
+
+## top 25 by cumulative time
+         36802394 function calls in 10.033 seconds
+
+   Ordered by: cumulative time
+   List reduced from 44 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.036    0.036   10.033   10.033 bench_hot_paths.py:701(inter_annotator)
+        1    0.015    0.015    9.997    9.997 agreement_metrics.py:286(analyze)
+        1    0.018    0.018    8.312    8.312 agreement_metrics.py:237(_summarize_fields)
+        4    0.662    0.165    8.293    2.073 agreement_metrics.py:203(_summarize)
+  3000016    1.234    0.000    3.352    0.000 __init__.py:669(update)
+  1800016    0.932    0.000    2.747    0.000 __init__.py:595(__init__)
+        4    0.456    0.114    2.723    0.681 agreement_metrics.py:73(_krippendorff_alpha_nominal)
+        4    0.417    0.104    2.629    0.657 agreement_metrics.py:89(_fleiss_kappa)
+  1200028    0.485    0.000    2.092    0.000 {built-in method builtins.sum}
+        3    0.445    0.148    1.654    0.551 agreement_metrics.py:364(_units)
+  4900040    0.738    0.000    1.533    0.000 {built-in method builtins.isinstance}
+   720414    0.327    0.000    1.202    0.000 agreement_metrics.py:210(<genexpr>)
+  1200004    0.465    0.000    1.120    0.000 agreement_metrics.py:69(_sum_of_squares)
+   600000    0.677    0.000    1.109    0.000 agreement_metrics.py:147(value)
+        4    0.478    0.119    0.802    0.200 agreement_metrics.py:112(_cohen_kappa)
+  3000008    0.393    0.000    0.795    0.000 <frozen abc>:117(__instancecheck__)
+  1800008    0.394    0.000    0.473    0.000 {built-in method _collections._count_elements}
+  3000008    0.401    0.000    0.401    0.000 {built-in method _abc._abc_instancecheck}
+   600000    0.222    0.000    0.340    0.000 canonical.py:14(canonical_label_value)
+  3900028    0.216    0.000    0.216    0.000 {built-in method builtins.len}
+  2040806    0.202    0.000    0.202    0.000 {method 'get' of 'dict' objects}
+  2640856    0.186    0.000    0.186    0.000 agreement_metrics.py:70(<genexpr>)
+  1800013    0.180    0.000    0.180    0.000 {method 'values' of 'dict' objects}
+   600004    0.111    0.000    0.174    0.000 agreement_metrics.py:209(<genexpr>)
+  1200001    0.126    0.000    0.126    0.000 {method 'items' of 'dict' objects}
+
+
+
+## top 25 by own time
+         36802394 function calls in 10.033 seconds
+
+   Ordered by: internal time
+   List reduced from 44 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+  3000016    1.234    0.000    3.352    0.000 __init__.py:669(update)
+  1800016    0.932    0.000    2.747    0.000 __init__.py:595(__init__)
+  4900040    0.738    0.000    1.533    0.000 {built-in method builtins.isinstance}
+   600000    0.677    0.000    1.109    0.000 agreement_metrics.py:147(value)
+        4    0.662    0.165    8.293    2.073 agreement_metrics.py:203(_summarize)
+  1200028    0.485    0.000    2.092    0.000 {built-in method builtins.sum}
+        4    0.478    0.119    0.802    0.200 agreement_metrics.py:112(_cohen_kappa)
+  1200004    0.465    0.000    1.120    0.000 agreement_metrics.py:69(_sum_of_squares)
+        4    0.456    0.114    2.723    0.681 agreement_metrics.py:73(_krippendorff_alpha_nominal)
+        3    0.445    0.148    1.654    0.551 agreement_metrics.py:364(_units)
+        4    0.417    0.104    2.629    0.657 agreement_metrics.py:89(_fleiss_kappa)
+  3000008    0.401    0.000    0.401    0.000 {built-in method _abc._abc_instancecheck}
+  1800008    0.394    0.000    0.473    0.000 {built-in method _collections._count_elements}
+  3000008    0.393    0.000    0.795    0.000 <frozen abc>:117(__instancecheck__)
+   720414    0.327    0.000    1.202    0.000 agreement_metrics.py:210(<genexpr>)
+   600000    0.222    0.000    0.340    0.000 canonical.py:14(canonical_label_value)
+  3900028    0.216    0.000    0.216    0.000 {built-in method builtins.len}
+  2040806    0.202    0.000    0.202    0.000 {method 'get' of 'dict' objects}
+  2640856    0.186    0.000    0.186    0.000 agreement_metrics.py:70(<genexpr>)
+  1800013    0.180    0.000    0.180    0.000 {method 'values' of 'dict' objects}
+  1200001    0.126    0.000    0.126    0.000 {method 'items' of 'dict' objects}
+   600004    0.111    0.000    0.174    0.000 agreement_metrics.py:209(<genexpr>)
+   600000    0.055    0.000    0.055    0.000 agreement_metrics.py:143(rater)
+   600004    0.044    0.000    0.044    0.000 agreement_metrics.py:131(<genexpr>)
+   600004    0.040    0.000    0.040    0.000 agreement_metrics.py:126(<genexpr>)
+
+

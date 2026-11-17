@@ -1,0 +1,71 @@
+# cProfile of one agreement_service_human_agent run at n=100000, not counted in timings
+
+## top 25 by cumulative time
+         153249371 function calls (153249367 primitive calls) in 41.563 seconds
+
+   Ordered by: cumulative time
+   List reduced from 272 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        2    0.097    0.048   29.730   14.865 agreement_metrics.py:237(_summarize_fields)
+        8    1.908    0.238   29.633    3.704 agreement_metrics.py:203(_summarize)
+      2/1    0.131    0.066   16.906   16.906 bench_hot_paths.py:707(human_agent)
+      2/1    0.884    0.442   16.774   16.774 agreement_metrics.py:286(analyze)
+ 12000032    4.984    0.000   13.548    0.000 __init__.py:669(update)
+  7200032    3.819    0.000   11.147    0.000 __init__.py:595(__init__)
+        8    1.841    0.230   10.976    1.372 agreement_metrics.py:73(_krippendorff_alpha_nominal)
+        8    1.527    0.191    9.689    1.211 agreement_metrics.py:89(_fleiss_kappa)
+  4800056    1.969    0.000    8.345    0.000 {built-in method builtins.sum}
+        1    2.035    2.035    7.336    7.336 agreement_metrics.py:383(_compute_human_agent_breakdown)
+14800083/14800081    2.681    0.000    5.874    0.000 {built-in method builtins.isinstance}
+  2852196    1.284    0.000    4.736    0.000 agreement_metrics.py:210(<genexpr>)
+  4800008    1.915    0.000    4.562    0.000 agreement_metrics.py:69(_sum_of_squares)
+        8    2.199    0.275    3.547    0.443 agreement_metrics.py:112(_cohen_kappa)
+ 12000016    1.591    0.000    3.192    0.000 <frozen abc>:117(__instancecheck__)
+  3486980    1.057    0.000    2.381    0.000 main.py:1028(__setattr__)
+  7200016    1.605    0.000    1.939    0.000 {built-in method _collections._count_elements}
+ 12000016    1.601    0.000    1.601    0.000 {built-in method _abc._abc_instancecheck}
+  1013048    0.893    0.000    1.543    0.000 main.py:240(__init__)
+        3    0.132    0.044    1.133    0.378 base_events.py:1922(_run_once)
+  3486980    0.725    0.000    1.015    0.000 main.py:94(_model_field_setattr_handler)
+   900000    0.287    0.000    0.934    0.000 agreement_metrics.py:147(value)
+ 10691353    0.920    0.000    0.920    0.000 {method 'get' of 'dict' objects}
+ 14400072    0.797    0.000    0.797    0.000 {built-in method builtins.len}
+ 10504448    0.753    0.000    0.753    0.000 agreement_metrics.py:70(<genexpr>)
+
+
+
+## top 25 by own time
+         153249371 function calls (153249367 primitive calls) in 41.563 seconds
+
+   Ordered by: internal time
+   List reduced from 272 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+ 12000032    4.984    0.000   13.548    0.000 __init__.py:669(update)
+  7200032    3.819    0.000   11.147    0.000 __init__.py:595(__init__)
+14800083/14800081    2.681    0.000    5.874    0.000 {built-in method builtins.isinstance}
+        8    2.199    0.275    3.547    0.443 agreement_metrics.py:112(_cohen_kappa)
+        1    2.035    2.035    7.336    7.336 agreement_metrics.py:383(_compute_human_agent_breakdown)
+  4800056    1.969    0.000    8.345    0.000 {built-in method builtins.sum}
+  4800008    1.915    0.000    4.562    0.000 agreement_metrics.py:69(_sum_of_squares)
+        8    1.908    0.238   29.633    3.704 agreement_metrics.py:203(_summarize)
+        8    1.841    0.230   10.976    1.372 agreement_metrics.py:73(_krippendorff_alpha_nominal)
+  7200016    1.605    0.000    1.939    0.000 {built-in method _collections._count_elements}
+ 12000016    1.601    0.000    1.601    0.000 {built-in method _abc._abc_instancecheck}
+ 12000016    1.591    0.000    3.192    0.000 <frozen abc>:117(__instancecheck__)
+        8    1.527    0.191    9.689    1.211 agreement_metrics.py:89(_fleiss_kappa)
+  2852196    1.284    0.000    4.736    0.000 agreement_metrics.py:210(<genexpr>)
+  3486980    1.057    0.000    2.381    0.000 main.py:1028(__setattr__)
+ 10691353    0.920    0.000    0.920    0.000 {method 'get' of 'dict' objects}
+  1013048    0.893    0.000    1.543    0.000 main.py:240(__init__)
+      2/1    0.884    0.442   16.774   16.774 agreement_metrics.py:286(analyze)
+ 14400072    0.797    0.000    0.797    0.000 {built-in method builtins.len}
+ 10504448    0.753    0.000    0.753    0.000 agreement_metrics.py:70(<genexpr>)
+  3486980    0.725    0.000    1.015    0.000 main.py:94(_model_field_setattr_handler)
+  7200030    0.705    0.000    0.705    0.000 {method 'values' of 'dict' objects}
+  1013056    0.650    0.000    0.650    0.000 {method 'validate_python' of 'pydantic_core._pydantic_core.SchemaValidator' objects}
+  4800006    0.503    0.000    0.503    0.000 {method 'items' of 'dict' objects}
+  2400008    0.450    0.000    0.705    0.000 agreement_metrics.py:209(<genexpr>)
+
+

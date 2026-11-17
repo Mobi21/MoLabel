@@ -1,0 +1,71 @@
+# cProfile of one benchmark_banking77 run at n=10000, not counted in timings
+
+## top 25 by cumulative time
+         9841096 function calls in 1.836 seconds
+
+   Ordered by: cumulative time
+   List reduced from 62 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.001    0.001    1.836    1.836 bench_hot_paths.py:809(score)
+        1    0.000    0.000    1.835    1.835 grounded_benchmarks.py:2233(score_grounded_stage)
+        1    0.455    0.455    1.521    1.521 grounded_benchmarks.py:1464(_score_macro_f1)
+  1650000    0.563    0.000    0.975    0.000 canonical.py:14(canonical_label_value)
+  5120003    0.325    0.000    0.325    0.000 {built-in method builtins.isinstance}
+        1    0.000    0.000    0.288    0.288 grounded_benchmarks.py:1309(_build_stage_diagnostics)
+  2650011    0.272    0.000    0.272    0.000 {method 'get' of 'dict' objects}
+       80    0.002    0.000    0.167    0.002 {built-in method builtins.sum}
+    20000    0.007    0.000    0.133    0.000 grounded_benchmarks.py:1071(_record_exact_match)
+        1    0.005    0.005    0.113    0.113 grounded_benchmarks.py:1256(_build_subset_breakdowns)
+    40000    0.028    0.000    0.100    0.000 __init__.py:183(dumps)
+       77    0.000    0.000    0.098    0.001 grounded_benchmarks.py:1221(_subset_summary)
+     9083    0.007    0.000    0.084    0.000 grounded_benchmarks.py:1319(<genexpr>)
+     9159    0.007    0.000    0.081    0.000 grounded_benchmarks.py:1235(<genexpr>)
+    40000    0.022    0.000    0.067    0.000 encoder.py:183(encode)
+        1    0.011    0.011    0.053    0.053 grounded_benchmarks.py:1179(_build_confusion_matrices)
+    50000    0.011    0.000    0.037    0.000 grounded_benchmarks.py:1099(_scalar_confusion_key)
+    40000    0.036    0.000    0.036    0.000 encoder.py:205(iterencode)
+       78    0.010    0.000    0.030    0.000 grounded_benchmarks.py:1154(_build_field_accuracy)
+        3    0.022    0.007    0.026    0.009 grounded_benchmarks.py:1087(_index_label_rows)
+        6    0.001    0.000    0.023    0.004 {method 'update' of 'set' objects}
+    30000    0.013    0.000    0.020    0.000 grounded_benchmarks.py:1055(_value_matches)
+        1    0.005    0.005    0.015    0.015 grounded_benchmarks.py:1417(_score_accuracy)
+    40000    0.009    0.000    0.013    0.000 grounded_benchmarks.py:1078(_select_label_fields)
+    10001    0.003    0.000    0.013    0.000 grounded_benchmarks.py:1192(<genexpr>)
+
+
+
+## top 25 by own time
+         9841096 function calls in 1.836 seconds
+
+   Ordered by: internal time
+   List reduced from 62 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+  1650000    0.563    0.000    0.975    0.000 canonical.py:14(canonical_label_value)
+        1    0.455    0.455    1.521    1.521 grounded_benchmarks.py:1464(_score_macro_f1)
+  5120003    0.325    0.000    0.325    0.000 {built-in method builtins.isinstance}
+  2650011    0.272    0.000    0.272    0.000 {method 'get' of 'dict' objects}
+    40000    0.036    0.000    0.036    0.000 encoder.py:205(iterencode)
+    40000    0.028    0.000    0.100    0.000 __init__.py:183(dumps)
+        3    0.022    0.007    0.026    0.009 grounded_benchmarks.py:1087(_index_label_rows)
+    40000    0.022    0.000    0.067    0.000 encoder.py:183(encode)
+    30000    0.013    0.000    0.020    0.000 grounded_benchmarks.py:1055(_value_matches)
+    50000    0.011    0.000    0.037    0.000 grounded_benchmarks.py:1099(_scalar_confusion_key)
+        1    0.011    0.011    0.053    0.053 grounded_benchmarks.py:1179(_build_confusion_matrices)
+       78    0.010    0.000    0.030    0.000 grounded_benchmarks.py:1154(_build_field_accuracy)
+    40000    0.009    0.000    0.013    0.000 grounded_benchmarks.py:1078(_select_label_fields)
+     9083    0.007    0.000    0.084    0.000 grounded_benchmarks.py:1319(<genexpr>)
+     9159    0.007    0.000    0.081    0.000 grounded_benchmarks.py:1235(<genexpr>)
+    20000    0.007    0.000    0.133    0.000 grounded_benchmarks.py:1071(_record_exact_match)
+    40000    0.006    0.000    0.006    0.000 encoder.py:105(__init__)
+        1    0.005    0.005    0.113    0.113 grounded_benchmarks.py:1256(_build_subset_breakdowns)
+        1    0.005    0.005    0.015    0.015 grounded_benchmarks.py:1417(_score_accuracy)
+    40000    0.003    0.000    0.003    0.000 {method 'join' of 'str' objects}
+    10001    0.003    0.000    0.013    0.000 grounded_benchmarks.py:1192(<genexpr>)
+        1    0.003    0.003    0.004    0.004 grounded_benchmarks.py:1122(_build_coverage_diagnostics)
+    10001    0.003    0.000    0.009    0.000 grounded_benchmarks.py:1470(<genexpr>)
+        1    0.003    0.003    0.003    0.003 grounded_benchmarks.py:993(_record_labels)
+       80    0.002    0.000    0.167    0.002 {built-in method builtins.sum}
+
+

@@ -26,6 +26,11 @@ This directory now has two kinds of docs:
   Krippendorff's alpha, when each one is null, and the published examples the
   tests check.
 
+- [Performance](performance.md)
+  Measured cost of ingest, querying, agreement, benchmark scoring and export
+  at 1k to 1M records, what bounds each one, the fixes that were measured in,
+  and the faster-library candidates that were adopted or rejected.
+
 ## Canonical References
 
 - [Product Requirements](prd/agentic-data-operations-workbench-prd.md)

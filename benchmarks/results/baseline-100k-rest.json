@@ -1,0 +1,141 @@
+{
+  "label": "baseline-100k-rest",
+  "generated_at": "2026-11-17T01:50:21.792811+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "git_rev": "7c2d894"
+  },
+  "args": {
+    "sizes": [
+      100000
+    ],
+    "paths": [
+      "agreement",
+      "benchmark",
+      "export"
+    ],
+    "runs": 7,
+    "warmup": 1,
+    "max_run_seconds": 120.0,
+    "skip": []
+  },
+  "synthetic": {
+    "fields": 3,
+    "raters": 2,
+    "overlap": 3,
+    "rater_disagreement": 0.2,
+    "agent_disagreement": 0.1
+  },
+  "database_bytes": 542957568,
+  "wall_seconds": 491.5,
+  "notes": [
+    "agreement_api n=100000: HTTP 500 Internal Server Error",
+    "agreement_api n=100000: HTTP 500 Internal Server Error",
+    "agreement_api n=100000: HTTP 500 Internal Server Error",
+    "agreement_api n=100000: HTTP 500 Internal Server Error",
+    "agreement_api n=100000: HTTP 500 Internal Server Error",
+    "agreement_api n=100000: HTTP 500 Internal Server Error",
+    "agreement_api n=100000: HTTP 500 Internal Server Error",
+    "agreement_api n=100000: HTTP 500 Internal Server Error",
+    "agreement_api n=100000: HTTP 500 Internal Server Error"
+  ],
+  "profiles": [
+    "benchmarks\\results\\profile-agreement_service_inter_annotator-100000.txt",
+    "benchmarks\\results\\profile-agreement_service_human_agent-100000.txt",
+    "benchmarks\\results\\profile-agreement_api-100000.txt",
+    "benchmarks\\results\\profile-benchmark_clinc150-100000.txt",
+    "benchmarks\\results\\profile-benchmark_banking77-100000.txt",
+    "benchmarks\\results\\profile-export_orchestrator_jsonl-100000.txt",
+    "benchmarks\\results\\profile-export_workflow_step-100000.txt"
+  ],
+  "timings": [
+    {
+      "path": "agreement_service_inter_annotator",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 4.1448,
+      "p95_s": 4.3095,
+      "min_s": 3.6345,
+      "max_s": 4.3095,
+      "work": 300000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_service_human_agent",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 17.6229,
+      "p95_s": 18.0383,
+      "min_s": 17.2752,
+      "max_s": 18.0383,
+      "work": 600000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "agreement_api",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 5.3882,
+      "p95_s": 5.4591,
+      "min_s": 4.872,
+      "max_s": 5.4591,
+      "work": 0,
+      "errors": 7,
+      "note": ""
+    },
+    {
+      "path": "benchmark_clinc150",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 2.0732,
+      "p95_s": 2.0908,
+      "min_s": 2.0577,
+      "max_s": 2.0908,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "benchmark_banking77",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 4.6045,
+      "p95_s": 4.8359,
+      "min_s": 4.4614,
+      "max_s": 4.8359,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "export_orchestrator_jsonl",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 0.8376,
+      "p95_s": 0.8827,
+      "min_s": 0.8244,
+      "max_s": 0.8827,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    },
+    {
+      "path": "export_workflow_step",
+      "size": 100000,
+      "runs": 7,
+      "median_s": 10.05,
+      "p95_s": 10.2806,
+      "min_s": 9.8712,
+      "max_s": 10.2806,
+      "work": 100000,
+      "errors": 0,
+      "note": ""
+    }
+  ]
+}

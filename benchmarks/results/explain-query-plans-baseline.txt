@@ -1,0 +1,60 @@
+
+=== list_queues at n=1000 (tasks=3000) ===
+--    0.5379s  SELECT t.queue_id, t.workspace_id, t.task_schema_id, COUNT(*), SUM(CASE WHEN t.status = 'available' THEN 1 ELS
+     SEARCH t USING INDEX idx_review_tasks_workspace_id (workspace_id=?)
+     SEARCH s USING INDEX sqlite_autoindex_task_schemas_1 (id=?) LEFT-JOIN
+     USE TEMP B-TREE FOR GROUP BY
+     CORRELATED LIST SUBQUERY 1
+       SEARCH m USING INDEX idx_review_tasks_queue_status (queue_id=? AND status=?)
+     CORRELATED SCALAR SUBQUERY 2
+       SCAN x
+     USE TEMP B-TREE FOR count(DISTINCT)
+     USE TEMP B-TREE FOR ORDER BY
+
+=== reviewer_queue_tasks at n=1000 (tasks=3000) ===
+--    0.0659s  SELECT t.id, t.record_id, r.external_id, t.status, t.submitted_at, t.ai_revealed, ( SELECT e.decision FROM rev
+     SEARCH t USING INDEX idx_review_tasks_queue_status (queue_id=? AND status=?)
+     SEARCH r USING INDEX sqlite_autoindex_records_1 (id=?) LEFT-JOIN
+     CORRELATED SCALAR SUBQUERY 2
+       SEARCH e USING INDEX idx_review_events_task_id (review_task_id=?)
+       CORRELATED SCALAR SUBQUERY 1
+       SCAN s
+       USE TEMP B-TREE FOR ORDER BY
+     USE TEMP B-TREE FOR ORDER BY
+
+=== get_queue_status at n=1000 (tasks=3000) ===
+--    0.0004s  SELECT status, COUNT(*) as cnt FROM review_tasks WHERE queue_id = ? GROUP BY status
+     SEARCH review_tasks USING COVERING INDEX idx_review_tasks_queue_status (queue_id=?)
+--    0.0001s  SELECT rp.id, rp.display_name, rp.avatar_color, rt.id as task_id, rt.record_id FROM review_tasks rt JOIN revie
+     SEARCH rt USING INDEX idx_review_tasks_queue_status (queue_id=? AND status=?)
+     SEARCH rp USING INDEX sqlite_autoindex_reviewer_profiles_1 (id=?)
+
+=== list_queues at n=3000 (tasks=9000) ===
+--   14.1486s  SELECT t.queue_id, t.workspace_id, t.task_schema_id, COUNT(*), SUM(CASE WHEN t.status = 'available' THEN 1 ELS
+     SEARCH t USING INDEX idx_review_tasks_workspace_id (workspace_id=?)
+     SEARCH s USING INDEX sqlite_autoindex_task_schemas_1 (id=?) LEFT-JOIN
+     USE TEMP B-TREE FOR GROUP BY
+     CORRELATED LIST SUBQUERY 1
+       SEARCH m USING INDEX idx_review_tasks_queue_status (queue_id=? AND status=?)
+     CORRELATED SCALAR SUBQUERY 2
+       SCAN x
+     USE TEMP B-TREE FOR count(DISTINCT)
+     USE TEMP B-TREE FOR ORDER BY
+
+=== reviewer_queue_tasks at n=3000 (tasks=9000) ===
+--    1.0708s  SELECT t.id, t.record_id, r.external_id, t.status, t.submitted_at, t.ai_revealed, ( SELECT e.decision FROM rev
+     SEARCH t USING INDEX idx_review_tasks_queue_status (queue_id=? AND status=?)
+     SEARCH r USING INDEX sqlite_autoindex_records_1 (id=?) LEFT-JOIN
+     CORRELATED SCALAR SUBQUERY 2
+       SEARCH e USING INDEX idx_review_events_task_id (review_task_id=?)
+       CORRELATED SCALAR SUBQUERY 1
+       SCAN s
+       USE TEMP B-TREE FOR ORDER BY
+     USE TEMP B-TREE FOR ORDER BY
+
+=== get_queue_status at n=3000 (tasks=9000) ===
+--    0.0015s  SELECT status, COUNT(*) as cnt FROM review_tasks WHERE queue_id = ? GROUP BY status
+     SEARCH review_tasks USING COVERING INDEX idx_review_tasks_queue_status (queue_id=?)
+--    0.0001s  SELECT rp.id, rp.display_name, rp.avatar_color, rt.id as task_id, rt.record_id FROM review_tasks rt JOIN revie
+     SEARCH rt USING INDEX idx_review_tasks_queue_status (queue_id=? AND status=?)
+     SEARCH rp USING INDEX sqlite_autoindex_reviewer_profiles_1 (id=?)
