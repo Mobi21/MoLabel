@@ -48,8 +48,10 @@ uv run python benchmarks/explain_query_plans.py --sizes 1000,3000
 uv run python benchmarks/render_results.py benchmarks/results/baseline-*.json
 ```
 
-The results, logs and profiles of those runs are in
-[`benchmarks/results/`](../benchmarks/results/). The first pass,
+The results and logs of those runs are in
+[`benchmarks/results/`](../benchmarks/results/). The raw cProfile dumps are
+not committed. Each command above with `--profile` writes them there again,
+as `profile-<path>-<n>.txt` for the largest size it runs. The first pass,
 `baseline-1k-10k.json`, seeded every size into one database and is kept
 only for its log, which records the writer failure described under
 [Queue listing](#queue-listing). Its database-backed numbers were taken
@@ -123,8 +125,9 @@ What each path runs:
 
 ## What each number is
 
-The limiter named for each path comes from its cProfile in
-`benchmarks/results/profile-<path>-<n>.txt`, or from the SQLite plan in
+The limiter named for each path comes from its cProfile, which the
+baseline commands above write to `benchmarks/results/profile-<path>-<n>.txt`,
+or from the SQLite plan in
 `benchmarks/results/explain-query-plans-baseline.txt`. Profiled runs are
 slower than timed runs because of profiler overhead, so shares are of the
 profiled total.
@@ -322,8 +325,12 @@ under 1.3x as unproven.
 
 What bounds each path now:
 
-- **Ingest.** The 100k profile after the fix (`profile-ingest_api_jsonl-100000.txt`,
-  6.6 s profiled) has SQLite's own `executemany` at 3.46 s, which is the
+- **Ingest.** The 100k profile after the fix (6.6 s profiled, written to
+  `benchmarks/results/profile-ingest_api_jsonl-100000.txt` by
+  `uv run python benchmarks/bench_hot_paths.py --sizes 100000 --runs 1
+  --warmup 0 --profile --paths ingest --no-seed --skip
+  ingest_loader_csv,ingest_loader_jsonl --label profile-ingest-fixed-100k`)
+  has SQLite's own `executemany` at 3.46 s, which is the
   primary key and seven index B-trees taking 100k random UUID keys, then
   `json.dumps` at 1.0 s over 400k calls, bind construction at 0.4 s and
   `uuid4` at 0.3 s. Into an empty database the endpoint takes 4.0 s; the
