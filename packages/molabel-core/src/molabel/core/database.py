@@ -64,14 +64,17 @@ class ForeignKeyViolation(BaseModel):
 
 
 def foreign_key_violations(engine: Engine) -> list[ForeignKeyViolation]:
-    """Every dangling foreign key in the database, counted per table and parent.
+    """Every row with a dangling foreign key, counted per table and parent.
 
     These rows are reported, never deleted: a review event whose task is gone
-    is still a reviewer's decision. Enforcement refuses new ones.
+    is still a reviewer's decision. Enforcement refuses new ones. SQLite
+    reports one line per violated constraint, so a row with two keys to the
+    same parent is counted once.
     """
     with engine.connect() as conn:
         rows = conn.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
-    counts = Counter((str(row[0]), str(row[2])) for row in rows)
+    dangling = {(str(row[0]), row[1], str(row[2])) for row in rows}
+    counts = Counter((table, parent) for table, _rowid, parent in dangling)
     return [
         ForeignKeyViolation(table=table, parent=parent, rows=count)
         for (table, parent), count in sorted(counts.items())

@@ -125,3 +125,34 @@ def test_rows_written_before_enforcement_are_reported_not_deleted(
     ]
     with engine.connect() as conn:
         assert conn.execute(text("SELECT count(*) FROM review_events")).scalar() == 2
+
+
+def test_a_row_that_breaks_two_keys_to_one_parent_counts_once(tmp_path: Path) -> None:
+    engine = get_engine(tmp_path / "two-keys.db")
+    upgrade_database(engine)
+    with engine.connect() as conn:
+        conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        conn.execute(
+            text(
+                "INSERT INTO correction_batches (id, prompt_template_id, "
+                "batch_sequence, status, correction_count, batch_threshold, "
+                "applied_prompt_version_id, file_path, created_at, workspace_id) "
+                "VALUES (:id, :template, 1, 'applied', 0, 25, :version, "
+                "'batches/1.json', '2026-01-01T00:00:00', :workspace)"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "template": str(uuid.uuid4()),
+                "version": str(uuid.uuid4()),
+                "workspace": str(uuid.uuid4()),
+            },
+        )
+        conn.commit()
+        conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+
+    violations = foreign_key_violations(engine)
+
+    assert [(v.table, v.parent, v.rows) for v in violations] == [
+        ("correction_batches", "prompt_templates", 1),
+        ("correction_batches", "workspaces", 1),
+    ]
