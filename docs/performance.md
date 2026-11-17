@@ -470,9 +470,13 @@ orphan on its own:
   alone, so the rewrite is a no-op on hyphenated data and on a second run.
   `tests/integration/test_schema_migrations.py` migrates a populated
   mixed-format database, runs the rewrite twice, and restores a snapshot
-  on it. Four of the five, the benchmark-run-facts cases, also inserted a
-  workflow execution, agent outputs and review events whose definition,
-  task schema, agent run and reviewers they never created. Their fixture
+  on it. Ids copied into JSON and text columns kept their hex spelling, so
+  a workflow paused before 005 exported none of its records afterwards.
+  Revision 006 rewrites them at known id positions, and
+  `docs/architecture/database-migrations.md` lists each column. Four of
+  the five, the benchmark-run-facts cases, also inserted a workflow
+  execution, agent outputs and review events whose definition, task
+  schema, agent run and reviewers they never created. Their fixture
   now seeds each parent, and no test is an expected failure.
 
 **Concurrency.** The baseline runs showed the cost of the rollback journal:

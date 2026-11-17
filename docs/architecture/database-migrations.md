@@ -73,6 +73,41 @@ Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 - The workspace manifest (`workbench.project.yaml`) includes `core_version` which indicates the expected schema version
 - If a workspace manifest declares a newer `core_version` than the installed app, the app warns: "This workspace was created with a newer version of MoLabel"
 
+## Ids inside JSON and text columns
+
+Revision 005 rewrote every UUID column to the hyphenated form. A row's id is also copied into JSON and text columns, in the spelling the writer read. Revision 006 rewrites those copies. It rewrites a value only at a position that `ID_POSITIONS` or `TEXT_ID_COLUMNS` in `006_hyphenated_json_ids.py` lists, and only when the value is 32 hex characters, so a hash beside an id is never read. A reader that looks up an id it read from JSON passes the id through `molabel.core.database.hyphenated_id` first, so a hex id that 006 does not reach still matches.
+
+These columns hold ids of rows whose primary key is a UUID:
+
+| Column | Ids it holds | Rewritten by 006 | Looked up by | Reader |
+|---|---|---|---|---|
+| `workflow_executions.context` | Workspace, execution, dataset, record, agent run, export bundle and snapshot ids, and the ids in each step summary | Yes | The exporter, agent runner, review queue and agreement source of a resumed workflow | `hyphenated_id` |
+| `workflow_step_executions.result` | The ids in the step summary | Yes | Nothing | None |
+| `review_tasks.agent_output_ids` | Agent output ids | Yes | Adjudication detail, the queue agreement report, CLI queue operations | Parses each id as a UUID |
+| `adjudications.conflicting_event_ids` | Review event ids | Yes | The check that a disagreement is resolved | `hyphenated_id` |
+| `adjudications.metadata` | `review_event_id` | Yes | Nothing | None |
+| `dataset_snapshots.dataset_membership` | Record ids, as the keys of `record_states` | Yes | Both snapshot restores | `hyphenated_id` |
+| `saved_views.filters` | `dataset_id`, `parent_subset_id`, and the include and exclude record ids | Yes | `DerivedSubsetService` | Parses each id as a UUID |
+| `datasets.source_config` | `source_dataset_id`, `source_subset_id` | Yes | Nothing | None |
+| `agent_events.payload` | Workspace, dataset, task schema, model profile and record ids | Yes | Nothing | None |
+| `audit_events.workspace_id`, `actor`, `object_id` | Workspace, reviewer, and release or artifact proposal ids, as text columns | Yes | The audit lists, by workspace and by object | None |
+| `workflow_definitions.steps`, `workflow_step_executions.step_config`, `agent_runs.config` | Dataset, task schema and model profile ids in step config | No. They copy the workflow file, and the file wins over the row | Ingest, the task schema selector, the model lookup | `hyphenated_id` in the loader and the task schema selector. The agent step and the model lookup already parse ids as UUIDs |
+| `task_schemas.record_selector` | `dataset_ids` | No. It copies the task schema file | Nothing | None |
+| `releases.export_bundle_ids`, `releases.release_metadata` | The export ids a release names, and the ids in its proof manifest | No. They repeat the release's `proof-manifest.json` | Nothing | None |
+| `audit_events.details` | Ids as each request named them | No. It records the request | Nothing | None |
+
+These columns look like id containers but are not:
+
+- `releases.validation_run_ids` holds validation gate names.
+- `review_tasks.queue_id` and the context's `review_queue_ids` and `adjudication_queue_ids` hold queue ids, which name no row.
+- No code writes `agent_runs.record_filter`, `audit_entries`, `correction_batches`, `export_bundles` or `validation_runs.gates`.
+- `records.content_hash`, `artifacts.file_hash`, `export_bundles.file_hash` and `audit_entries.file_hash_before` and `file_hash_after` hold hashes.
+
+### A hash in a UUID column is rewritten too
+
+Revision 005 rewrites every 32-hex value in a UUID column. A 32-hex hash stored in a UUID column would come out hyphenated. Its 128 bits stay the same and `uuid.UUID` reads both forms, but a reader that compares the text with the original hash would no longer match it. No model stores a hash in a UUID column.
+
 ## Testing
 - Fixture schemas at known versions are stored in `fixtures/migrations/`. `pre-alembic-create-all.sql` is the schema `create_all` produced before Alembic owned it
 - `tests/integration/test_schema_migrations.py` starts the server on a fresh database and on each fixture, and checks that the result is at head and that autogenerate finds no difference from the models. A model change without a matching migration fails it
+- `tests/integration/test_json_id_migration.py` runs revision 006 on each container above and resumes a paused workflow on a database written before 005
