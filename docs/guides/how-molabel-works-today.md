@@ -67,6 +67,17 @@ application with a single `/api/v1` router tree. It exposes domains including:
 The backend is the system of operational coordination. It is not meant to be
 the everyday human authoring surface.
 
+A registered workspace root is an access boundary: the server reads and writes
+files only inside one. Registering a root (`molabel workspace bootstrap`, or
+`POST /api/v1/workspaces`) is refused unless the folder resolves, links and
+junctions followed, to a folder inside an allowed parent. That is the home
+folder, or the folders in `MOLABEL_ALLOWED_WORKSPACE_ROOTS` (separated by `:`,
+or `;` on Windows) when the server has it set. Drive and share roots, the home
+folder and an allowed parent itself are always refused. A workspace registered
+earlier outside the allowed parents keeps working, and `molabel doctor` and
+`molabel status` list it under `workspace_roots_not_allowed`.
+`docs/architecture/api-specification.md` has the error codes.
+
 ### 2.3 Frontend
 
 The frontend in `frontend/` is the review GUI, a keyboard-first queue on the

@@ -4,32 +4,52 @@ Every path a request names, directly or through stored config, and every
 path the server derives under a workspace root, reaches the filesystem only
 through this module. A path must not contain ``..``, and
 after ``resolve()`` (symlinks included) it must be a registered workspace
-root or inside one. The one exception is bootstrap, which registers a new
-root and so only requires an absolute path without ``..``.
+root or inside one.
+
+Registering a root is the one way to widen that boundary, so a new root must
+resolve, links and junctions followed, to a folder strictly inside an allowed
+parent: ``MOLABEL_ALLOWED_WORKSPACE_ROOTS``, or the home folder by default.
+Drive and share roots, the home folder, and each allowed parent itself are
+refused.
 """
 
 from __future__ import annotations
 
+import os
+from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from fnmatch import fnmatch
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
+from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import text
 
 from molabel.app.schemas import ErrorDetail, ErrorResponse
+
+ALLOWED_ROOTS_ENV = "MOLABEL_ALLOWED_WORKSPACE_ROOTS"
 
 
 class WorkspacePathError(Exception):
     """A request path that the server refuses to touch."""
 
-    def __init__(self, status_code: int, code: str, message: str, path: str) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        path: str,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.message = message
         self.path = path
+        self.details = details or {}
 
 
 async def workspace_path_error_handler(
@@ -39,7 +59,9 @@ async def workspace_path_error_handler(
         status_code=exc.status_code,
         content=ErrorResponse(
             error=ErrorDetail(
-                code=exc.code, message=exc.message, details={"path": exc.path}
+                code=exc.code,
+                message=exc.message,
+                details={"path": exc.path, **exc.details},
             )
         ).model_dump(mode="json"),
     )
@@ -105,15 +127,150 @@ def require_portable(root: Path, raw: str) -> None:
             )
 
 
-def new_workspace_root(raw: str) -> Path:
-    """Validate a path the caller is about to register as a workspace root."""
+class RootRefusal(StrEnum):
+    """Why a folder may not be registered as a workspace root."""
+
+    FILESYSTEM_ROOT = "filesystem_root"
+    HOME_FOLDER = "home_folder"
+    ALLOWED_PARENT = "allowed_parent"
+    OUTSIDE_ALLOWED_PARENTS = "outside_allowed_parents"
+
+
+_REFUSAL_TEXT = {
+    RootRefusal.FILESYSTEM_ROOT: "is a drive or share root",
+    RootRefusal.HOME_FOLDER: "is the home folder",
+    RootRefusal.ALLOWED_PARENT: "is an allowed parent folder itself",
+    RootRefusal.OUTSIDE_ALLOWED_PARENTS: "is outside the allowed parent folders",
+}
+
+
+@dataclass(frozen=True)
+class RootPolicy:
+    """The folders a workspace root may be registered under, all resolved."""
+
+    home: PurePath
+    allowed_parents: Sequence[PurePath]
+
+    @classmethod
+    def from_env(cls) -> RootPolicy:
+        """``MOLABEL_ALLOWED_WORKSPACE_ROOTS`` (``os.pathsep``-separated), else home."""
+        home = Path.home().resolve()
+        entries = (
+            Path(entry.strip()).expanduser()
+            for entry in os.environ.get(ALLOWED_ROOTS_ENV, "").split(os.pathsep)
+            if entry.strip()
+        )
+        parents = tuple(entry.resolve() for entry in entries if entry.is_absolute())
+        return cls(home=home, allowed_parents=parents or (home,))
+
+    def refusal(self, root: PurePath) -> RootRefusal | None:
+        """Why the resolved absolute *root* may not be registered, or None."""
+        if root.parent == root:
+            return RootRefusal.FILESYSTEM_ROOT
+        if root == self.home:
+            return RootRefusal.HOME_FOLDER
+        if root in self.allowed_parents:
+            return RootRefusal.ALLOWED_PARENT
+        if not any(root.is_relative_to(parent) for parent in self.allowed_parents):
+            return RootRefusal.OUTSIDE_ALLOWED_PARENTS
+        return None
+
+    def explain(self, root: PurePath, refusal: RootRefusal) -> str:
+        parents = ", ".join(str(parent) for parent in self.allowed_parents)
+        return (
+            f"{root} {_REFUSAL_TEXT[refusal]}. A workspace root must be a folder "
+            f"inside one of: {parents}. {ALLOWED_ROOTS_ENV} sets these folders."
+        )
+
+
+def _absolute_path(raw: str) -> Path:
     _reject_traversal(raw)
     path = Path(raw).expanduser()
     if not path.is_absolute():
         raise WorkspacePathError(
             400, "PATH_NOT_ABSOLUTE", "Workspace paths must be absolute", raw
         )
-    return path.resolve()
+    return path
+
+
+def _resolve_root(path: Path) -> Path:
+    # A share root is refused as it is; resolve() would look the server up on
+    # the network first.
+    return path if path.parent == path else path.resolve()
+
+
+def absolute_path(raw: str) -> Path:
+    """Resolve a path the caller names to inspect, without registering it."""
+    return _absolute_path(raw).resolve()
+
+
+def new_workspace_root(raw: str) -> Path:
+    """Resolve a path the caller is about to register, refusing a disallowed root."""
+    root = _resolve_root(_absolute_path(raw))
+    policy = RootPolicy.from_env()
+    refusal = policy.refusal(root)
+    if refusal is not None:
+        raise WorkspacePathError(
+            403,
+            "WORKSPACE_ROOT_NOT_ALLOWED",
+            policy.explain(root, refusal),
+            raw,
+            {
+                "reason": refusal,
+                "allowed_parents": [str(parent) for parent in policy.allowed_parents],
+            },
+        )
+    return root
+
+
+class WorkspaceRootNotAllowed(BaseModel):
+    """A registered workspace whose root is not inside an allowed parent folder."""
+
+    workspace_id: str
+    workspace_name: str
+    root_path: str
+    reason: RootRefusal
+    message: str
+
+
+def roots_not_allowed(engine) -> list[WorkspaceRootNotAllowed]:
+    """Registered workspaces outside the allowed parents.
+
+    They were registered before the limit or under another setting. They keep
+    working, and bootstrap refuses to register them again.
+    """
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT id, workspace_name, root_path FROM workspaces "
+                "ORDER BY created_at"
+            )
+        ).fetchall()
+    policy = RootPolicy.from_env()
+    found: list[WorkspaceRootNotAllowed] = []
+    for workspace_id, name, root_path in rows:
+        if not root_path:
+            continue
+        root = _resolve_root(Path(str(root_path)).expanduser())
+        refusal = policy.refusal(root)
+        if refusal is None:
+            continue
+        found.append(
+            WorkspaceRootNotAllowed(
+                workspace_id=str(workspace_id),
+                workspace_name=str(name),
+                root_path=str(root),
+                reason=refusal,
+                message=(
+                    f"Workspace '{name}': {policy.explain(root, refusal)} It was "
+                    "registered before, so it keeps working, but bootstrap "
+                    "refuses it. Move the folder inside an allowed parent and run "
+                    "`molabel workspace bootstrap` there, or add its parent "
+                    f"folder to {ALLOWED_ROOTS_ENV}."
+                ),
+            )
+        )
+    return found
 
 
 def resolve_in_workspace(root: Path, raw: str) -> Path:

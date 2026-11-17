@@ -306,7 +306,11 @@ export default async function globalSetup() {
     ],
     {
       cwd: launch,
-      env: keylessEnv({ MOLABEL_DATA_DIR: data }),
+      // The run's folder is under the OS temp folder, outside home on CI.
+      env: keylessEnv({
+        MOLABEL_DATA_DIR: data,
+        MOLABEL_ALLOWED_WORKSPACE_ROOTS: root,
+      }),
       stdio: 'ignore',
     },
   )

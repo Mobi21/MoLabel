@@ -93,8 +93,22 @@ glob finds there is checked too. A path is first refused if it contains a
 `..` segment. It is then resolved, symlinks included, and refused unless it is
 a registered root or inside one. Artifact routes need `workspace_root` or
 `workspace_id`; there is no fallback to the server's working directory.
-Bootstrap is the one route that takes a new root. It needs an absolute path
-without `..`. A file the server writes in a workspace, such as a config file,
+Workspace create (`POST /api/v1/workspaces`) and bootstrap are the routes
+that register a root, and bootstrap registers one again when a workspace
+folder moves. Both need an absolute path without `..` that resolves, symlinks
+and junctions included, to a folder strictly inside an allowed parent. The
+allowed parent is the home folder, or each folder in
+`MOLABEL_ALLOWED_WORKSPACE_ROOTS`, separated by `os.pathsep` (`:`, or `;` on
+Windows), when that is set. A drive or share root (`/`, `C:\`,
+`\\server\share`), the home folder, and an allowed parent itself are refused,
+whatever the setting. A workspace registered before this rule, or under
+another setting, keeps working. `GET /api/v1/cli/status` lists it under
+`workspace_roots_not_allowed` with a `reason` and a `message`, and bootstrap
+refuses to register it again where it is. The test harness, `frontend/e2e`
+and `scripts/smoke_no_key.py` set `MOLABEL_ALLOWED_WORKSPACE_ROOTS` to their
+temp folder, which on CI is outside home.
+
+A file the server writes in a workspace, such as a config file,
 a gold set or an export, must also have names Windows can hold, whatever
 platform runs the server, so the workspace opens on every machine. No folder
 or file name may end with a dot or a space, or be a Windows device name
@@ -108,9 +122,13 @@ or `lpt` with a superscript 1, 2 or 3, in any case and with any extension).
 | 400         | `PATH_NOT_ABSOLUTE`      | A workspace root or bootstrap path is relative    |
 | 400         | `WORKSPACE_REQUIRED`     | Neither `workspace_root` nor `workspace_id` given |
 | 403         | `PATH_OUTSIDE_WORKSPACE` | The resolved path is outside every registered root |
+| 403         | `WORKSPACE_ROOT_NOT_ALLOWED` | A root to register is not a folder inside an allowed parent |
 | 422         | `PATH_NOT_PORTABLE`      | A name to write ends with a dot or space, or is a Windows device name |
 
-`details.path` echoes the rejected path. A workflow step whose path is
+`details.path` echoes the rejected path. A `WORKSPACE_ROOT_NOT_ALLOWED` error
+also has `details.reason` (`filesystem_root`, `home_folder`, `allowed_parent`
+or `outside_allowed_parents`) and `details.allowed_parents`, the resolved
+allowed parent folders. A workflow step whose path is
 refused fails with "Path is outside the workspace" in its `error_summary`.
 
 ### Filtering

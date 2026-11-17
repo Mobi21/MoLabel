@@ -663,7 +663,11 @@ def main() -> int:
                     base_url.rsplit(":", 1)[1],
                 ],
                 cwd=launch,
-                env=keyless_env(MOLABEL_DATA_DIR=str(data)),
+                # The workspace is in the OS temp folder, outside home on CI.
+                env=keyless_env(
+                    MOLABEL_DATA_DIR=str(data),
+                    MOLABEL_ALLOWED_WORKSPACE_ROOTS=str(root),
+                ),
                 stdout=log,
                 stderr=subprocess.STDOUT,
             )

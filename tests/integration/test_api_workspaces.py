@@ -77,11 +77,11 @@ async def test_get_workspace_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_create_workspace_no_auth_required(client):
+async def test_create_workspace_no_auth_required(client, tmp_path):
     """API-005: POST /workspaces is auth-free (bootstrap entry point)."""
     resp = await client.post(
         "/api/v1/workspaces",
-        json={"path": "/tmp/test-workspace", "workspace_name": "Test"},
+        json={"path": str(tmp_path / "test-workspace"), "workspace_name": "Test"},
     )
     # Workspace creation is the bootstrap entry point — no auth required
     assert resp.status_code == 201

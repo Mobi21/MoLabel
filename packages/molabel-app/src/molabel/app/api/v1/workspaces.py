@@ -25,6 +25,7 @@ from molabel.app.services.session import (
     create_session_token,
 )
 from molabel.app.utils import get_app_secret, get_engine
+from molabel.app.workspace_paths import new_workspace_root
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
@@ -230,15 +231,18 @@ async def create_workspace(
     No authentication required — this is the entry point for a fresh install.
     Creates the workspace, auto-creates the first reviewer profile (defaulting
     to "Reviewer 1"), and sets the molabel_session cookie so the caller is
-    immediately logged in.
+    immediately logged in. The path must resolve to a folder inside an allowed
+    parent folder, the home folder unless MOLABEL_ALLOWED_WORKSPACE_ROOTS is
+    set, or the request fails with 403 WORKSPACE_ROOT_NOT_ALLOWED.
     """
+    root = new_workspace_root(body.path)
     engine = get_engine(request)
     secret = get_app_secret(request)
     now = datetime.now(UTC).isoformat()
 
     # ── 1. Create workspace ──────────────────────────────────────────────────
     workspace_id = str(uuid.uuid4())
-    name = body.workspace_name or body.path.rstrip("/").split("/")[-1]
+    name = body.workspace_name or root.name
     slug = name.lower().replace(" ", "-")
 
     with engine.connect() as conn:
@@ -254,8 +258,8 @@ async def create_workspace(
                 "name": name,
                 "slug": slug,
                 "version": "0.1.0",
-                "path": body.path,
-                "manifest": f"{body.path}/.molabel/manifest.yaml",
+                "path": str(root),
+                "manifest": str(root / ".molabel" / "manifest.yaml"),
                 "now": now,
             },
         )
