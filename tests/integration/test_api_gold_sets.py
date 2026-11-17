@@ -1104,3 +1104,20 @@ async def test_an_append_after_a_hand_edit_rewrites_only_the_stale_lines(
     after = (await client.get(f"/api/v1/gold-sets/{GOLD}", headers=headers)).json()
     assert after["items_consistent"] is True
     assert after["stale_items"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_conflicts_line_that_does_not_parse_names_the_file_and_line(
+    client, app, tmp_path
+):
+    _, tokens, _ = await _start_review(client, app, tmp_path)
+    await _create(client, tokens[0])
+    _conflicts_path(tmp_path).write_bytes(b"\n{not json\n")
+
+    resp = await client.get(f"/api/v1/gold-sets/{GOLD}", headers=_as(tokens[0]))
+
+    assert resp.status_code == 409
+    error = resp.json()["error"]
+    assert error["code"] == "GOLD_SET_INVALID"
+    assert "conflicts.jsonl" in error["message"]
+    assert error["details"]["line"] == 2

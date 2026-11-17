@@ -115,7 +115,8 @@ Frontend only talks to backend through the API.
 
 Config is files in the workspace folder. Review in progress is SQLite.
 Released gold sets are files too: `gold/<slug>/gold.yaml` and
-`gold/<slug>/gold.jsonl`, listed under `gold_sets` in the manifest.
+`gold/<slug>/gold.jsonl`, listed under `gold_sets` in the manifest, with
+open conflicts in `gold/<slug>/conflicts.jsonl`.
 MoLabel writes them through the workspace lock and never runs git.
 `docs/architecture/gold-sets.md` gives the item shape and the rules for
 versions, duplicates and conflicts.
