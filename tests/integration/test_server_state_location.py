@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import sys
 import uuid
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -44,9 +46,19 @@ def test_server_start_writes_nothing_into_the_launch_folder(
     assert len(list(home.rglob("app_secret"))) == 1
 
 
+def _user_data_dir(home: Path) -> Path:
+    """The per-user data folder the server database belongs in, per platform."""
+    if sys.platform == "win32":
+        return home / "AppData" / "Local" / "MoLabel"
+    if sys.platform == "darwin":
+        return home / "Library" / "Application Support" / "MoLabel"
+    return home / ".local" / "share" / "molabel"
+
+
 def test_bootstrap_records_the_workspace_in_the_server_database(
     fresh_user: tuple[Path, Path], tmp_path: Path
 ) -> None:
+    home, _launch = fresh_user
     workspace = tmp_path / "workspace"
     (workspace / "data").mkdir(parents=True)
     (workspace / "data" / "items.jsonl").write_text('{"id": "1", "text": "hi"}\n')
@@ -57,7 +69,29 @@ def test_bootstrap_records_the_workspace_in_the_server_database(
         )
         assert resp.status_code == 201, resp.text
         datasets = client.get("/api/v1/datasets").json()["items"]
+        imported = client.post(
+            f"/api/v1/datasets/{datasets[0]['dataset_id']}/import",
+            json={"records": [{"id": "r-2", "text": "two"}, {"id": "r-3"}]},
+        )
+        assert imported.status_code == 202, imported.text
+        server_database = Path(client.app.state.engine.url.database).resolve()
 
+    database = (_user_data_dir(home) / "molabel.db").resolve()
+    assert server_database == database
+    with closing(sqlite3.connect(database)) as conn:
+        stored = {
+            row[0]
+            for row in conn.execute(
+                "SELECT external_id FROM records WHERE external_id LIKE 'r-%'"
+            )
+        }
+    assert stored == {"r-2", "r-3"}
+    databases_in_workspace = [
+        p.relative_to(workspace).as_posix()
+        for pattern in ("*.db", "*.db-*", "*.sqlite*")
+        for p in workspace.rglob(pattern)
+    ]
+    assert databases_in_workspace == []
     assert [d["dataset_slug"] for d in datasets] == ["data"]
     files = sorted(
         p.relative_to(workspace).as_posix()
