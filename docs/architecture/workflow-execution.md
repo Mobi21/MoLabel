@@ -128,16 +128,19 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 
 **`human_calibration`**
 
-Planned with gold sets (P8). Until then the API refuses a workflow with this
-step, with `400 CALIBRATION_NOT_AVAILABLE` and the step's id in `details`,
-when the workflow is created, updated, or run. A refused run starts no
-execution and runs no step. The executor stays for P8 to build on, and the
-contract below is the planned one.
+Checks reviewers against a gold set (`docs/architecture/gold-sets.md`). The
+step must name one with `config.gold_set`. The API refuses a step without it
+with `400 CALIBRATION_GOLD_SET_REQUIRED` and the step's id in `details`, when
+the workflow is created, updated, or run. A run checks the named set before it
+starts. A set the workspace does not list answers `404 GOLD_SET_NOT_FOUND`,
+and a set with no item whose record the workspace holds answers
+`409 CALIBRATION_GOLD_SET_EMPTY`. Either way the run starts no execution.
 
-- Inputs: reads `record_sets[active_record_set_id]`; reads `config.sample_size` (the shared calibration set size); reads `config.min_reviewers` (minimum reviewers who must complete calibration); reads `config.task_schema_id`
-- Outputs: appends to `review_queue_ids`; writes `step_outputs[step_id]` with calibration results (per-reviewer agreement, discussion items); writes `metrics["calibration.agreement"]`, `metrics["calibration.reviewer_count"]`
-- Side effects: creates a single shared calibration queue; each reviewer gets the same items; writes review events
-- Blocking: pauses until `min_reviewers` have completed the calibration set
+- Inputs: reads the gold set `config.gold_set` names; reads `config.sample_size` (optional, a seeded sample of its items); reads `config.min_reviewers` (copies of each item, 2 by default); reads `config.show_ai_proposal` (false by default). It does not read the active record set.
+- Outputs: appends to `review_queue_ids`; writes `record_sets[step_id]` with the gold items' records and leaves `active_record_set_id` as it was; writes `step_outputs[step_id]` with the queue id, the gold set, its version and content hash, and the items whose record the workspace lacks; writes `metrics["calibration.agreement"]` and `metrics["calibration.reviewer_count"]` as 0
+- Side effects: creates a calibration queue. Each item finds its record by `record_id`, or by dataset slug and `external_id`, and gets `min_reviewers` copies marked `is_calibration`, so that many reviewers each label every item. A copy is bound to the run's agent proposals only when `show_ai_proposal` is true. Otherwise the claim shows none and reveal answers `409 AI_HIDDEN_IN_CALIBRATION`. A calibration answer never becomes the record's latest label.
+- Results: `GET /api/v1/calibration/queues/{queue_id}` (`molabel calibration report`) scores each reviewer against the gold labels: accuracy, exact match and Cohen's kappa, per field and pooled
+- Blocking: pauses until every copy is submitted, skipped, or closed
 
 **`human_adjudication`**
 

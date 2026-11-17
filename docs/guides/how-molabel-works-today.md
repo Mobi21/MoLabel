@@ -114,7 +114,11 @@ Frontend only talks to backend through the API.
 ## 4. Storage Ownership
 
 Config is files in the workspace folder. Review in progress is SQLite.
-Released gold sets will be files too (planned, P8).
+Released gold sets are files too: `gold/<slug>/gold.yaml` and
+`gold/<slug>/gold.jsonl`, listed under `gold_sets` in the manifest.
+MoLabel writes them through the workspace lock and never runs git.
+`docs/architecture/gold-sets.md` gives the item shape and the rules for
+versions, duplicates and conflicts.
 
 ### 4.1 Config Files
 
@@ -359,10 +363,10 @@ Examples of supported step types include:
 - `export`, `snapshot`, `release_validation`
 - `loop`, `conditional`, `parallel`, `gate`
 
-`human_calibration`, which checks reviewers against gold labels before review,
-is planned with gold sets (P8). No shipped template uses it, and the API
-refuses a workflow that has one with `CALIBRATION_NOT_AVAILABLE` when it is
-created, updated, or run.
+- `human_calibration`, which checks reviewers against a gold set the step
+  names with `gold_set`. A step without one fails with
+  `CALIBRATION_GOLD_SET_REQUIRED`. No shipped template uses it, because a
+  template cannot know the workspace's gold sets.
 
 At runtime each step reads from and writes to the shared workflow context. Human
 steps can pause execution. Control steps branch or orchestrate child steps.

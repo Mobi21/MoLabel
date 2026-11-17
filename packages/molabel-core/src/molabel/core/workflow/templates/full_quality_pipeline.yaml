@@ -3,7 +3,8 @@ version: 1
 description: >
   Comprehensive pipeline: ingest, agent run, human review, agreement
   analysis, adjudication, quality check, export, and release validation.
-  Reviewer calibration against a gold set is planned with gold sets (P8).
+  To check reviewers against a gold set first, add a human_calibration step
+  that names it with gold_set: <slug>.
 
 steps:
   - id: ingest

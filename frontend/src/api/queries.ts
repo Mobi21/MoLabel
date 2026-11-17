@@ -1,6 +1,7 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import {
   getAgreementMetricsQueryKey,
+  getCalibrationReportQueryKey,
   getGoldSetQueryKey,
   getMeQueryKey,
   getQueueDisagreementQueryKey,
@@ -15,6 +16,7 @@ import {
 } from '@/api/generated/@tanstack/react-query.gen'
 import {
   getAgreementMetrics,
+  getCalibrationReport,
   getGoldSet,
   getMe,
   getQueueDisagreement,
@@ -134,6 +136,16 @@ export const agreementQuery = (workspaceId: string, queueId: string) => {
   })
 }
 
+export const calibrationReportQuery = (queueId: string) => {
+  const options = { path: { queue_id: queueId } }
+  return queryOptions({
+    queryKey: getCalibrationReportQueryKey(options),
+    queryFn: async ({ signal }) =>
+      (await getCalibrationReport({ ...options, signal, throwOnError: true }))
+        .data,
+  })
+}
+
 export const goldSetsQuery = () =>
   queryOptions({
     queryKey: listGoldSetsEndpointQueryKey(),
@@ -159,7 +171,8 @@ export function invalidateGoldSets(queryClient: QueryClient): void {
 
 /**
  * Mark stale what a submit, correction, skip or resolve changes: the queue's
- * agreement, its disagreements, and the record's disagreement.
+ * agreement and calibration report, its disagreements, and the record's
+ * disagreement.
  */
 export function invalidateQueueOutcomes(
   queryClient: QueryClient,
@@ -167,6 +180,7 @@ export function invalidateQueueOutcomes(
 ): void {
   for (const queryKey of [
     agreementQuery(scope.workspaceId, scope.queueId).queryKey,
+    calibrationReportQuery(scope.queueId).queryKey,
     disagreementsQuery(scope.queueId).queryKey,
     disagreementQuery(scope.queueId, scope.recordId).queryKey,
   ]) {

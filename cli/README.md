@@ -24,6 +24,7 @@ The intended operating model is:
 - `review`: submit, draft, reveal, release, and correction flows
 - `adjudication`: list, show, and resolve the disagreements of a review queue
 - `gold`: create gold sets, promote reviewed records, append failures, dedupe, and export
+- `calibration`: score each reviewer of a calibration queue against its gold set
 - `agent-run`: agent-run lifecycle and comparison
 - `quality`: quality dashboard, agreement, drift
 - `export`: export creation and validation
@@ -145,6 +146,13 @@ which is reported and never overwrites the item. `export` prints the JSONL
 inside its JSON result, prints the lines alone with `--raw`, or writes them
 to a workspace path with `--out`. A set of another workspace fails with
 `HTTP_404`.
+
+A workflow's `human_calibration` step names a set with `gold_set: <slug>`
+and makes a calibration queue of its items, `min_reviewers` copies each (2 by
+default). Reviewers never see the expected labels, and see an agent proposal
+only when the step sets `show_ai_proposal: true`. A step with no `gold_set`
+fails with `CALIBRATION_GOLD_SET_REQUIRED`.
+`molabel calibration report <queue-id>` scores each reviewer against the set.
 
 ## Labeling without an API key
 

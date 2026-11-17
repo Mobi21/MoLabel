@@ -4,9 +4,13 @@ It then creates the agent_comparison template, which leaves a model unset,
 once with no model and once on the offline provider. It runs the offline one
 to review and checks that it is marked an offline smoke run.
 
-Last, it adjudicates two reviewers through the CLI alone. It creates a second
+It adjudicates two reviewers through the CLI alone. It creates a second
 reviewer, runs a workflow whose review gives each record two copies, has the
 reviewers disagree on one record, and resolves that disagreement.
+
+Last, it promotes the adjudicated record into a gold set and reads the gold
+files back from the workspace. It appends the first review's failures twice,
+and the second append adds nothing.
 
 Starts the real backend with uvicorn on a temporary data directory, with
 every provider key unset, and drives the built CLI (cli/dist/bin/molabel.js)
@@ -20,6 +24,7 @@ Run from the repository root after `uv sync` and `npm run build` in cli/:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -30,10 +35,13 @@ import socket
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 REPO = Path(__file__).resolve().parent.parent
 CLI = REPO / "cli" / "dist" / "bin" / "molabel.js"
@@ -159,7 +167,7 @@ class Cli:
             ) from exc
 
 
-def run_flow(molabel: Cli, workspace: Path) -> tuple[Path, str, str]:
+def run_flow(molabel: Cli, workspace: Path) -> tuple[Path, str, str, str]:
     doctor = molabel("doctor")
     provider_types = {item["provider_type"] for item in doctor["providers"]}
     check("offline" in provider_types, "doctor lists the offline provider")
@@ -314,7 +322,7 @@ def run_flow(molabel: Cli, workspace: Path) -> tuple[Path, str, str]:
     check(len(rows) == 6, "export holds 6 records")
     exported = {row["external_id"]: row["labels"] for row in rows}
     check(exported == reviewed, "export holds the reviewed labels, edits included")
-    return export_path, dataset_id, schema_id
+    return export_path, dataset_id, schema_id, queue["queue_id"]
 
 
 def run_comparison(molabel: Cli) -> None:
@@ -383,7 +391,8 @@ def review_queue(molabel: Cli, queue_id: str, edits: dict[str, Any]) -> list[str
 
 def run_adjudication(
     molabel: Cli, workspace: Path, dataset_id: str, schema_id: str
-) -> None:
+) -> tuple[str, str, str, str]:
+    """Adjudicate two reviewers; return the queue, the record, and both reviewers."""
     first = molabel("session", "whoami")["reviewer_id"]
     second = molabel("reviewer", "create", "--display-name", "Reviewer 2")
     check(
@@ -501,6 +510,119 @@ def run_adjudication(
         stored["resolution"] == "resolve" and stored["resolved_labels"] == RESOLVED,
         "a fresh adjudication show reads the stored resolution and its labels",
     )
+    return queue_id, record_id, first, second["id"]
+
+
+def _sha256(path: Path) -> str:
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+
+
+def run_gold(
+    molabel: Cli,
+    workspace: Path,
+    review_queue: str,
+    adjudication: tuple[str, str, str, str],
+) -> None:
+    queue_id, record_id, first, second = adjudication
+    created = molabel("gold", "create", "ticket-gold", "--task-schema", "ticket-triage")
+    check(
+        (created["version"], created["item_count"]) == (1, 0),
+        "gold create wrote version 1 with no items",
+    )
+    promoted = molabel(
+        "gold", "promote", "ticket-gold", "--queue", queue_id, "--record", record_id
+    )
+    check(
+        promoted["counts"]
+        == {"added": 1, "duplicates": 0, "conflicts": 0, "skipped": 0},
+        "gold promote added the adjudicated record",
+    )
+
+    folder = workspace / "gold" / "ticket-gold"
+    items = folder / "gold.jsonl"
+    check(items.is_file(), f"the gold file exists: {items}")
+    (item,) = [json.loads(line) for line in items.read_text("utf-8").splitlines()]
+    print(f"  gold.jsonl: {items.read_text('utf-8').strip()}")
+    check(
+        item["input_ref"]["external_id"] == "ticket-4" and item["expected"] == RESOLVED,
+        "the gold item is ticket-4 with the adjudicated labels",
+    )
+    provenance = item["provenance"]
+    check(
+        provenance["source"] == "adjudication"
+        and provenance["adjudication"]["adjudicator_id"] == second
+        and provenance["reviewer_ids"] == sorted([first, second])
+        and provenance["promoted_by"] == second
+        and provenance["queue_id"] == queue_id,
+        "its provenance names the adjudication, both reviewers and the promoter",
+    )
+    check(
+        provenance["ai_revealed"] is True and len(provenance["reviews"]) == 2,
+        "its provenance records the two reviews and that a proposal was shown",
+    )
+    header_text = (folder / "gold.yaml").read_text("utf-8")
+    print(textwrap.indent(f"gold.yaml:\n{header_text}", "  "), end="")
+    header = yaml.safe_load(header_text)
+    check(
+        header["version"] == 2 and header["content_hash"] == _sha256(items),
+        "gold.yaml is at version 2 with the file's content hash",
+    )
+    manifest = (workspace / "workbench.project.yaml").read_text("utf-8")
+    check(
+        "gold_set_id: ticket-gold" in manifest,
+        "workbench.project.yaml lists the gold set",
+    )
+
+    appended = molabel(
+        "gold",
+        "append",
+        "ticket-gold",
+        "--queue",
+        review_queue,
+        "--allow-single-reviewer",
+    )
+    check(
+        appended["counts"]
+        == {"added": 1, "duplicates": 0, "conflicts": 1, "skipped": 4},
+        "gold append added ticket-6 and reported ticket-4 as a conflict",
+    )
+    (added,) = appended["added"]
+    check(
+        added["input_ref"]["external_id"] == "ticket-6"
+        and added["provenance"]["model_failure"]["proposed"]["intent"] == "bug"
+        and added["provenance"]["source"] == "single_reviewer",
+        "the appended failure records the wrong proposal",
+    )
+    (conflict,) = appended["conflicts"]
+    check(
+        conflict["gold"]["expected"] == RESOLVED
+        and conflict["other"]["expected"] == EDITS["ticket-4"],
+        "the conflict keeps the adjudicated gold label",
+    )
+    once = items.read_bytes()
+
+    again = molabel(
+        "gold",
+        "append",
+        "ticket-gold",
+        "--queue",
+        review_queue,
+        "--allow-single-reviewer",
+    )
+    check(
+        again["written"] is False
+        and again["counts"]["added"] == 0
+        and again["counts"]["duplicates"] == 1
+        and again["gold_set"]["version"] == 3,
+        "a second append adds nothing, dedupes ticket-6, and keeps version 3",
+    )
+    check(items.read_bytes() == once, "the second append left gold.jsonl as it was")
+
+    exported = molabel("gold", "export", "ticket-gold")
+    check(
+        exported["content"].encode("utf-8") == once,
+        "gold export prints the file's lines",
+    )
 
 
 def main() -> int:
@@ -539,9 +661,12 @@ def main() -> int:
                 keyless_env(MOLABEL_BASE_URL=base_url, XDG_CONFIG_HOME=str(config)),
                 cwd=workspace,
             )
-            export_path, dataset_id, schema_id = run_flow(molabel, workspace)
+            export_path, dataset_id, schema_id, review_queue = run_flow(
+                molabel, workspace
+            )
             run_comparison(molabel)
-            run_adjudication(molabel, workspace, dataset_id, schema_id)
+            adjudication = run_adjudication(molabel, workspace, dataset_id, schema_id)
+            run_gold(molabel, workspace, review_queue, adjudication)
             check(
                 export_path.resolve().is_relative_to(workspace.resolve()),
                 "the export stays inside the workspace",

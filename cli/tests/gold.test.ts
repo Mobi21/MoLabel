@@ -243,6 +243,28 @@ describe('gold', () => {
     })
   })
 
+  it('reports a calibration queue scored against gold', async () => {
+    const report = {
+      queue_id: 'q 1',
+      gold_set_id: 'ticket-gold',
+      reviewers: [],
+    }
+    const api = await mockApi({
+      'GET /api/v1/calibration/queues/q%201': () => ({ body: report }),
+    })
+
+    const result = await runCliCapture([
+      '--base-url',
+      api.url,
+      'calibration',
+      'report',
+      'q 1',
+    ])
+
+    expect(result.exitCode).toBe(0)
+    expect(parseStdoutJson(result)).toEqual(report)
+  })
+
   it('lists every gold command in the manifest', () => {
     const names = COMMAND_MANIFEST.commands.map((command) => command.name)
     for (const name of [
@@ -253,6 +275,7 @@ describe('gold', () => {
       'gold append',
       'gold dedupe',
       'gold export',
+      'calibration report',
     ]) {
       expect(names).toContain(name)
     }

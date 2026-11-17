@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
@@ -30,6 +31,19 @@ from molabel.core.quality.review_agreement import (
 from molabel.core.utils.canonical import canonical_label_value
 
 GOLD_RATER = "gold"
+
+
+@dataclass(frozen=True)
+class CalibrationItems:
+    """The records of a workspace that a gold set's items point to."""
+
+    gold_set: str
+    version: int
+    content_hash: str
+    task_schema: str
+    record_ids: list[str]
+    unresolved: list[str]
+    """Items whose record this workspace does not hold, by item id."""
 
 
 class GoldFieldScore(BaseModel):

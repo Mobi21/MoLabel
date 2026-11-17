@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy import bindparam, text
 
 from molabel.app.api.v1.model_profiles import SHARED_PROFILE_WORKSPACE
+from molabel.app.errors import ApiError
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import (
     ErrorDetail,
@@ -29,15 +30,22 @@ from molabel.app.schemas import (
     PaginatedResponse,
     QueryParams,
 )
+from molabel.app.services.gold_sets import calibration_items
 from molabel.app.services.review_events import (
     queue_review_events,
     run_agent_proposals,
 )
 from molabel.app.utils import get_engine
-from molabel.app.workspace_config import WORKFLOW, workspace_files, workspace_folder
+from molabel.app.workspace_config import (
+    WORKFLOW,
+    WorkspaceFolder,
+    workspace_files,
+    workspace_folder,
+)
 from molabel.app.workspace_paths import resolve_in_workspace
 from molabel.core.agents.queue_binding import serialize_agent_output_ids
 from molabel.core.database import hyphenated_id
+from molabel.core.gold.calibration import CalibrationItems
 from molabel.core.providers.base import ProviderError, resolve_api_key
 from molabel.core.providers.detection import ProviderDetector
 from molabel.core.providers.model_defaults import (
@@ -898,39 +906,65 @@ _RUNNABLE_PROVIDERS = frozenset(ProviderType) - {ProviderType.custom}
 _AGENT_STEP_TYPES = frozenset({"agent_run", "agent_labeling"})
 
 
-class CalibrationNotAvailableError(Exception):
-    """A workflow has a human_calibration step, which needs P8's gold sets."""
+def _require_gold_set(steps: Iterable[tuple[str, str, dict[str, Any]]]) -> None:
+    """Refuse a human_calibration step that names no gold set.
 
-    def __init__(self, step_id: str) -> None:
-        super().__init__(
-            f"Step '{step_id}' is a human_calibration step, which checks "
-            "reviewers against gold labels. Calibration comes with gold sets in "
-            "P8, so MoLabel cannot run it yet. Remove the step, or review the "
-            "records with human_review."
-        )
-        self.step_id = step_id
-
-
-async def calibration_not_available_error_handler(
-    _request: Request, exc: CalibrationNotAvailableError
-) -> JSONResponse:
-    return JSONResponse(
-        status_code=400,
-        content=ErrorResponse(
-            error=ErrorDetail(
-                code="CALIBRATION_NOT_AVAILABLE",
-                message=str(exc),
-                details={"step_id": exc.step_id},
+    Each step is (step id, step type, config).
+    """
+    for step_id, step_type, config in steps:
+        gold_set = (config or {}).get("gold_set")
+        if step_type == WorkflowStepType.human_calibration and not (
+            isinstance(gold_set, str) and gold_set
+        ):
+            raise ApiError(
+                400,
+                "CALIBRATION_GOLD_SET_REQUIRED",
+                f"Step '{step_id}' is a human_calibration step, which checks "
+                "reviewers against a gold set. Name one with gold_set: <slug>; "
+                "molabel gold list shows the workspace's sets.",
+                {"step_id": step_id},
             )
-        ).model_dump(mode="json"),
-    )
 
 
-def _refuse_calibration(steps: Iterable[tuple[str, str]]) -> None:
-    """Refuse every (step id, step type) whose type is human_calibration."""
-    for step_id, step_type in steps:
-        if step_type == WorkflowStepType.human_calibration:
-            raise CalibrationNotAvailableError(step_id)
+def _check_calibration_sets(
+    conn: Any, workspace_id: str, definition: WorkflowDefinitionParsed
+) -> None:
+    """Refuse a run whose calibration step names a set with no record here."""
+    for step in definition.steps:
+        if step.type != WorkflowStepType.human_calibration:
+            continue
+        folder = WorkspaceFolder(
+            workspace_id, "", _resolve_workspace_root(conn, workspace_id)
+        )
+        slug = step.config["gold_set"]
+        try:
+            items = calibration_items(conn, folder, slug)
+        except ApiError as exc:
+            raise ApiError(
+                exc.status_code,
+                exc.code,
+                exc.message,
+                {**(exc.details or {}), "step_id": step.id},
+            ) from exc
+        if not items.record_ids:
+            raise ApiError(
+                409,
+                "CALIBRATION_GOLD_SET_EMPTY",
+                f"Gold set '{slug}' has no item whose record this workspace "
+                f"holds, so step '{step.id}' has nothing to calibrate on",
+                {"step_id": step.id, "gold_set_id": slug},
+            )
+
+
+class _WorkflowGoldSets:
+    """The gold sets a calibration step reads, from the workspace's files."""
+
+    def __init__(self, conn: Any, folder: WorkspaceFolder) -> None:
+        self._conn = conn
+        self._folder = folder
+
+    def calibration_items(self, slug: str) -> CalibrationItems:
+        return calibration_items(self._conn, self._folder, slug)
 
 
 class UnresolvedModelError(Exception):
@@ -2082,7 +2116,14 @@ def _materialize_review_queue(
     record_ids: list[str],
     config: dict[str, Any],
     workflow_context: WorkflowContext,
+    calibration: bool = False,
 ) -> None:
+    """Insert the queue's review tasks, once.
+
+    A calibration queue's tasks are marked ``is_calibration`` and bound to no
+    agent output unless ``show_ai_proposal`` is set, so its reviewers never
+    see a proposal they were not meant to.
+    """
     existing = conn.execute(
         text("SELECT count(*) FROM review_tasks WHERE queue_id = :queue_id"),
         {"queue_id": queue_id},
@@ -2103,7 +2144,8 @@ def _materialize_review_queue(
         else None
     )
     output_rows = []
-    if latest_agent_run_id:
+    shows_proposals = not calibration or config.get("show_ai_proposal") is True
+    if latest_agent_run_id and shows_proposals:
         output_rows = conn.execute(
             text(
                 "SELECT id, record_id FROM agent_outputs "
@@ -2136,7 +2178,8 @@ def _materialize_review_queue(
                     "ai_revealed, ai_revealed_at, submitted_at, created_at, "
                     "updated_at, workspace_id, dataset_id) "
                     "VALUES (:id, :queue_id, :record_id, :task_schema_id, :status, "
-                    ":priority, 'workflow_queue', NULL, NULL, 0, :is_overlap, 0, "
+                    ":priority, 'workflow_queue', NULL, NULL, 0, :is_overlap, "
+                    ":is_calibration, "
                     "NULL, :agent_output_ids, 0, NULL, NULL, :created_at, "
                     ":updated_at, :workspace_id, :dataset_id)"
                 ),
@@ -2148,6 +2191,7 @@ def _materialize_review_queue(
                     "status": ReviewTaskStatusEnum.available.value,
                     "priority": priority,
                     "is_overlap": overlap_count > 1,
+                    "is_calibration": calibration,
                     "agent_output_ids": agent_output_ids,
                     "created_at": now,
                     "updated_at": now,
@@ -2238,6 +2282,9 @@ def _run_engine_until_blocked(
                 workspace_root=workspace_root,
             ),
             "agreement_data_source": _ReviewAgreementSource(conn),
+            "gold_sets": _WorkflowGoldSets(
+                conn, WorkspaceFolder(workspace_id, "", workspace_root)
+            ),
         },
     )
     engine.initialize(definition, workflow_context)
@@ -2291,13 +2338,23 @@ def _run_engine_until_blocked(
                 queue_id = str(step_output.summary.get("queue_id", ""))
                 if queue_id:
                     record_set = workflow_context.record_sets.get(current_step_id)
+                    step = definition.get_step(current_step_id)
+                    calibration = step.type == WorkflowStepType.human_calibration
+                    config = step.config
+                    if calibration:
+                        config = {
+                            **config,
+                            "task_schema_id": step_output.summary["task_schema_id"],
+                            "overlap_count": step_output.summary["min_reviewers"],
+                        }
                     _materialize_review_queue(
                         conn,
                         workspace_id=workspace_id,
                         queue_id=queue_id,
                         record_ids=list(record_set.record_ids if record_set else []),
-                        config=definition.get_step(current_step_id).config,
+                        config=config,
                         workflow_context=workflow_context,
+                        calibration=calibration,
                     )
             break
         if not result.success:
@@ -2485,7 +2542,9 @@ async def create_workflow(
     _reviewer: CurrentReviewer,
 ) -> WorkflowDetail:
     """Create a new workflow definition (API-021) and write its file."""
-    _refuse_calibration((step.step_id, step.step_type) for step in body.steps)
+    _require_gold_set(
+        (step.step_id, step.step_type, step.config) for step in body.steps
+    )
     engine = get_engine(request)
     folder = workspace_folder(engine, body.workspace_id)
     workflow_id = str(uuid.uuid4())
@@ -2532,7 +2591,9 @@ async def update_workflow(
     _reviewer: CurrentReviewer,
 ) -> WorkflowDetail:
     """Update a workflow definition (API-022) and rewrite its file."""
-    _refuse_calibration((step.step_id, step.step_type) for step in body.steps or [])
+    _require_gold_set(
+        (step.step_id, step.step_type, step.config) for step in body.steps or []
+    )
     engine = get_engine(request)
     now = datetime.now(UTC).isoformat()
 
@@ -2624,9 +2685,11 @@ async def execute_workflow(
         ).first()
         if wf_row is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
-        _refuse_calibration(
-            (step.id, step.type) for step in _build_workflow_definition(wf_row).steps
+        definition = _build_workflow_definition(wf_row)
+        _require_gold_set(
+            (step.id, step.type, step.config) for step in definition.steps
         )
+        _check_calibration_sets(conn, str(wf_row[10]), definition)
 
         exec_id = str(uuid.uuid4())
         initial_context = dict(body.context or {}) if body and body.context else {}

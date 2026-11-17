@@ -53,6 +53,7 @@ import {
   getAgreementMetrics,
   getAuditEvent,
   getBenchmarkRunFacts,
+  getCalibrationReport,
   getComparisonResults,
   getCostEstimate,
   getCostSummary,
@@ -275,6 +276,9 @@ import type {
   GetBenchmarkRunFactsData,
   GetBenchmarkRunFactsError,
   GetBenchmarkRunFactsResponse,
+  GetCalibrationReportData,
+  GetCalibrationReportError,
+  GetCalibrationReportResponse,
   GetComparisonResultsData,
   GetComparisonResultsError,
   GetComparisonResultsResponse,
@@ -3944,6 +3948,36 @@ export const exportGoldSetToPathMutation = (
   }
   return mutationOptions
 }
+
+export const getCalibrationReportQueryKey = (
+  options: Options<GetCalibrationReportData>,
+) => createQueryKey('getCalibrationReport', options)
+
+/**
+ * Get Calibration Report
+ *
+ * Score each reviewer of a calibration queue against its gold set.
+ */
+export const getCalibrationReportOptions = (
+  options: Options<GetCalibrationReportData>,
+) =>
+  queryOptions<
+    GetCalibrationReportResponse,
+    GetCalibrationReportError,
+    GetCalibrationReportResponse,
+    ReturnType<typeof getCalibrationReportQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getCalibrationReport({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      })
+      return data
+    },
+    queryKey: getCalibrationReportQueryKey(options),
+  })
 
 export const getQualityDashboardQueryKey = (
   options: Options<GetQualityDashboardData>,

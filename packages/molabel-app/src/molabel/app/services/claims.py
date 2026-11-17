@@ -23,6 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from molabel.app.errors import ApiError
 from molabel.app.utils import parse_bool
 from molabel.core.review.queue_ordering import (
     OrderingConfig,
@@ -760,7 +761,8 @@ def submit_review(
             },
         )
 
-        if effective_labels:
+        # A calibration answer tests the reviewer and never labels the record.
+        if effective_labels and not parse_bool(row[11]):
             try:
                 conn.execute(
                     text(
@@ -1230,6 +1232,21 @@ def _select_agent_output(
     }
 
 
+def _calibration_hides_ai(conn, task_id: str) -> bool:
+    """Whether the task is a calibration copy that shows no agent proposal.
+
+    A calibration queue binds proposals to its tasks only when its step sets
+    ``show_ai_proposal``, so a task with none bound never shows one.
+    """
+    row = conn.execute(
+        text(
+            "SELECT is_calibration, agent_output_ids FROM review_tasks WHERE id = :id"
+        ),
+        {"id": task_id},
+    ).first()
+    return row is not None and parse_bool(row[0]) and not row[1]
+
+
 def _get_agent_output_for_task(
     conn,
     record_id: str,
@@ -1265,8 +1282,12 @@ def apply_blind_review_policy(
     with engine.begin() as conn:
         task_dict.update(reviewer_record_context(conn, record_id))
         policy = _get_blind_review_policy(conn, task_schema_id)
-        shows_output = policy == BlindReviewPolicy.show_agent_outputs or (
-            policy == BlindReviewPolicy.hide_agent_outputs_by_default and ai_revealed
+        shows_output = not _calibration_hides_ai(conn, task_dict["id"]) and (
+            policy == BlindReviewPolicy.show_agent_outputs
+            or (
+                policy == BlindReviewPolicy.hide_agent_outputs_by_default
+                and ai_revealed
+            )
         )
         agent_output = (
             _get_agent_output_for_task(conn, record_id, task_schema_id)
@@ -1338,6 +1359,14 @@ def reveal_ai(
         policy = _get_blind_review_policy(conn, task_schema_id)
         if policy == BlindReviewPolicy.no_agent:
             return None
+        if _calibration_hides_ai(conn, task_dict["id"]):
+            raise ApiError(
+                409,
+                "AI_HIDDEN_IN_CALIBRATION",
+                "This calibration queue hides the AI proposal; its step sets "
+                "show_ai_proposal to show it",
+                {"task_id": task_dict["id"]},
+            )
 
         agent_output = _get_agent_output_for_task(
             conn,

@@ -38,6 +38,7 @@ from molabel.app.workspace_config import (
 from molabel.app.workspace_paths import resolve_in_workspace
 from molabel.core.agents.queue_binding import deserialize_agent_output_ids
 from molabel.core.database import hyphenated_id
+from molabel.core.gold.calibration import CalibrationItems
 from molabel.core.gold.model import (
     GOLD_DIRECTORY,
     HEADER_FILENAME,
@@ -602,3 +603,73 @@ def export_gold_set(
         data = render_items(stored.gold.items)
         written = files.write_file(path, data)
     return stored, written, data
+
+
+# ---------------------------------------------------------------------------
+# Calibration
+# ---------------------------------------------------------------------------
+
+
+def gold_records(
+    conn: Any, workspace_id: str, gold: GoldSet
+) -> tuple[dict[str, GoldItem], list[str]]:
+    """Each item by the record of this workspace it points to, and the rest.
+
+    An item points to its ``record_id`` when this workspace holds it, or else
+    to the record with its dataset slug and external id, which a database
+    that imported the data again gives a new id.
+    """
+    held = {
+        str(record_id)
+        for (record_id,) in conn.execute(
+            _expanding(
+                "SELECT id FROM records WHERE workspace_id = :w AND id IN :ids", "ids"
+            ),
+            {
+                "w": workspace_id,
+                "ids": [
+                    i.input_ref.record_id for i in gold.items if i.input_ref.record_id
+                ],
+            },
+        ).fetchall()
+    }
+    by_record: dict[str, GoldItem] = {}
+    unresolved: list[str] = []
+    for item in gold.items:
+        ref = item.input_ref
+        record_id = ref.record_id if ref.record_id in held else None
+        if record_id is None and ref.dataset and ref.external_id:
+            found = conn.execute(
+                text(
+                    "SELECT r.id FROM records r JOIN datasets d ON d.id = r.dataset_id "
+                    "WHERE r.workspace_id = :w AND d.dataset_slug = :dataset "
+                    "AND r.external_id = :external_id LIMIT 1"
+                ),
+                {
+                    "w": workspace_id,
+                    "dataset": ref.dataset,
+                    "external_id": ref.external_id,
+                },
+            ).scalar()
+            record_id = str(found) if found else None
+        if record_id is None or record_id in by_record:
+            unresolved.append(item.item_id)
+        else:
+            by_record[record_id] = item
+    return by_record, unresolved
+
+
+def calibration_items(
+    conn: Any, folder: WorkspaceFolder, slug: str
+) -> CalibrationItems:
+    """The records a calibration queue on set *slug* holds."""
+    gold = read_gold_set(folder, slug).gold
+    by_record, unresolved = gold_records(conn, folder.workspace_id, gold)
+    return CalibrationItems(
+        gold_set=slug,
+        version=gold.header.version,
+        content_hash=gold.header.content_hash,
+        task_schema=gold.header.task_schema,
+        record_ids=list(by_record),
+        unresolved=unresolved,
+    )

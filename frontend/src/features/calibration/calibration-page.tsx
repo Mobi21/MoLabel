@@ -13,6 +13,7 @@ import { useQueue } from '@/features/queues/queues'
 import { useReviewer } from '@/features/session/session'
 import { letter, plainKey, useKeymap, type Binding } from '@/lib/keymap'
 import { cn } from '@/lib/utils'
+import { AgainstGold } from './against-gold'
 import {
   RELIABLE,
   TENTATIVE,
@@ -268,6 +269,7 @@ export function CalibrationPage() {
             {errorMessage(report.error)}
           </p>
         )}
+        {queue?.kind === 'calibrate' && <AgainstGold queueId={queueId} />}
         {data && (
           <>
             <p className="font-mono text-xs text-ink-soft">

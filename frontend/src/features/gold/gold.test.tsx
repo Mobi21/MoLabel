@@ -327,6 +327,36 @@ function serveCalibration(kind: string, calls?: { promoted?: () => unknown }) {
     ],
     ['GET', /^\/api\/v1\/gold-sets$/, () => ({ items: [TRIAGE_GOLD] })],
     [
+      'GET',
+      /^\/api\/v1\/calibration\/queues\/q1$/,
+      () => ({
+        queue_id: 'q1',
+        gold_set_id: 'triage-gold',
+        gold_version: 3,
+        queue_gold_version: 2,
+        items: 6,
+        fields: ['intent'],
+        reviewers: [
+          {
+            reviewer_id: 'r2',
+            reviewer_name: 'Bo',
+            items_answered: 6,
+            exact_match: 0.5,
+            pooled: { accuracy: 0.5, cohen_kappa: 0, compared: 6, missing: 0 },
+            fields: {
+              intent: {
+                accuracy: 0.5,
+                cohen_kappa: 0,
+                compared: 6,
+                missing: 0,
+              },
+            },
+          },
+        ],
+        warnings: ['Gold set triage-gold is at version 3.'],
+      }),
+    ],
+    [
       'POST',
       /\/promote$/,
       calls?.promoted ??
@@ -369,6 +399,26 @@ describe('Promote to gold on the calibration screen', () => {
     expect(await screen.findByTestId('promote-result')).toHaveTextContent(
       'Skipped ticket-3: The reviewers disagree and no adjudication resolved it.',
     )
+  })
+
+  it('shows each reviewer against gold on a calibration queue', async () => {
+    serveCalibration('calibrate')
+    renderAt(
+      '/queues/q1/calibration',
+      '/queues/:queueId/calibration',
+      <CalibrationPage />,
+    )
+
+    const row = await screen.findByTestId('reviewer-against-gold')
+    expect(
+      within(row)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent),
+    ).toEqual(['6', '50.0%', '50.0%', '0.000', '50.0%', '0.000'])
+    expect(within(row).getByRole('rowheader')).toHaveTextContent('Bo')
+    expect(
+      screen.getByText('Gold set triage-gold is at version 3.'),
+    ).toBeVisible()
   })
 
   it('never promotes the answers of a calibration queue', async () => {

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from molabel.app.api.v1.adjudication import router as adjudication_router
 from molabel.app.api.v1.agent_runs import router as agent_runs_router
 from molabel.app.api.v1.audit import router as audit_router
+from molabel.app.api.v1.calibration import router as calibration_router
 from molabel.app.api.v1.cli import router as cli_router
 from molabel.app.api.v1.corrections import router as corrections_router
 from molabel.app.api.v1.costs import router as costs_router
@@ -56,6 +57,7 @@ router.include_router(queue_router)
 router.include_router(reviews_router)
 router.include_router(adjudication_router)
 router.include_router(gold_sets_router)
+router.include_router(calibration_router)
 
 # Quality, exports, releases
 router.include_router(quality_router)

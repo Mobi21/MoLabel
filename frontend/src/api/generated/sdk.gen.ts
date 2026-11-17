@@ -136,6 +136,9 @@ import type {
   GetBenchmarkRunFactsData,
   GetBenchmarkRunFactsErrors,
   GetBenchmarkRunFactsResponses,
+  GetCalibrationReportData,
+  GetCalibrationReportErrors,
+  GetCalibrationReportResponses,
   GetComparisonResultsData,
   GetComparisonResultsErrors,
   GetComparisonResultsResponses,
@@ -2216,6 +2219,24 @@ export const exportGoldSetToPath = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   })
+
+/**
+ * Get Calibration Report
+ *
+ * Score each reviewer of a calibration queue against its gold set.
+ */
+export const getCalibrationReport = <ThrowOnError extends boolean = false>(
+  options: Options<GetCalibrationReportData, ThrowOnError>,
+): RequestResult<
+  GetCalibrationReportResponses,
+  GetCalibrationReportErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetCalibrationReportResponses,
+    GetCalibrationReportErrors,
+    ThrowOnError
+  >({ url: '/api/v1/calibration/queues/{queue_id}', ...options })
 
 /**
  * Get Quality Dashboard

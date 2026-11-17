@@ -530,6 +530,12 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       ],
     },
     {
+      name: 'calibration report',
+      group: 'calibration',
+      description:
+        "Score each reviewer of a calibration queue against its gold set: accuracy, exact match and Cohen's kappa, per field and pooled",
+    },
+    {
       name: 'agent-run list',
       group: 'agent-run',
       description: 'List agent runs',

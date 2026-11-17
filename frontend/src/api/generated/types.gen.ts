@@ -1419,6 +1419,56 @@ export type CalibrationBucket = {
 }
 
 /**
+ * CalibrationReport
+ *
+ * Each reviewer of a calibration queue scored against its gold set.
+ *
+ * ``accuracy`` is the share of compared values that match gold, and
+ * ``cohen_kappa`` treats gold as a second rater, so a reviewer who always
+ * gives the most common label scores near 0.
+ */
+export type CalibrationReport = {
+  /**
+   * Queue Id
+   */
+  queue_id: string
+  /**
+   * Gold Set Id
+   */
+  gold_set_id: string
+  /**
+   * Gold Version
+   *
+   * The version the set is at now
+   */
+  gold_version: number
+  /**
+   * Queue Gold Version
+   *
+   * The version the queue was made from
+   */
+  queue_gold_version?: number | null
+  /**
+   * Items
+   *
+   * Gold items in the queue
+   */
+  items: number
+  /**
+   * Fields
+   */
+  fields: Array<string>
+  /**
+   * Reviewers
+   */
+  reviewers: Array<ReviewerCalibration>
+  /**
+   * Warnings
+   */
+  warnings?: Array<string>
+}
+
+/**
  * ClaimResponse
  *
  * Response for a claim operation (SE-006).
@@ -3171,6 +3221,36 @@ export type GoldExportRequest = {
    * Overwrite
    */
   overwrite?: boolean
+}
+
+/**
+ * GoldFieldScore
+ *
+ * A reviewer against gold on one field, or pooled over every field.
+ */
+export type GoldFieldScore = {
+  /**
+   * Accuracy
+   */
+  accuracy?: number | null
+  /**
+   * Cohen Kappa
+   */
+  cohen_kappa?: number | null
+  /**
+   * Compared
+   */
+  compared?: number
+  /**
+   * Missing
+   */
+  missing?: number
+  /**
+   * Null Reasons
+   */
+  null_reasons?: {
+    [key: string]: string
+  }
 }
 
 /**
@@ -6404,6 +6484,37 @@ export type ReviewTaskResponse = {
    * Dataset Id
    */
   dataset_id: string
+}
+
+/**
+ * ReviewerCalibration
+ */
+export type ReviewerCalibration = {
+  /**
+   * Reviewer Id
+   */
+  reviewer_id: string
+  /**
+   * Items Answered
+   */
+  items_answered: number
+  /**
+   * Exact Match
+   *
+   * Share of answered items where every gold field matches
+   */
+  exact_match?: number | null
+  pooled: GoldFieldScore
+  /**
+   * Fields
+   */
+  fields?: {
+    [key: string]: GoldFieldScore
+  }
+  /**
+   * Reviewer Name
+   */
+  reviewer_name: string
 }
 
 /**
@@ -11615,6 +11726,38 @@ export type ExportGoldSetToPathResponses = {
 
 export type ExportGoldSetToPathResponse =
   ExportGoldSetToPathResponses[keyof ExportGoldSetToPathResponses]
+
+export type GetCalibrationReportData = {
+  body?: never
+  path: {
+    /**
+     * Queue Id
+     */
+    queue_id: string
+  }
+  query?: never
+  url: '/api/v1/calibration/queues/{queue_id}'
+}
+
+export type GetCalibrationReportErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type GetCalibrationReportError =
+  GetCalibrationReportErrors[keyof GetCalibrationReportErrors]
+
+export type GetCalibrationReportResponses = {
+  /**
+   * Successful Response
+   */
+  200: CalibrationReport
+}
+
+export type GetCalibrationReportResponse =
+  GetCalibrationReportResponses[keyof GetCalibrationReportResponses]
 
 export type GetQualityDashboardData = {
   body?: never

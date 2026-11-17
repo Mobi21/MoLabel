@@ -6,6 +6,7 @@ import { registerAdjudicationCommands } from './adjudication.js'
 import { registerAgentRunCommands } from './agent-run.js'
 import { registerArtifactCommands } from './artifact.js'
 import { registerAuditCommands } from './audit.js'
+import { registerCalibrationCommands } from './calibration.js'
 import { registerCodebookCommands } from './codebook.js'
 import { registerCoreCommands } from './core.js'
 import { registerDatasetCommands } from './dataset.js'
@@ -45,6 +46,7 @@ export function registerCommands(
   registerReviewCommands(program, runtime)
   registerAdjudicationCommands(program, runtime)
   registerGoldCommands(program, runtime)
+  registerCalibrationCommands(program, runtime)
   registerAgentRunCommands(program, runtime)
   registerQualityCommands(program, runtime)
   registerExportCommands(program, runtime)
