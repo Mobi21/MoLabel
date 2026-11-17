@@ -360,7 +360,9 @@ Examples of supported step types include:
 - `loop`, `conditional`, `parallel`, `gate`
 
 `human_calibration`, which checks reviewers against gold labels before review,
-is planned with gold sets (P8). No shipped template uses it.
+is planned with gold sets (P8). No shipped template uses it, and the API
+refuses a workflow that has one with `CALIBRATION_NOT_AVAILABLE` when it is
+created, updated, or run.
 
 At runtime each step reads from and writes to the shared workflow context. Human
 steps can pause execution. Control steps branch or orchestrate child steps.

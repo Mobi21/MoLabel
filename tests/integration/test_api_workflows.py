@@ -1322,6 +1322,99 @@ async def test_a_model_profile_id_beside_a_model_of_its_provider_runs(
     assert hosted_calls == expected_calls * 3 * run_count
 
 
+CALIBRATION_STEP = {
+    "step_id": "calibrate",
+    "step_type": "human_calibration",
+    "config": {"sample_size": 2, "min_reviewers": 2},
+}
+INGEST_STEP = {
+    "step_id": "ingest",
+    "step_type": "data_ingest",
+    "config": {"source": "data/reviews.jsonl"},
+}
+
+
+def _assert_calibration_refused(resp):
+    assert resp.status_code == 400, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "CALIBRATION_NOT_AVAILABLE"
+    assert "P8" in error["message"]
+    assert "gold sets" in error["message"]
+    assert error["details"] == {"step_id": "calibrate"}
+
+
+async def _bootstrapped_workspace(client, tmp_path):
+    resp = await client.post(
+        "/api/v1/cli/workspaces/bootstrap", json={"path": str(tmp_path / "ws")}
+    )
+    assert resp.status_code == 201, resp.text
+    client.cookies.set("molabel_session", resp.cookies["molabel_session"])
+    return resp.json()["workspace_id"], tmp_path / "ws" / "workbench" / "workflows"
+
+
+@pytest.mark.asyncio
+async def test_a_workflow_with_a_calibration_step_is_refused_at_create(
+    client, tmp_path
+):
+    workspace_id, workflows = await _bootstrapped_workspace(client, tmp_path)
+
+    resp = await client.post(
+        "/api/v1/workflows",
+        json={
+            "workspace_id": workspace_id,
+            "name": "Calibrate",
+            "steps": [INGEST_STEP, CALIBRATION_STEP],
+        },
+    )
+
+    _assert_calibration_refused(resp)
+    assert not (workflows / "calibrate.yaml").exists()
+    assert (await client.get("/api/v1/workflows")).json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_calibration_step_is_refused_at_update(client, tmp_path):
+    workspace_id, workflows = await _bootstrapped_workspace(client, tmp_path)
+    created = await client.post(
+        "/api/v1/workflows",
+        json={"workspace_id": workspace_id, "name": "Label", "steps": [INGEST_STEP]},
+    )
+    assert created.status_code == 201, created.text
+    before = (workflows / "label.yaml").read_text(encoding="utf-8")
+
+    resp = await client.put(
+        f"/api/v1/workflows/{created.json()['workflow_id']}",
+        json={"steps": [INGEST_STEP, CALIBRATION_STEP]},
+    )
+
+    _assert_calibration_refused(resp)
+    assert (workflows / "label.yaml").read_text(encoding="utf-8") == before
+
+
+@pytest.mark.asyncio
+async def test_a_stored_calibration_step_is_refused_before_any_step_runs(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    _write_demo_reviews(tmp_path)
+    workflow_id = _insert_workflow(
+        app.state.engine, workspace_id, [INGEST_STEP, CALIBRATION_STEP]
+    )
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+
+    _assert_calibration_refused(resp)
+    assert _execution_count(app.state.engine, workspace_id) == 0
+    with app.state.engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM review_tasks")).scalar() == 0
+
+
 @pytest.mark.asyncio
 async def test_execute_workflow_reaches_review_queue(client, app, tmp_path):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)

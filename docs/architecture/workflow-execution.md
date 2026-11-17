@@ -128,9 +128,11 @@ Each step type defines exactly what it reads from `WorkflowContext`, what it wri
 
 **`human_calibration`**
 
-Planned with gold sets (P8). No shipped template uses it, and the queue it
-creates does not yet compare reviewers with gold labels. The contract below is
-the planned one.
+Planned with gold sets (P8). Until then the API refuses a workflow with this
+step, with `400 CALIBRATION_NOT_AVAILABLE` and the step's id in `details`,
+when the workflow is created, updated, or run. A refused run starts no
+execution and runs no step. The executor stays for P8 to build on, and the
+contract below is the planned one.
 
 - Inputs: reads `record_sets[active_record_set_id]`; reads `config.sample_size` (the shared calibration set size); reads `config.min_reviewers` (minimum reviewers who must complete calibration); reads `config.task_schema_id`
 - Outputs: appends to `review_queue_ids`; writes `step_outputs[step_id]` with calibration results (per-reviewer agreement, discussion items); writes `metrics["calibration.agreement"]`, `metrics["calibration.reviewer_count"]`

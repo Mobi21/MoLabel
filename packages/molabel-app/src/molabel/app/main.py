@@ -28,7 +28,9 @@ from molabel.app.api.v1.cli.operations import (
     template_model_required_error_handler,
 )
 from molabel.app.api.v1.workflows import (
+    CalibrationNotAvailableError,
     UnresolvedModelError,
+    calibration_not_available_error_handler,
     unresolved_model_error_handler,
 )
 from molabel.app.schemas import ErrorDetail, ErrorResponse, HealthResponse
@@ -171,6 +173,9 @@ def create_app() -> FastAPI:
 
     app.add_exception_handler(WorkspacePathError, workspace_path_error_handler)
     app.add_exception_handler(UnresolvedModelError, unresolved_model_error_handler)
+    app.add_exception_handler(
+        CalibrationNotAvailableError, calibration_not_available_error_handler
+    )
     app.add_exception_handler(
         TemplateModelRequiredError, template_model_required_error_handler
     )
