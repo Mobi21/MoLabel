@@ -254,6 +254,24 @@ These runs create durable operational records:
 - events and progress,
 - confidence and cost metadata when available.
 
+A proposal needs no LLM key. The offline provider labels records with keyword
+heuristics, with no network and no model download. Select it with
+`molabel workflow create --template <id> --provider offline`, or with
+`provider_type: offline` or `model: offline-heuristic` alone on an `agent_run`
+step. Its outputs record `builtin.offline` as the run's adapter,
+`raw_response.strategy: offline-heuristic`, and a `composite_confidence` of 0,
+so review and routing never treat them as a model's. MoLabel never switches
+to the offline provider on its own. A workflow that names a hosted model fails
+without its key, and the error names the key variable and the offline flag.
+A step whose model matches no model profile and no known model family fails
+before any step runs, with `MODEL_UNRESOLVED` and the providers the backend
+can use. So does a step that pins a model profile id that does not exist,
+whose provider MoLabel cannot run, or whose provider is not the step's
+`provider_type`, and a step whose `model` and `model_profile_id` select
+profiles of different providers.
+`cli/README.md` describes the heuristic, and `scripts/smoke_no_key.py` runs
+import, offline pre-label, review, and export with no key in CI.
+
 ### 6.4 Human Review
 
 Review happens through queues. A reviewer typically:
@@ -337,7 +355,8 @@ or one model vendor.
 - `molabel-core` defines the domain contracts and provider/plugin interfaces.
 - `molabel-plugins` provides built-in task-type implementations.
 - provider adapters in core handle model backends such as OpenAI-compatible,
-  OpenRouter, Ollama, Anthropic, and custom adapters.
+  OpenRouter, Ollama, Anthropic, and custom adapters. The offline adapter
+  implements the same interface with keyword heuristics and needs no key.
 - model profiles and runtime profiles describe how a given model should be
   invoked in practice.
 

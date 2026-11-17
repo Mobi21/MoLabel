@@ -46,6 +46,9 @@ async function runDoctor(options: CliRuntimeOptions): Promise<void> {
   const whoami = client
     ? await safeGetJson<Record<string, unknown>>(client, '/api/v1/me')
     : null
+  const providers = client
+    ? await safeGetJson<{ providers?: unknown[] }>(client, '/api/v1/providers')
+    : null
 
   await emit(
     {
@@ -55,6 +58,7 @@ async function runDoctor(options: CliRuntimeOptions): Promise<void> {
         healthy: health?.status ?? null,
       },
       session: whoami,
+      providers: providers?.providers ?? null,
     },
     outputMode(options),
   )

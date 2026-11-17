@@ -176,6 +176,24 @@ class TestModelProfileService:
         assert updated is not None
         assert updated.is_available is not None
 
+    def test_test_connectivity_offline_needs_no_key_or_network(self) -> None:
+        service = self._make_service()
+        profile = service.create(
+            ModelProfileCreate(
+                model_profile_slug="offline",
+                provider_type=ProviderType.offline,
+                model_identifier="offline-heuristic",
+                transport="builtin",
+            ),
+            workspace_id=_WORKSPACE_ID,
+        )
+
+        result = service.test_connectivity(profile.id)
+
+        assert result.health.is_healthy is True
+        assert [m.model_id for m in result.available_models] == ["offline-heuristic"]
+        assert service.get(profile.id).is_available is True
+
     def test_response_model_fields(self) -> None:
         service = self._make_service()
         profile = service.create(

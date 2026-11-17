@@ -155,4 +155,65 @@ describe('workflow create --template', () => {
     expect(result.exitCode).toBe(1)
     expect(readErrorCode(result)).toBe('USAGE_ERROR')
   })
+
+  it.each([
+    [['--provider', 'offline'], 'provider', 'offline'],
+    [['--model', 'gpt-4o'], 'model', 'gpt-4o'],
+  ])(
+    'asks the API to bind the agent steps for %j',
+    async (flags, param, value) => {
+      const api = await startTemplateApi()
+
+      const result = await runCliCapture([
+        '--base-url',
+        api.url,
+        'workflow',
+        'create',
+        '--template',
+        'human_in_the_loop',
+        '--workspace-id',
+        WORKSPACE_ID,
+        ...flags,
+      ])
+
+      expect(result.exitCode).toBe(0)
+      const templateQuery = api.requests[0]?.query
+      expect(templateQuery?.get(param)).toBe(value)
+      expect(templateQuery?.has(param === 'model' ? 'provider' : 'model')).toBe(
+        false,
+      )
+    },
+  )
+
+  it.each([
+    [['--template', 'human_in_the_loop', '--provider', 'anthropic']],
+    [
+      [
+        '--template',
+        'human_in_the_loop',
+        '--provider',
+        'offline',
+        '--model',
+        'gpt-4o',
+      ],
+    ],
+    [['--name', 'Manual', '--provider', 'offline']],
+    [['--name', 'Manual', '--model', 'gpt-4o']],
+  ])('rejects %j as a usage error', async (flags) => {
+    const api = await startTemplateApi()
+
+    const result = await runCliCapture([
+      '--base-url',
+      api.url,
+      'workflow',
+      'create',
+      '--workspace-id',
+      WORKSPACE_ID,
+      ...flags,
+    ])
+
+    expect(result.exitCode).toBe(1)
+    expect(readErrorCode(result)).toBe('USAGE_ERROR')
+    expect(api.requests).toEqual([])
+  })
 })

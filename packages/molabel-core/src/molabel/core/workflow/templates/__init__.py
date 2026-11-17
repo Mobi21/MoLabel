@@ -236,21 +236,47 @@ def template_needs_task_schema(definition: dict[str, Any]) -> bool:
     )
 
 
+MODEL_CONFIG_KEYS = frozenset(
+    {
+        "model",
+        "model_profile_id",
+        "provider_type",
+        "provider_name",
+        "base_url",
+        "auth_ref",
+    }
+)
+
+
+def template_has_agent_run(definition: dict[str, Any]) -> bool:
+    """Whether a template has an agent_run step whose model can be bound."""
+    return any(step.get("type") == "agent_run" for step in _steps(definition))
+
+
 def bind_template_inputs(
     definition: dict[str, Any],
     *,
     dataset_id: str | None,
     task_schema_id: str | None,
+    agent_model: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Return a copy of a template definition bound to a dataset and schema.
 
     A bound dataset replaces any ingest source file. A bound task schema
-    applies to every labeling, review, and normalize step.
+    applies to every labeling, review, and normalize step. A bound agent
+    model replaces the model and provider settings of every agent_run step.
     """
     bound_steps: list[dict[str, Any]] = []
     for step in _steps(definition):
         config = dict(_config(step))
         step_type = step.get("type")
+        if agent_model and step_type == "agent_run":
+            config = {
+                key: value
+                for key, value in config.items()
+                if key not in MODEL_CONFIG_KEYS
+            }
+            config.update(agent_model)
         if dataset_id and step_type == "data_ingest":
             config.pop("source", None)
             config["dataset_id"] = dataset_id

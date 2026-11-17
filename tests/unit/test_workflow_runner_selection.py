@@ -2,15 +2,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from types import SimpleNamespace
 
 from sqlalchemy import text
 
 from molabel.app.api.v1.workflows import (
     _ensure_model_profile,
-    _HeuristicAgentRunner,
-    _LlmAgentRunner,
-    _select_agent_runner,
     _WorkflowDataLoader,
 )
 from molabel.core.database import get_engine
@@ -92,97 +88,6 @@ def _insert_workspace(engine, root_path) -> str:
     return workspace_id
 
 
-def test_select_agent_runner_uses_model_profile_id(tmp_path) -> None:
-    engine = _build_engine(tmp_path)
-    workspace_id = _insert_workspace(engine, tmp_path)
-    profile_id = str(uuid.uuid4())
-    _insert_model_profile(
-        engine,
-        workspace_id,
-        profile_id=profile_id,
-        slug="minimax-2-7",
-        model_identifier="MiniMax-M2.7-highspeed",
-    )
-    definition = SimpleNamespace(
-        steps=[
-            SimpleNamespace(
-                id="label",
-                type="agent_run",
-                config={"model_profile_id": profile_id},
-            )
-        ]
-    )
-
-    runner = _select_agent_runner(
-        engine.connect(),
-        definition=definition,
-        workspace_id=workspace_id,
-    )
-
-    assert isinstance(runner, _LlmAgentRunner)
-
-
-def test_select_agent_runner_uses_model_profile_slug(tmp_path) -> None:
-    engine = _build_engine(tmp_path)
-    workspace_id = _insert_workspace(engine, tmp_path)
-    profile_id = str(uuid.uuid4())
-    _insert_model_profile(
-        engine,
-        workspace_id,
-        profile_id=profile_id,
-        slug="minimax-2-7",
-        model_identifier="MiniMax-M2.7-highspeed",
-    )
-    definition = SimpleNamespace(
-        steps=[
-            SimpleNamespace(
-                id="label",
-                type="agent_run",
-                config={"model": "minimax-2-7"},
-            )
-        ]
-    )
-
-    runner = _select_agent_runner(
-        engine.connect(),
-        definition=definition,
-        workspace_id=workspace_id,
-    )
-
-    assert isinstance(runner, _LlmAgentRunner)
-
-
-def test_select_agent_runner_keeps_heuristic_for_custom_profile(tmp_path) -> None:
-    engine = _build_engine(tmp_path)
-    workspace_id = _insert_workspace(engine, tmp_path)
-    profile_id = str(uuid.uuid4())
-    _insert_model_profile(
-        engine,
-        workspace_id,
-        profile_id=profile_id,
-        slug="demo-heuristic",
-        model_identifier="heuristic-agent",
-        provider_type="custom",
-    )
-    definition = SimpleNamespace(
-        steps=[
-            SimpleNamespace(
-                id="label",
-                type="agent_run",
-                config={"model_profile_id": profile_id},
-            )
-        ]
-    )
-
-    runner = _select_agent_runner(
-        engine.connect(),
-        definition=definition,
-        workspace_id=workspace_id,
-    )
-
-    assert isinstance(runner, _HeuristicAgentRunner)
-
-
 def test_ensure_model_profile_resolves_existing_profile_id(tmp_path) -> None:
     engine = _build_engine(tmp_path)
     workspace_id = _insert_workspace(engine, tmp_path)
@@ -254,30 +159,31 @@ def test_ensure_model_profile_infers_minimax_profile(tmp_path, monkeypatch) -> N
     assert MINIMAX_M27_HIGHSPEED.base_url in str(row[3])
 
 
-def test_select_agent_runner_uses_step_provider_hint_without_profile(tmp_path) -> None:
+def test_ensure_model_profile_uses_the_step_provider_without_a_profile(
+    tmp_path,
+) -> None:
     engine = _build_engine(tmp_path)
     workspace_id = _insert_workspace(engine, tmp_path)
-    definition = SimpleNamespace(
-        steps=[
-            SimpleNamespace(
-                id="label",
-                type="agent_run",
-                config={
-                    "model": "MiniMax-M2.7-highspeed",
-                    "provider_type": "anthropic",
-                    "base_url": "https://api.minimax.io/anthropic",
-                },
-            )
-        ]
-    )
 
-    runner = _select_agent_runner(
-        engine.connect(),
-        definition=definition,
-        workspace_id=workspace_id,
-    )
+    with engine.connect() as conn:
+        profile_id = _ensure_model_profile(
+            conn,
+            workspace_id=workspace_id,
+            model_identifier="MiniMax-M2.7-highspeed",
+            provider_type="anthropic",
+            base_url="https://api.minimax.io/anthropic",
+        )
+        row = conn.execute(
+            text(
+                "SELECT provider_type, routing_metadata FROM model_profiles "
+                "WHERE id = :id"
+            ),
+            {"id": profile_id},
+        ).first()
 
-    assert isinstance(runner, _LlmAgentRunner)
+    assert row is not None
+    assert row[0] == "anthropic"
+    assert "https://api.minimax.io/anthropic" in str(row[1])
 
 
 def test_workflow_data_loader_uses_record_id_field_from_dataset_config(

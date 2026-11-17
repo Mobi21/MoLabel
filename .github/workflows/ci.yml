@@ -79,6 +79,26 @@ jobs:
       - name: Tests
         run: npm test
 
+  smoke-no-key:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: uv sync
+
+      - name: Build the CLI
+        working-directory: cli
+        run: npm ci && npm run build
+
+      - name: Import, offline pre-label, review, and export with no API key
+        run: uv run python scripts/smoke_no_key.py
+
   openapi-sync:
     runs-on: ubuntu-latest
     needs: [python]
