@@ -166,6 +166,43 @@ async def test_create_refuses_a_set_that_exists_or_a_schema_that_does_not(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("orphan", ["gold.jsonl", "gold.yaml", "notes.md"])
+async def test_create_refuses_a_folder_holding_files_the_manifest_does_not_list(
+    client, app, tmp_path, orphan
+):
+    _, tokens, _ = await _start_review(client, app, tmp_path)
+    folder = tmp_path / "gold" / GOLD
+    folder.mkdir(parents=True)
+    kept = b'{"input": {"text": "hand made"}, "expected": {}}\n'
+    (folder / orphan).write_bytes(kept)
+
+    resp = await client.post(
+        "/api/v1/gold-sets",
+        json={"gold_set_id": GOLD, "task_schema_id": "sentiment-demo-v1"},
+        headers=_as(tokens[0]),
+    )
+
+    assert resp.status_code == 409, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "GOLD_SET_FILES_EXIST"
+    assert error["details"]["files"] == [f"gold/{GOLD}/{orphan}"]
+    assert (folder / orphan).read_bytes() == kept
+    assert [p.name for p in folder.iterdir()] == [orphan]
+    listed = await client.get("/api/v1/gold-sets", headers=_as(tokens[0]))
+    assert listed.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_create_writes_into_an_empty_folder(client, app, tmp_path):
+    _, tokens, _ = await _start_review(client, app, tmp_path)
+    (tmp_path / "gold" / GOLD).mkdir(parents=True)
+
+    await _create(client, tokens[0])
+
+    assert _header(tmp_path)["version"] == 1
+
+
+@pytest.mark.asyncio
 async def test_promotion_writes_adjudicated_and_agreed_records_with_provenance(
     client, app, tmp_path
 ):

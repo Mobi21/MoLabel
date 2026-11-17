@@ -198,14 +198,20 @@ def create_gold_set(
         gold = GoldSet.new(
             slug=slug, name=name or slug, task_schema=schema_slug, now=_now()
         )
-        default_path = f"{GOLD_DIRECTORY}/{slug}/{HEADER_FILENAME}"
-        if resolve_in_workspace(folder.path, default_path).exists():
+        set_folder = f"{GOLD_DIRECTORY}/{slug}"
+        set_path = resolve_in_workspace(folder.path, set_folder)
+        held = sorted(
+            f"{set_folder}/{entry.name}"
+            for entry in (set_path.iterdir() if set_path.is_dir() else ())
+        )
+        if held:
             raise ApiError(
                 409,
-                "GOLD_SET_EXISTS",
-                f"{default_path} exists but the manifest does not list it; "
-                "add it to gold_sets in workbench.project.yaml",
-                {"gold_set_id": slug, "path": default_path},
+                "GOLD_SET_FILES_EXIST",
+                f"{set_folder}/ holds files the manifest does not list as a gold "
+                "set. Pick another slug, move the folder away, or list its "
+                f"{HEADER_FILENAME} under gold_sets in workbench.project.yaml.",
+                {"gold_set_id": slug, "path": set_folder, "files": held},
             )
         path = files.write_gold_set(
             slug,

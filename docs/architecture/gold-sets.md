@@ -72,6 +72,12 @@ version, so promoting the same records twice changes no file. A `content_hash` t
 not match the file means someone edited it outside MoLabel, and `gold show`
 reports it.
 
+Create never adopts or overwrites files it did not list. If `gold/<slug>/`
+holds any file, such as a `gold.jsonl` left behind, and the manifest lists no
+set there, create answers `409 GOLD_SET_FILES_EXIST` with the files it found.
+Pick another slug, move the folder, or list its `gold.yaml` under `gold_sets`.
+An empty folder is used as it is.
+
 ## Duplicates and conflicts
 
 The dedupe key is the task schema plus `input_hash`, which is `item_id`. A
