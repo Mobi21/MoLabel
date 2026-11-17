@@ -19,6 +19,11 @@ export function queueTitle(queue: QueueSummary): string {
   return queue.task_schema_title ?? 'Untitled task schema'
 }
 
+/** Gold answers a calibration queue's items, so it has nothing to adjudicate. */
+export function isAdjudicable(queue: QueueSummary): boolean {
+  return queue.kind !== 'calibrate'
+}
+
 export function isBlind(queue: QueueSummary): boolean {
   return queue.blind_review_policy === 'hide_agent_outputs_by_default'
 }

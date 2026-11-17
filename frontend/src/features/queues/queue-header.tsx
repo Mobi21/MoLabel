@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import type { QueueSummary } from '@/api/generated/types.gen'
 import { cn } from '@/lib/utils'
-import { isBlind, kindLabel, queueTitle } from './queues'
+import { isAdjudicable, isBlind, kindLabel, queueTitle } from './queues'
 
 const SCREENS = [
   { path: 'review', label: 'Review' },
@@ -44,7 +44,10 @@ export function QueueHeader({
           </h1>
         </div>
         <nav aria-label="Queue screens" className="flex gap-1 self-end">
-          {SCREENS.map((screen) => (
+          {SCREENS.filter(
+            (screen) =>
+              screen.path !== 'adjudication' || !queue || isAdjudicable(queue),
+          ).map((screen) => (
             <NavLink
               key={screen.path}
               to={`/queues/${queueId}/${screen.path}`}
