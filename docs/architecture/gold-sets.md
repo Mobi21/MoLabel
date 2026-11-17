@@ -66,9 +66,9 @@ correct hashes on the next write.
 
 A write that changes `gold.jsonl` increments `version`. It sets
 `previous_hash` to the hash of the file it replaced and `content_hash` to the
-hash of the new file. Create writes version 1 with no items. A write that
-would leave the file byte-identical writes nothing and keeps the version, so
-promoting the same records twice changes no file. A `content_hash` that does
+hash of the new file. Create writes version 1 with no items. A promotion
+that adds no item, or a dedupe that removes none, writes nothing and keeps the
+version, so promoting the same records twice changes no file. A `content_hash` that does
 not match the file means someone edited it outside MoLabel, and `gold show`
 reports it.
 

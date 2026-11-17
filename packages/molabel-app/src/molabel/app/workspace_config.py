@@ -27,8 +27,14 @@ from filelock import FileLock
 from sqlalchemy import text
 
 from molabel.app.workspace_paths import WorkspacePathError, resolve_in_workspace
+from molabel.core.gold.model import (
+    GOLD_DIRECTORY,
+    HEADER_FILENAME,
+    ITEMS_FILENAME,
+)
 from molabel.core.manifest import (
     DatasetManifestEntry,
+    GoldSetManifestEntry,
     PromptManifestEntry,
     TaskSchemaManifestEntry,
     WorkflowManifestEntry,
@@ -204,6 +210,49 @@ class WorkspaceFiles:
 
         self._update_manifest(add_source)
 
+    def write_gold_set(
+        self,
+        slug: str,
+        *,
+        header: dict[str, Any],
+        items: bytes,
+        definition_path: str | None,
+    ) -> str:
+        """Write a gold set's items and header and list the set in the manifest.
+
+        The header keeps the comments and layout of the one it replaces, and
+        both files end lines with LF. Returns the header's path relative to
+        the workspace folder.
+        """
+        header_path = resolve_in_workspace(
+            self.folder.path,
+            definition_path or f"{GOLD_DIRECTORY}/{slug}/{HEADER_FILENAME}",
+        )
+        relative = header_path.relative_to(self.folder.path).as_posix()
+        items_path = resolve_in_workspace(
+            self.folder.path, f"{header_path.parent.as_posix()}/{ITEMS_FILENAME}"
+        )
+        self._write(items_path, items)
+        self._write(
+            header_path, dump_yaml(header, _text_or_none(header_path)).encode("utf-8")
+        )
+
+        def list_set(manifest: WorkspaceManifest) -> None:
+            manifest.gold_sets = _replaced(
+                manifest.gold_sets,
+                GoldSetManifestEntry(gold_set_id=slug, definition_path=relative),
+                "gold_set_id",
+            )
+
+        self._update_manifest(list_set)
+        return relative
+
+    def write_file(self, relative: str, content: bytes) -> str:
+        """Write a generated file, such as an export, inside the workspace."""
+        path = resolve_in_workspace(self.folder.path, relative)
+        self._write(path, content)
+        return path.relative_to(self.folder.path).as_posix()
+
     def _update_manifest(self, change: Callable[[WorkspaceManifest], None]) -> None:
         path = resolve_in_workspace(self.folder.path, MANIFEST_FILENAME)
         previous = _text_or_none(path)
@@ -219,7 +268,7 @@ class WorkspaceFiles:
         change(manifest)
         self._write(path, dump_manifest(manifest, previous))
 
-    def _write(self, path: Path, content: str) -> None:
+    def _write(self, path: Path, content: str | bytes) -> None:
         original = path.read_bytes() if path.exists() else None
         try:
             _write_atomically(path, content)

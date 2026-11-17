@@ -94,7 +94,11 @@ class WorkspaceManifest(ManifestModel):
     task_schemas: list[TaskSchemaManifestEntry] = PydanticField(default_factory=list)
     prompts: list[PromptManifestEntry] = PydanticField(default_factory=list)
     workflows: list[WorkflowManifestEntry] = PydanticField(default_factory=list)
-    gold_sets: list[GoldSetManifestEntry] = PydanticField(default_factory=list)
+    gold_sets: list[GoldSetManifestEntry] = PydanticField(
+        default_factory=list,
+        exclude_if=lambda sets: not sets,
+        description="Left out of the file until a workspace has a gold set",
+    )
     export_targets: list[dict[str, Any]] = PydanticField(default_factory=list)
     validation_gates: list[dict[str, Any]] = PydanticField(default_factory=list)
 

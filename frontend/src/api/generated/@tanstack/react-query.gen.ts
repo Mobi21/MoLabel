@@ -11,6 +11,7 @@ import {
 import { client } from '../client.gen'
 import {
   advanceStep,
+  appendFailuresToGoldSet,
   approveRelease,
   bootstrapWorkspace,
   cancelAgentRun,
@@ -22,6 +23,7 @@ import {
   createArtifactProposal,
   createDataset,
   createExport,
+  createGoldSetEndpoint,
   createModelProfile,
   createPrompt,
   createRelease,
@@ -33,6 +35,7 @@ import {
   createWorkflow,
   createWorkspace,
   decideArtifactProposal,
+  dedupeGoldSetEndpoint,
   deleteModelProfile,
   deleteRuntimeProfile,
   deleteSession,
@@ -42,6 +45,8 @@ import {
   downloadExport,
   enablePlugin,
   executeWorkflow,
+  exportGoldSetContent,
+  exportGoldSetToPath,
   getAgentAnalytics,
   getAgentOutputForRecord,
   getAgentRun,
@@ -56,6 +61,7 @@ import {
   getDriftReport,
   getExecution,
   getExport,
+  getGoldSet,
   getLocks,
   getMe,
   getMissionControlReviewers,
@@ -87,6 +93,7 @@ import {
   listDatasets,
   listExecutions,
   listExports,
+  listGoldSetsEndpoint,
   listModelProfiles,
   listMyQueueTasksEndpoint,
   listPlugins,
@@ -108,6 +115,7 @@ import {
   pauseExecution,
   previewExport,
   previewLabelMapping,
+  promoteToGoldSet,
   pushToHuggingface,
   readArtifact,
   reindexWorkspace,
@@ -144,6 +152,9 @@ import type {
   AdvanceStepData,
   AdvanceStepError,
   AdvanceStepResponse,
+  AppendFailuresToGoldSetData,
+  AppendFailuresToGoldSetError,
+  AppendFailuresToGoldSetResponse,
   ApproveReleaseData,
   ApproveReleaseError,
   ApproveReleaseResponse,
@@ -176,6 +187,9 @@ import type {
   CreateExportData,
   CreateExportError,
   CreateExportResponse,
+  CreateGoldSetEndpointData,
+  CreateGoldSetEndpointError,
+  CreateGoldSetEndpointResponse,
   CreateModelProfileData,
   CreateModelProfileError,
   CreateModelProfileResponse,
@@ -209,6 +223,9 @@ import type {
   DecideArtifactProposalData,
   DecideArtifactProposalError,
   DecideArtifactProposalResponse,
+  DedupeGoldSetEndpointData,
+  DedupeGoldSetEndpointError,
+  DedupeGoldSetEndpointResponse,
   DeleteModelProfileData,
   DeleteModelProfileError,
   DeleteModelProfileResponse,
@@ -234,6 +251,12 @@ import type {
   ExecuteWorkflowData,
   ExecuteWorkflowError,
   ExecuteWorkflowResponse,
+  ExportGoldSetContentData,
+  ExportGoldSetContentError,
+  ExportGoldSetContentResponse,
+  ExportGoldSetToPathData,
+  ExportGoldSetToPathError,
+  ExportGoldSetToPathResponse,
   GetAgentAnalyticsData,
   GetAgentAnalyticsError,
   GetAgentAnalyticsResponse,
@@ -276,6 +299,9 @@ import type {
   GetExportData,
   GetExportError,
   GetExportResponse,
+  GetGoldSetData,
+  GetGoldSetError,
+  GetGoldSetResponse,
   GetLocksData,
   GetLocksResponse,
   GetMeData,
@@ -367,6 +393,9 @@ import type {
   ListExportsData,
   ListExportsError,
   ListExportsResponse,
+  ListGoldSetsEndpointData,
+  ListGoldSetsEndpointError,
+  ListGoldSetsEndpointResponse,
   ListModelProfilesData,
   ListModelProfilesError,
   ListModelProfilesResponse,
@@ -425,6 +454,9 @@ import type {
   PreviewLabelMappingData,
   PreviewLabelMappingError,
   PreviewLabelMappingResponse,
+  PromoteToGoldSetData,
+  PromoteToGoldSetError,
+  PromoteToGoldSetResponse,
   PushToHuggingfaceData,
   PushToHuggingfaceError,
   PushToHuggingfaceResponse,
@@ -3661,6 +3693,248 @@ export const resolveQueueDisagreementMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await resolveQueueDisagreement({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+export const listGoldSetsEndpointQueryKey = (
+  options?: Options<ListGoldSetsEndpointData>,
+) => createQueryKey('listGoldSetsEndpoint', options)
+
+/**
+ * List Gold Sets Endpoint
+ *
+ * List the gold sets of the session's workspace, in manifest order.
+ */
+export const listGoldSetsEndpointOptions = (
+  options?: Options<ListGoldSetsEndpointData>,
+) =>
+  queryOptions<
+    ListGoldSetsEndpointResponse,
+    ListGoldSetsEndpointError,
+    ListGoldSetsEndpointResponse,
+    ReturnType<typeof listGoldSetsEndpointQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listGoldSetsEndpoint({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      })
+      return data
+    },
+    queryKey: listGoldSetsEndpointQueryKey(options),
+  })
+
+/**
+ * Create Gold Set Endpoint
+ *
+ * Write version 1 of an empty gold set and list it in the manifest.
+ */
+export const createGoldSetEndpointMutation = (
+  options?: Partial<Options<CreateGoldSetEndpointData>>,
+): UseMutationOptions<
+  CreateGoldSetEndpointResponse,
+  CreateGoldSetEndpointError,
+  Options<CreateGoldSetEndpointData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateGoldSetEndpointResponse,
+    CreateGoldSetEndpointError,
+    Options<CreateGoldSetEndpointData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createGoldSetEndpoint({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+export const getGoldSetQueryKey = (options: Options<GetGoldSetData>) =>
+  createQueryKey('getGoldSet', options)
+
+/**
+ * Get Gold Set
+ *
+ * Show a gold set: its header, newest items, duplicates and conflicts.
+ */
+export const getGoldSetOptions = (options: Options<GetGoldSetData>) =>
+  queryOptions<
+    GetGoldSetResponse,
+    GetGoldSetError,
+    GetGoldSetResponse,
+    ReturnType<typeof getGoldSetQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getGoldSet({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      })
+      return data
+    },
+    queryKey: getGoldSetQueryKey(options),
+  })
+
+/**
+ * Promote To Gold Set
+ *
+ * Promote reviewed records into the set.
+ *
+ * A record qualifies when an adjudication resolved it with labels or every
+ * counted reviewer gave identical labels, or, with allow_single_reviewer,
+ * one reviewer labelled it. Promoting a record again is a duplicate and
+ * changes nothing; other labels for the same input are a conflict, which
+ * is reported and never overwrites the item.
+ */
+export const promoteToGoldSetMutation = (
+  options?: Partial<Options<PromoteToGoldSetData>>,
+): UseMutationOptions<
+  PromoteToGoldSetResponse,
+  PromoteToGoldSetError,
+  Options<PromoteToGoldSetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    PromoteToGoldSetResponse,
+    PromoteToGoldSetError,
+    Options<PromoteToGoldSetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await promoteToGoldSet({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+/**
+ * Append Failures To Gold Set
+ *
+ * Append the reviewed records the model got wrong.
+ *
+ * These are the records that qualify for promotion and whose human label
+ * contradicts an agent proposal bound to their review tasks. Each item
+ * records that proposal. Append dedupes as promotion does.
+ */
+export const appendFailuresToGoldSetMutation = (
+  options?: Partial<Options<AppendFailuresToGoldSetData>>,
+): UseMutationOptions<
+  AppendFailuresToGoldSetResponse,
+  AppendFailuresToGoldSetError,
+  Options<AppendFailuresToGoldSetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AppendFailuresToGoldSetResponse,
+    AppendFailuresToGoldSetError,
+    Options<AppendFailuresToGoldSetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await appendFailuresToGoldSet({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+/**
+ * Dedupe Gold Set Endpoint
+ *
+ * Remove exact repeats, keeping the first, and report the conflicts left.
+ */
+export const dedupeGoldSetEndpointMutation = (
+  options?: Partial<Options<DedupeGoldSetEndpointData>>,
+): UseMutationOptions<
+  DedupeGoldSetEndpointResponse,
+  DedupeGoldSetEndpointError,
+  Options<DedupeGoldSetEndpointData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DedupeGoldSetEndpointResponse,
+    DedupeGoldSetEndpointError,
+    Options<DedupeGoldSetEndpointData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await dedupeGoldSetEndpoint({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+export const exportGoldSetContentQueryKey = (
+  options: Options<ExportGoldSetContentData>,
+) => createQueryKey('exportGoldSetContent', options)
+
+/**
+ * Export Gold Set Content
+ *
+ * The set's items as JSONL, one item per line as gold.jsonl holds them.
+ */
+export const exportGoldSetContentOptions = (
+  options: Options<ExportGoldSetContentData>,
+) =>
+  queryOptions<
+    ExportGoldSetContentResponse,
+    ExportGoldSetContentError,
+    ExportGoldSetContentResponse,
+    ReturnType<typeof exportGoldSetContentQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await exportGoldSetContent({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      })
+      return data
+    },
+    queryKey: exportGoldSetContentQueryKey(options),
+  })
+
+/**
+ * Export Gold Set To Path
+ *
+ * Write the set's items as JSONL to a path inside the workspace.
+ */
+export const exportGoldSetToPathMutation = (
+  options?: Partial<Options<ExportGoldSetToPathData>>,
+): UseMutationOptions<
+  ExportGoldSetToPathResponse,
+  ExportGoldSetToPathError,
+  Options<ExportGoldSetToPathData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ExportGoldSetToPathResponse,
+    ExportGoldSetToPathError,
+    Options<ExportGoldSetToPathData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await exportGoldSetToPath({
         ...options,
         ...fnOptions,
         throwOnError: true,

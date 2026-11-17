@@ -145,17 +145,17 @@ def _parse_json_object(raw: Any) -> dict[str, Any] | None:
     return raw if isinstance(raw, dict) else None
 
 
-def _scrub_review_value(raw: Any) -> Any:
+def scrub_review_value(raw: Any) -> Any:
     """Recursively remove obvious gold-bearing fields from reviewer-visible data."""
     if isinstance(raw, dict):
         scrubbed: dict[str, Any] = {}
         for key, value in raw.items():
             if key.lower() in _REVIEW_LEAK_FIELDS:
                 continue
-            scrubbed[key] = _scrub_review_value(value)
+            scrubbed[key] = scrub_review_value(value)
         return scrubbed
     if isinstance(raw, list):
-        return [_scrub_review_value(value) for value in raw]
+        return [scrub_review_value(value) for value in raw]
     return raw
 
 
@@ -456,12 +456,12 @@ def reviewer_record_context(
             "record_text": None,
         }
 
-    payload = _scrub_review_value(_parse_json_object(row[2]))
+    payload = scrub_review_value(_parse_json_object(row[2]))
 
     return {
         "record_external_id": str(row[0]) if row[0] else None,
         "record_view": {
-            "stable_fields": _scrub_review_value(_parse_json_object(row[1])),
+            "stable_fields": scrub_review_value(_parse_json_object(row[1])),
             "payload": payload,
         },
         "record_text": _extract_record_text(payload),

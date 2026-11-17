@@ -3048,6 +3048,568 @@ export type GateResult = {
 }
 
 /**
+ * GoldAdjudication
+ *
+ * The adjudication that settled the expected labels.
+ */
+export type GoldAdjudication = {
+  /**
+   * Adjudication Id
+   */
+  adjudication_id: string
+  /**
+   * Adjudicator Id
+   */
+  adjudicator_id: string
+  /**
+   * Review Event Id
+   */
+  review_event_id?: string | null
+  /**
+   * Ai Revealed
+   */
+  ai_revealed?: boolean
+  [key: string]: unknown
+}
+
+/**
+ * GoldConflict
+ *
+ * Two items with the same input and different expected labels.
+ */
+export type GoldConflict = {
+  /**
+   * Item Id
+   */
+  item_id: string
+  /**
+   * Fields
+   *
+   * The fields whose labels differ
+   */
+  fields: Array<string>
+  /**
+   * The item the set holds, which is kept
+   */
+  gold: GoldItem
+  /**
+   * The item with the other labels
+   */
+  other: GoldItem
+}
+
+/**
+ * GoldDedupeReport
+ */
+export type GoldDedupeReport = {
+  gold_set: GoldSetSummary
+  /**
+   * Written
+   */
+  written: boolean
+  /**
+   * Removed
+   */
+  removed: Array<GoldItemRef>
+  /**
+   * Conflicts
+   */
+  conflicts: Array<GoldConflict>
+}
+
+/**
+ * GoldExport
+ *
+ * The set's items as JSONL, inline or written to a workspace path.
+ */
+export type GoldExport = {
+  /**
+   * Gold Set Id
+   */
+  gold_set_id: string
+  /**
+   * Version
+   */
+  version: number
+  /**
+   * Format
+   */
+  format: 'jsonl'
+  /**
+   * Item Count
+   */
+  item_count: number
+  /**
+   * Content Hash
+   */
+  content_hash: string
+  /**
+   * Path
+   */
+  path?: string | null
+  /**
+   * Content
+   */
+  content?: string | null
+}
+
+/**
+ * GoldExportRequest
+ */
+export type GoldExportRequest = {
+  /**
+   * Format
+   */
+  format?: 'jsonl'
+  /**
+   * Path
+   *
+   * Where to write, relative to the workspace
+   */
+  path: string
+  /**
+   * Overwrite
+   */
+  overwrite?: boolean
+}
+
+/**
+ * GoldInputRef
+ *
+ * Where the input came from in the review database.
+ */
+export type GoldInputRef = {
+  /**
+   * Dataset
+   */
+  dataset?: string | null
+  /**
+   * External Id
+   */
+  external_id?: string | null
+  /**
+   * Record Id
+   */
+  record_id?: string | null
+  [key: string]: unknown
+}
+
+/**
+ * GoldItem
+ *
+ * One gold item. ``item_id`` and both hashes are derived from its content.
+ */
+export type GoldItem = {
+  /**
+   * Item Id
+   */
+  item_id: string
+  input_ref: GoldInputRef
+  /**
+   * Input
+   */
+  input: {
+    [key: string]: unknown
+  }
+  /**
+   * Input Hash
+   */
+  input_hash: string
+  /**
+   * Expected
+   */
+  expected: {
+    [key: string]: unknown
+  }
+  /**
+   * Content Hash
+   */
+  content_hash: string
+  provenance: GoldProvenance
+  [key: string]: unknown
+}
+
+/**
+ * GoldItemRef
+ *
+ * An item named by its id and where its input came from.
+ */
+export type GoldItemRef = {
+  /**
+   * Item Id
+   */
+  item_id: string
+  input_ref: GoldInputRef
+}
+
+/**
+ * GoldModelFailure
+ *
+ * An agent proposal that the expected labels contradict.
+ */
+export type GoldModelFailure = {
+  /**
+   * Agent Output Id
+   */
+  agent_output_id: string
+  /**
+   * Agent Run Id
+   */
+  agent_run_id: string
+  /**
+   * Proposed
+   */
+  proposed: {
+    [key: string]: unknown
+  }
+  /**
+   * Failed Fields
+   */
+  failed_fields: Array<string>
+  [key: string]: unknown
+}
+
+/**
+ * GoldPromoteRequest
+ *
+ * The reviewed records to promote: a queue's, or a workflow execution's.
+ */
+export type GoldPromoteRequest = {
+  /**
+   * Queue Id
+   */
+  queue_id?: string | null
+  /**
+   * Workflow Execution Id
+   *
+   * Every review queue the execution made
+   */
+  workflow_execution_id?: string | null
+  /**
+   * Record Ids
+   *
+   * Only these records of queue_id
+   */
+  record_ids?: Array<string> | null
+  /**
+   * Allow Single Reviewer
+   *
+   * Also promote a record one reviewer labelled, marked as such
+   */
+  allow_single_reviewer?: boolean
+}
+
+/**
+ * GoldProvenance
+ *
+ * Where an item's expected labels came from, and who promoted it.
+ */
+export type GoldProvenance = {
+  source: GoldSource
+  /**
+   * Queue Id
+   */
+  queue_id: string
+  /**
+   * Workflow Execution Id
+   */
+  workflow_execution_id?: string | null
+  adjudication?: GoldAdjudication | null
+  /**
+   * Reviews
+   */
+  reviews?: Array<GoldReview>
+  /**
+   * Reviewer Ids
+   */
+  reviewer_ids?: Array<string>
+  /**
+   * Ai Revealed
+   *
+   * An AI proposal was shown to a human the label rests on
+   */
+  ai_revealed: boolean
+  /**
+   * Accepted Ai Proposal
+   *
+   * A counted reviewer accepted an AI proposal they were shown
+   */
+  accepted_ai_proposal: boolean
+  model_failure?: GoldModelFailure | null
+  /**
+   * Promoted At
+   */
+  promoted_at: string
+  /**
+   * Promoted By
+   */
+  promoted_by: string
+  [key: string]: unknown
+}
+
+/**
+ * GoldReview
+ *
+ * A counted human review event the expected labels rest on.
+ */
+export type GoldReview = {
+  /**
+   * Review Event Id
+   */
+  review_event_id: string
+  /**
+   * Reviewer Id
+   */
+  reviewer_id: string
+  /**
+   * Decision
+   */
+  decision?: string | null
+  /**
+   * Ai Revealed
+   */
+  ai_revealed?: boolean
+  [key: string]: unknown
+}
+
+/**
+ * GoldSetCreate
+ */
+export type GoldSetCreate = {
+  /**
+   * Gold Set Id
+   *
+   * The set's slug
+   */
+  gold_set_id: string
+  /**
+   * Name
+   */
+  name?: string | null
+  /**
+   * Task Schema Id
+   *
+   * The task schema's id or slug
+   */
+  task_schema_id: string
+}
+
+/**
+ * GoldSetDetail
+ *
+ * A gold set with its sources, latest items, and the repeats it holds.
+ */
+export type GoldSetDetail = {
+  /**
+   * Gold Set Id
+   */
+  gold_set_id: string
+  /**
+   * Name
+   */
+  name: string
+  /**
+   * Task Schema
+   */
+  task_schema: string
+  /**
+   * Version
+   */
+  version: number
+  /**
+   * Item Count
+   */
+  item_count: number
+  /**
+   * Content Hash
+   */
+  content_hash: string
+  /**
+   * Previous Hash
+   */
+  previous_hash?: string | null
+  /**
+   * Updated At
+   */
+  updated_at: string
+  /**
+   * Path
+   *
+   * The header file, relative to the workspace
+   */
+  path: string
+  /**
+   * Sources
+   */
+  sources: Array<GoldSetSource>
+  /**
+   * Content Hash Matches
+   *
+   * False when gold.jsonl was edited outside MoLabel
+   */
+  content_hash_matches: boolean
+  /**
+   * Recent Additions
+   *
+   * Newest first
+   */
+  recent_additions: Array<GoldItem>
+  /**
+   * Duplicates
+   *
+   * Exact repeats, which gold dedupe removes
+   */
+  duplicates: Array<GoldItemRef>
+  /**
+   * Conflicts
+   *
+   * Items with one input and different labels, left for a person
+   */
+  conflicts: Array<GoldConflict>
+}
+
+/**
+ * GoldSetList
+ */
+export type GoldSetList = {
+  /**
+   * Items
+   */
+  items: Array<GoldSetSummary>
+}
+
+/**
+ * GoldSetSource
+ *
+ * A queue a set took items from.
+ */
+export type GoldSetSource = {
+  /**
+   * Queue Id
+   */
+  queue_id: string
+  /**
+   * Workflow Execution Id
+   */
+  workflow_execution_id?: string | null
+  /**
+   * Workflow
+   */
+  workflow?: string | null
+  [key: string]: unknown
+}
+
+/**
+ * GoldSetSummary
+ *
+ * A gold set's header, and where it lives in the workspace.
+ */
+export type GoldSetSummary = {
+  /**
+   * Gold Set Id
+   */
+  gold_set_id: string
+  /**
+   * Name
+   */
+  name: string
+  /**
+   * Task Schema
+   */
+  task_schema: string
+  /**
+   * Version
+   */
+  version: number
+  /**
+   * Item Count
+   */
+  item_count: number
+  /**
+   * Content Hash
+   */
+  content_hash: string
+  /**
+   * Previous Hash
+   */
+  previous_hash?: string | null
+  /**
+   * Updated At
+   */
+  updated_at: string
+  /**
+   * Path
+   *
+   * The header file, relative to the workspace
+   */
+  path: string
+}
+
+/**
+ * GoldSource
+ *
+ * What the expected labels of an item rest on.
+ */
+export type GoldSource =
+  | 'adjudication'
+  | 'reviewer_agreement'
+  | 'single_reviewer'
+
+/**
+ * GoldWriteCounts
+ */
+export type GoldWriteCounts = {
+  /**
+   * Added
+   */
+  added: number
+  /**
+   * Duplicates
+   */
+  duplicates: number
+  /**
+   * Conflicts
+   */
+  conflicts: number
+  /**
+   * Skipped
+   */
+  skipped: number
+}
+
+/**
+ * GoldWriteReport
+ *
+ * What a promotion or append added, and what it left out and why.
+ */
+export type GoldWriteReport = {
+  gold_set: GoldSetSummary
+  /**
+   * Written
+   *
+   * False when the files did not change
+   */
+  written: boolean
+  counts: GoldWriteCounts
+  /**
+   * Added
+   */
+  added: Array<GoldItem>
+  /**
+   * Duplicates
+   */
+  duplicates: Array<GoldItemRef>
+  /**
+   * Conflicts
+   */
+  conflicts: Array<GoldConflict>
+  /**
+   * Skipped
+   */
+  skipped: Array<Skipped>
+}
+
+/**
  * HFAuthStatus
  *
  * Result of HuggingFace Hub authentication check.
@@ -6377,6 +6939,20 @@ export type SessionResponse = {
 }
 
 /**
+ * SkipReason
+ */
+export type SkipReason =
+  | 'open_copies'
+  | 'unresolved_disagreement'
+  | 'resolved_without_labels'
+  | 'no_human_label'
+  | 'review_without_labels'
+  | 'partial_agreement'
+  | 'single_reviewer'
+  | 'no_model_proposal'
+  | 'model_agreed'
+
+/**
  * SkipResponse
  *
  * Response for a skip operation.
@@ -6392,6 +6968,27 @@ export type SkipResponse = {
    * Message
    */
   message?: string
+}
+
+/**
+ * Skipped
+ *
+ * A record that was not promoted, and why.
+ */
+export type Skipped = {
+  /**
+   * Record Id
+   */
+  record_id: string | null
+  /**
+   * External Id
+   */
+  external_id: string | null
+  reason: SkipReason
+  /**
+   * Message
+   */
+  message: string
 }
 
 /**
@@ -10769,6 +11366,255 @@ export type ResolveQueueDisagreementResponses = {
 
 export type ResolveQueueDisagreementResponse =
   ResolveQueueDisagreementResponses[keyof ResolveQueueDisagreementResponses]
+
+export type ListGoldSetsEndpointData = {
+  body?: never
+  path?: never
+  query?: never
+  url: '/api/v1/gold-sets'
+}
+
+export type ListGoldSetsEndpointErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type ListGoldSetsEndpointError =
+  ListGoldSetsEndpointErrors[keyof ListGoldSetsEndpointErrors]
+
+export type ListGoldSetsEndpointResponses = {
+  /**
+   * Successful Response
+   */
+  200: GoldSetList
+}
+
+export type ListGoldSetsEndpointResponse =
+  ListGoldSetsEndpointResponses[keyof ListGoldSetsEndpointResponses]
+
+export type CreateGoldSetEndpointData = {
+  body: GoldSetCreate
+  path?: never
+  query?: never
+  url: '/api/v1/gold-sets'
+}
+
+export type CreateGoldSetEndpointErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type CreateGoldSetEndpointError =
+  CreateGoldSetEndpointErrors[keyof CreateGoldSetEndpointErrors]
+
+export type CreateGoldSetEndpointResponses = {
+  /**
+   * Successful Response
+   */
+  201: GoldSetDetail
+}
+
+export type CreateGoldSetEndpointResponse =
+  CreateGoldSetEndpointResponses[keyof CreateGoldSetEndpointResponses]
+
+export type GetGoldSetData = {
+  body?: never
+  path: {
+    /**
+     * Gold Set Id
+     */
+    gold_set_id: string
+  }
+  query?: never
+  url: '/api/v1/gold-sets/{gold_set_id}'
+}
+
+export type GetGoldSetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type GetGoldSetError = GetGoldSetErrors[keyof GetGoldSetErrors]
+
+export type GetGoldSetResponses = {
+  /**
+   * Successful Response
+   */
+  200: GoldSetDetail
+}
+
+export type GetGoldSetResponse = GetGoldSetResponses[keyof GetGoldSetResponses]
+
+export type PromoteToGoldSetData = {
+  body: GoldPromoteRequest
+  path: {
+    /**
+     * Gold Set Id
+     */
+    gold_set_id: string
+  }
+  query?: never
+  url: '/api/v1/gold-sets/{gold_set_id}/promote'
+}
+
+export type PromoteToGoldSetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type PromoteToGoldSetError =
+  PromoteToGoldSetErrors[keyof PromoteToGoldSetErrors]
+
+export type PromoteToGoldSetResponses = {
+  /**
+   * Successful Response
+   */
+  200: GoldWriteReport
+}
+
+export type PromoteToGoldSetResponse =
+  PromoteToGoldSetResponses[keyof PromoteToGoldSetResponses]
+
+export type AppendFailuresToGoldSetData = {
+  body: GoldPromoteRequest
+  path: {
+    /**
+     * Gold Set Id
+     */
+    gold_set_id: string
+  }
+  query?: never
+  url: '/api/v1/gold-sets/{gold_set_id}/append'
+}
+
+export type AppendFailuresToGoldSetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type AppendFailuresToGoldSetError =
+  AppendFailuresToGoldSetErrors[keyof AppendFailuresToGoldSetErrors]
+
+export type AppendFailuresToGoldSetResponses = {
+  /**
+   * Successful Response
+   */
+  200: GoldWriteReport
+}
+
+export type AppendFailuresToGoldSetResponse =
+  AppendFailuresToGoldSetResponses[keyof AppendFailuresToGoldSetResponses]
+
+export type DedupeGoldSetEndpointData = {
+  body?: never
+  path: {
+    /**
+     * Gold Set Id
+     */
+    gold_set_id: string
+  }
+  query?: never
+  url: '/api/v1/gold-sets/{gold_set_id}/dedupe'
+}
+
+export type DedupeGoldSetEndpointErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type DedupeGoldSetEndpointError =
+  DedupeGoldSetEndpointErrors[keyof DedupeGoldSetEndpointErrors]
+
+export type DedupeGoldSetEndpointResponses = {
+  /**
+   * Successful Response
+   */
+  200: GoldDedupeReport
+}
+
+export type DedupeGoldSetEndpointResponse =
+  DedupeGoldSetEndpointResponses[keyof DedupeGoldSetEndpointResponses]
+
+export type ExportGoldSetContentData = {
+  body?: never
+  path: {
+    /**
+     * Gold Set Id
+     */
+    gold_set_id: string
+  }
+  query?: {
+    /**
+     * Format
+     */
+    format?: 'jsonl'
+  }
+  url: '/api/v1/gold-sets/{gold_set_id}/export'
+}
+
+export type ExportGoldSetContentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type ExportGoldSetContentError =
+  ExportGoldSetContentErrors[keyof ExportGoldSetContentErrors]
+
+export type ExportGoldSetContentResponses = {
+  /**
+   * Successful Response
+   */
+  200: GoldExport
+}
+
+export type ExportGoldSetContentResponse =
+  ExportGoldSetContentResponses[keyof ExportGoldSetContentResponses]
+
+export type ExportGoldSetToPathData = {
+  body: GoldExportRequest
+  path: {
+    /**
+     * Gold Set Id
+     */
+    gold_set_id: string
+  }
+  query?: never
+  url: '/api/v1/gold-sets/{gold_set_id}/export'
+}
+
+export type ExportGoldSetToPathErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError
+}
+
+export type ExportGoldSetToPathError =
+  ExportGoldSetToPathErrors[keyof ExportGoldSetToPathErrors]
+
+export type ExportGoldSetToPathResponses = {
+  /**
+   * Successful Response
+   */
+  200: GoldExport
+}
+
+export type ExportGoldSetToPathResponse =
+  ExportGoldSetToPathResponses[keyof ExportGoldSetToPathResponses]
 
 export type GetQualityDashboardData = {
   body?: never

@@ -161,13 +161,15 @@ class ResolveDisagreement(BaseModel):
 
 
 @dataclass(frozen=True)
-class _Queue:
+class ReviewQueue:
     queue_id: str
     workspace_id: str
     task_schema_id: str
 
 
-def _queue(conn: Any, queue_id: str, workspace_id: uuid.UUID) -> _Queue:
+def workspace_review_queue(
+    conn: Any, queue_id: str, workspace_id: uuid.UUID
+) -> ReviewQueue:
     row = conn.execute(
         text(
             "SELECT workspace_id, task_schema_id FROM review_tasks "
@@ -177,11 +179,11 @@ def _queue(conn: Any, queue_id: str, workspace_id: uuid.UUID) -> _Queue:
     ).first()
     if row is None:
         raise HTTPException(status_code=404, detail="Review queue not found")
-    return _Queue(queue_id, str(row[0]), str(row[1]))
+    return ReviewQueue(queue_id, str(row[0]), str(row[1]))
 
 
 @dataclass(frozen=True)
-class _Disagreement:
+class Disagreement:
     item: AdjudicationQueueItem
     record_external_id: str | None
     dataset_id: str
@@ -251,7 +253,7 @@ def _outcomes_by_record(
     return outcomes
 
 
-def _queue_disagreements(conn: Any, queue: _Queue) -> list[_Disagreement]:
+def queue_disagreements(conn: Any, queue: ReviewQueue) -> list[Disagreement]:
     open_records = {
         str(record_id)
         for (record_id,) in conn.execute(
@@ -293,7 +295,7 @@ def _queue_disagreements(conn: Any, queue: _Queue) -> list[_Disagreement]:
             if covered == event_ids
         ]
         disagreements.append(
-            _Disagreement(
+            Disagreement(
                 item=item,
                 record_external_id=external_id,
                 dataset_id=dataset_id,
@@ -303,14 +305,14 @@ def _queue_disagreements(conn: Any, queue: _Queue) -> list[_Disagreement]:
     return disagreements
 
 
-def _find_or_none(conn: Any, queue: _Queue, record_id: str) -> _Disagreement | None:
-    for disagreement in _queue_disagreements(conn, queue):
+def _find_or_none(conn: Any, queue: ReviewQueue, record_id: str) -> Disagreement | None:
+    for disagreement in queue_disagreements(conn, queue):
         if str(disagreement.item.record_id) == record_id:
             return disagreement
     return None
 
 
-def _find(conn: Any, queue: _Queue, record_id: str) -> _Disagreement:
+def _find(conn: Any, queue: ReviewQueue, record_id: str) -> Disagreement:
     disagreement = _find_or_none(conn, queue, record_id)
     if disagreement is None:
         raise HTTPException(status_code=404, detail="No disagreement on this record")
@@ -318,7 +320,7 @@ def _find(conn: Any, queue: _Queue, record_id: str) -> _Disagreement:
 
 
 def _detail(
-    conn: Any, queue: _Queue, disagreement: _Disagreement
+    conn: Any, queue: ReviewQueue, disagreement: Disagreement
 ) -> DisagreementDetail:
     record_id = str(disagreement.item.record_id)
     event_rows = conn.execute(
@@ -412,8 +414,8 @@ async def list_queue_disagreements(
     submitted, skipped, or closed.
     """
     with get_engine(request).connect() as conn:
-        queue = _queue(conn, queue_id, reviewer.workspace_id)
-        disagreements = _queue_disagreements(conn, queue)
+        queue = workspace_review_queue(conn, queue_id, reviewer.workspace_id)
+        disagreements = queue_disagreements(conn, queue)
     items = [DisagreementSummary(**d.summary()) for d in disagreements]
     return DisagreementQueue(
         queue_id=queue_id,
@@ -435,7 +437,7 @@ async def get_queue_disagreement(
 ) -> DisagreementDetail:
     """Show a disagreement side by side: the record and each reviewer's labels."""
     with get_engine(request).connect() as conn:
-        queue = _queue(conn, queue_id, reviewer.workspace_id)
+        queue = workspace_review_queue(conn, queue_id, reviewer.workspace_id)
         return _detail(conn, queue, _find(conn, queue, record_id))
 
 
@@ -462,7 +464,7 @@ async def resolve_queue_disagreement(
         raise HTTPException(status_code=422, detail="resolve needs resolved_labels")
 
     with get_engine(request).begin() as conn:
-        queue = _queue(conn, queue_id, reviewer.workspace_id)
+        queue = workspace_review_queue(conn, queue_id, reviewer.workspace_id)
         disagreement = _find_or_none(conn, queue, record_id)
         if disagreement is None or disagreement.event_ids != set(body.review_event_ids):
             raise HTTPException(

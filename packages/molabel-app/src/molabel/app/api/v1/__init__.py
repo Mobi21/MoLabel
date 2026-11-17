@@ -15,6 +15,7 @@ from molabel.app.api.v1.corrections import router as corrections_router
 from molabel.app.api.v1.costs import router as costs_router
 from molabel.app.api.v1.datasets import router as datasets_router
 from molabel.app.api.v1.exports import router as exports_router
+from molabel.app.api.v1.gold_sets import router as gold_sets_router
 from molabel.app.api.v1.label_mappings import router as label_mappings_router
 from molabel.app.api.v1.model_profiles import router as model_profiles_router
 from molabel.app.api.v1.plugins import router as plugins_router
@@ -54,6 +55,7 @@ router.include_router(corrections_router)
 router.include_router(queue_router)
 router.include_router(reviews_router)
 router.include_router(adjudication_router)
+router.include_router(gold_sets_router)
 
 # Quality, exports, releases
 router.include_router(quality_router)
