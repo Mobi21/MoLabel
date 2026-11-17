@@ -158,6 +158,9 @@ to the incoming labels, or delete the line from `conflicts.jsonl`. A conflict
 whose item `gold.jsonl` no longer holds is settled too. Every read leaves
 settled lines out. A hand edit that gives the item a third label set leaves
 the conflict open, and reads show the item's current labels as `existing`.
+A git merge can leave several rows for one item. Every row counts, whatever
+their order: a row with the incoming labels settles the conflict, and
+`existing` changes only when no row holds it, to the item's last row.
 The next promote, append or dedupe writes the file again. It drops settled
 lines and renders afresh each line whose `existing` changed. When the last
 conflict is settled the file stays, empty. There is no resolve command.

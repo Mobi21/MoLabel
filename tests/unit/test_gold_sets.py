@@ -512,6 +512,19 @@ class TestConflictLog:
         assert line["existing"] == {"intent": "bug"}
         assert line["detected_at"] == NOW
 
+    @pytest.mark.parametrize("order", [1, -1], ids=["gold_first", "gold_last"])
+    def test_every_row_of_a_merged_item_counts_whatever_the_row_order(self, order):
+        held = item("refund me", "refund")
+        log = GoldConflictLog.read(b"").recorded(
+            [held], conflicts_of(held, item("refund me", "other", record="r2")), now=NOW
+        )
+        settling = [held, item("refund me", "other", record="r2")][::order]
+        third = [held, item("refund me", "bug", record="r3")][::order]
+
+        assert log.open(settling) == ()
+        assert log.recorded(settling, (), now=NOW).data == b""
+        assert log.recorded(third, (), now=NOW).data == log.data
+
     def test_a_line_that_does_not_parse_names_its_line(self):
         with pytest.raises(GoldFileError) as raised:
             GoldConflictLog.read(b"\n{not json\n")

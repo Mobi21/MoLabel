@@ -518,20 +518,23 @@ class GoldConflictLog:
     ) -> Iterable[tuple[bytes, GoldOpenConflict]]:
         """The lines *items* still contradict, with ``existing`` as they hold it.
 
-        A line whose item the set no longer holds, or holds with the incoming
-        labels, is settled. A line whose item holds a third label set is
-        rendered afresh with those labels.
+        Every row of an item counts, since a git merge can leave several. A
+        line whose item the set no longer holds, or holds in some row with the
+        incoming labels, is settled. A line whose ``existing`` no row holds is
+        rendered afresh with the item's last row.
         """
-        held = {item.item_id: item for item in items}
+        held: dict[str, list[dict[str, Any]]] = {}
+        for item in items:
+            held.setdefault(item.item_id, []).append(item.expected)
         for raw, conflict in self.lines:
-            item = held.get(conflict.item_id)
-            if item is None or item.expected == conflict.incoming:
+            labels = held.get(conflict.item_id, [])
+            if not labels or conflict.incoming in labels:
                 continue
-            if item.expected != conflict.existing:
+            if conflict.existing not in labels:
                 conflict = conflict.model_copy(
                     update={
-                        "existing": item.expected,
-                        "fields": _differing(item.expected, conflict.incoming),
+                        "existing": labels[-1],
+                        "fields": _differing(labels[-1], conflict.incoming),
                     }
                 )
                 raw = _json_line(conflict).encode("utf-8")
