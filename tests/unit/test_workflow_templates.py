@@ -101,7 +101,6 @@ class TestSpecificTemplates:
             get_template_yaml("full_quality_pipeline"), from_string=True
         )
         step_types = [s.type for s in wf.steps]
-        assert "human_calibration" in step_types
         assert "agreement_analysis" in step_types
         assert "human_adjudication" in step_types
         assert "release_validation" in step_types
@@ -146,7 +145,6 @@ class TestSpecificTemplates:
         metadata = wf.metadata["metadata"]
         assert metadata["domain"] == "psychology_research"
         assert metadata["canonical_model"] == "MiniMax-M2.7-highspeed"
-        assert "human_calibration" in step_types
         assert "agent_run" in step_types
         assert "agreement_analysis" in step_types
         assert "human_adjudication" in step_types
@@ -233,3 +231,43 @@ def test_every_template_gates_agreement_at_krippendorffs_reliable_alpha() -> Non
 
     assert thresholds
     assert set(thresholds.values()) == {0.80}, thresholds
+
+
+def _template_steps() -> dict[str, list[dict]]:
+    return {
+        template["id"]: yaml.safe_load(get_template_yaml(template["id"]))["steps"]
+        for template in list_templates()
+    }
+
+
+def test_every_agreement_loop_targets_its_templates_gate() -> None:
+    loops = {}
+    for template_id, steps in _template_steps().items():
+        gates = {
+            s["config"]["min_agreement"]
+            for s in steps
+            if "min_agreement" in (s.get("config") or {})
+        }
+        for step in steps:
+            termination = (step.get("config") or {}).get("termination") or {}
+            if termination.get("metric") == "quality.agreement":
+                loops[(template_id, step["id"])] = (termination["threshold"], gates)
+
+    assert loops
+    assert {key: v for key, v in loops.items() if v[1] != {v[0]}} == {}
+
+
+def test_no_template_creates_a_calibration_queue() -> None:
+    calibrating = [
+        (template_id, step["id"])
+        for template_id, steps in _template_steps().items()
+        for step in steps
+        if step["type"] == "human_calibration"
+    ]
+
+    assert calibrating == []
+    assert not [
+        template["id"]
+        for template in list_templates()
+        if "human_calibration" in template["capabilities"]
+    ]
