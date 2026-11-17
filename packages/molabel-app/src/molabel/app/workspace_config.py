@@ -116,27 +116,34 @@ def workspace_folder(engine, workspace_id: str) -> WorkspaceFolder:
 WORKSPACE_STATE_DIR = ".molabel"
 
 
-def _state_dir(root: Path) -> Path:
-    """``.molabel/`` in the workspace at *root*, which ignores itself in git."""
-    state_dir = resolve_in_workspace(root, WORKSPACE_STATE_DIR)
-    state_dir.mkdir(parents=True, exist_ok=True)
-    ignore = state_dir / ".gitignore"
+def _state_path(root: Path, *names: str) -> Path:
+    """``.molabel/`` or a path in it, refused when a link leads out of *root*."""
+    return resolve_in_workspace(root, "/".join((WORKSPACE_STATE_DIR, *names)))
+
+
+def _state_dir(root: Path, name: str) -> Path:
+    """The folder ``.molabel/<name>/`` in the workspace at *root*, created.
+
+    ``.molabel/`` ignores itself in git.
+    """
+    _state_path(root).mkdir(parents=True, exist_ok=True)
+    ignore = _state_path(root, ".gitignore")
     if not ignore.exists():
         ignore.write_text("*\n", encoding="utf-8")
-    return state_dir
+    folder = _state_path(root, name)
+    folder.mkdir(exist_ok=True)
+    return folder
 
 
-def _write_atomically(path: Path, content: str | bytes, staging: Path) -> None:
+def _write_atomically(path: Path, content: str | bytes, temp: Path) -> None:
     """Replace *path* with *content*, refusing a file its owner made read-only.
 
-    The content goes to a file in *staging*, on *path*'s filesystem, and moves
-    into place, so a process killed partway leaves nothing beside *path*.
+    The content goes to *temp*, on *path*'s filesystem, and moves into place,
+    so a process killed partway leaves nothing beside *path*.
     """
     if path.exists() and not path.stat().st_mode & stat.S_IWUSR:
         raise PermissionError(errno.EACCES, "The file is read-only", str(path))
     path.parent.mkdir(parents=True, exist_ok=True)
-    staging.mkdir(parents=True, exist_ok=True)
-    temp = staging / f"{path.name}.{uuid.uuid4().hex}.tmp"
     try:
         if isinstance(content, str):
             temp.write_text(content, encoding="utf-8")
@@ -174,7 +181,7 @@ class WorkspaceFiles:
     def __init__(self, folder: WorkspaceFolder) -> None:
         self.folder = folder
         self._originals: dict[Path, bytes | None] = {}
-        self._staging = _state_dir(folder.path) / "tmp"
+        _state_dir(folder.path, "tmp")
 
     def write_config(
         self,
@@ -298,10 +305,16 @@ class WorkspaceFiles:
         change(manifest)
         self._write(path, dump_manifest(manifest, previous))
 
+    def _temp_for(self, path: Path) -> Path:
+        """A new file in ``.molabel/tmp/`` to stage *path*'s content in."""
+        return _state_path(
+            self.folder.path, "tmp", f"{path.name}.{uuid.uuid4().hex}.tmp"
+        )
+
     def _write(self, path: Path, content: str | bytes) -> None:
         original = path.read_bytes() if path.exists() else None
         try:
-            _write_atomically(path, content, self._staging)
+            _write_atomically(path, content, self._temp_for(path))
         except OSError as exc:
             relative = path.relative_to(self.folder.path).as_posix()
             raise WorkspacePathError(
@@ -317,7 +330,7 @@ class WorkspaceFiles:
             if original is None:
                 path.unlink(missing_ok=True)
             else:
-                _write_atomically(path, original, self._staging)
+                _write_atomically(path, original, self._temp_for(path))
 
 
 def workspace_lock(root: Path) -> FileLock:
@@ -328,9 +341,8 @@ def workspace_lock(root: Path) -> FileLock:
     The lock file lives in the workspace, so every writer shares it whatever
     its data directory, under ``.molabel/``, which ignores itself in git.
     """
-    locks = _state_dir(root) / "locks"
-    locks.mkdir(exist_ok=True)
-    return FileLock(locks / "workspace.lock")
+    _state_dir(root, "locks")
+    return FileLock(_state_path(root, "locks", "workspace.lock"))
 
 
 @contextmanager

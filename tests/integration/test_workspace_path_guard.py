@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -577,6 +578,57 @@ async def test_config_write_refuses_a_manifest_linked_out_of_the_workspace(
 
     assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
     assert outside_manifest.read_text(encoding="utf-8") == elsewhere
+
+
+def _junction(link: Path, target: Path) -> None:
+    """Make *link* a junction to *target* on Windows, a folder symlink elsewhere."""
+    link.parent.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            check=True,
+            capture_output=True,
+        )
+    else:
+        os.symlink(target, link, target_is_directory=True)
+
+
+async def _create_task_schema(client, app):
+    return await client.post(
+        "/api/v1/task-schemas",
+        json={
+            "workspace_id": app.state.test_workspace_id,
+            "task_type": "text_classification",
+            "title": "Guarded",
+        },
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state_folder", ["tmp", "locks"])
+async def test_config_write_refuses_a_state_folder_linked_out_of_the_workspace(
+    client, app, layout, state_folder
+):
+    _junction(layout["workspace"] / ".molabel" / state_folder, layout["outside"])
+
+    resp = await _create_task_schema(client, app)
+
+    assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+    assert _outside_files(layout) == ["secret.jsonl", "secret.yaml"]
+
+
+@pytest.mark.asyncio
+async def test_config_write_refuses_a_lock_file_linked_out_of_the_workspace(
+    client, app, layout
+):
+    secret = layout["outside"] / "secret.yaml"
+    (layout["workspace"] / ".molabel" / "locks").mkdir(parents=True)
+    _link_file(layout["workspace"] / ".molabel" / "locks" / "workspace.lock", secret)
+
+    resp = await _create_task_schema(client, app)
+
+    assert _error(resp) == (403, "PATH_OUTSIDE_WORKSPACE")
+    assert secret.read_text(encoding="utf-8") == "secret: true\n"
 
 
 @pytest.mark.asyncio
