@@ -50,6 +50,8 @@ class Resolution:
     labels: dict[str, Any] | None
     review_event_id: str | None
     ai_revealed: bool
+    agent_output_ids: tuple[str, ...] = ()
+    """The agent proposals whose columns the adjudicator took values from."""
 
 
 @dataclass(frozen=True)
@@ -162,6 +164,14 @@ def _value(value: Any) -> str | None:
     return None if value in (None, "", []) else canonical_label_value(value)
 
 
+def _differing_fields(expected: dict[str, Any], proposed: dict[str, Any]) -> list[str]:
+    return sorted(
+        name
+        for name in expected.keys() | proposed.keys()
+        if _value(expected.get(name)) != _value(proposed.get(name))
+    )
+
+
 def model_failure(
     expected: dict[str, Any], proposals: tuple[Proposal, ...]
 ) -> GoldModelFailure | SkipReason:
@@ -169,11 +179,7 @@ def model_failure(
     if not proposals:
         return SkipReason.no_model_proposal
     for proposal in proposals:
-        fields = sorted(
-            name
-            for name in expected.keys() | proposal.labels.keys()
-            if _value(expected.get(name)) != _value(proposal.labels.get(name))
-        )
+        fields = _differing_fields(expected, proposal.labels)
         if fields:
             return GoldModelFailure(
                 agent_output_id=proposal.agent_output_id,
@@ -241,6 +247,12 @@ def gold_candidate(
     reviewer_ids = {review.reviewer_id for review in reviews}
     if adjudication is not None:
         reviewer_ids.add(adjudication.adjudicator_id)
+    adjudicator_took_ai = resolution is not None and (
+        bool(resolution.agent_output_ids)
+        or any(
+            not _differing_fields(settled.expected, p.labels) for p in record.proposals
+        )
+    )
     return GoldItem.build(
         task_schema=task_schema,
         input=record.input,
@@ -255,9 +267,11 @@ def gold_candidate(
             reviewer_ids=sorted(reviewer_ids),
             ai_revealed=any(r.ai_revealed for r in reviews)
             or (adjudication is not None and adjudication.ai_revealed),
-            accepted_ai_proposal=any(
+            accepted_ai_proposal=adjudicator_took_ai
+            or any(
                 r.ai_revealed and r.decision == ReviewDecision.accept for r in reviews
             ),
+            adjudicator_took_ai=adjudicator_took_ai,
             model_failure=failure,
             promoted_at=promoted_at,
             promoted_by=promoted_by,

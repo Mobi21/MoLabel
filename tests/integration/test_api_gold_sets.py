@@ -262,6 +262,52 @@ async def test_promotion_writes_adjudicated_and_agreed_records_with_provenance(
 
 
 @pytest.mark.asyncio
+async def test_an_adjudicator_who_takes_the_ai_column_is_recorded_as_accepting_it(
+    client, app, tmp_path
+):
+    _, tokens, queue = await _start_review(client, app, tmp_path)
+    queue_id = queue["queue_id"]
+    await _review_all(client, queue_id, tokens[0], FIRST_REVIEWER)
+    await _review_all(
+        client, queue_id, tokens[1], {**OFFLINE_SENTIMENT, "r3": "positive"}
+    )
+    record_id = _external_ids(app)["r3"]
+    path = f"/api/v1/adjudication/queues/{queue_id}/disagreements/{record_id}"
+    shown = (await client.get(path, headers=_as(tokens[0]))).json()
+    (proposal,) = shown["agent_labels"]
+    body = {
+        "resolved_labels": proposal["labels"],
+        "review_event_ids": [s["review_event_id"] for s in shown["reviewer_labels"]],
+    }
+
+    unknown = await client.post(
+        f"{path}/resolve",
+        json={**body, "agent_output_ids": [str(uuid.uuid4())]},
+        headers=_as(tokens[0]),
+    )
+    resolved = await client.post(
+        f"{path}/resolve",
+        json={**body, "agent_output_ids": [proposal["agent_output_id"]]},
+        headers=_as(tokens[0]),
+    )
+    await _create(client, tokens[0])
+    report = await _promote(
+        client, tokens[0], {"queue_id": queue_id, "record_ids": [record_id]}
+    )
+
+    assert unknown.status_code == 422, unknown.text
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["resolution"]["agent_output_ids"] == [
+        proposal["agent_output_id"]
+    ]
+    (item,) = report["added"]
+    assert item["provenance"]["source"] == "adjudication"
+    assert [r["decision"] for r in item["provenance"]["reviews"]] == ["edit", "edit"]
+    assert item["provenance"]["adjudicator_took_ai"] is True
+    assert item["provenance"]["accepted_ai_proposal"] is True
+
+
+@pytest.mark.asyncio
 async def test_promoting_the_same_records_again_changes_no_file(client, app, tmp_path):
     _, tokens, queue_id, _ = await _reviewed_and_adjudicated(client, app, tmp_path)
     await _create(client, tokens[0])

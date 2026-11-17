@@ -2103,6 +2103,7 @@ class AdjudicationOutcome(BaseModel):
     adjudicator_id: str
     adjudicator_name: str | None
     review_event_id: str | None
+    agent_output_ids: list[str]          # the AI columns the adjudicator took values from
     resolved_at: str
 ```
 
@@ -2115,7 +2116,11 @@ Store a resolution and return the updated `DisagreementDetail`. `resolve` needs
 (422 when invalid). `review_event_ids` names the `review_event_id` of each
 `reviewer_labels` entry the caller read. 409 when the disagreement's review
 events differ from them or it is gone, so the caller reloads it, and 409 when
-it is already resolved.
+it is already resolved. `agent_output_ids` names each agent proposal whose
+column `resolved_labels` takes a value from. Each must be an `agent_labels`
+entry of the disagreement, and they need `resolve` (422 otherwise). The
+adjudication stores them, and gold promotion records that the adjudicator took
+the AI proposal.
 
 ```python
 class ResolveDisagreement(BaseModel):
@@ -2123,6 +2128,7 @@ class ResolveDisagreement(BaseModel):
     resolved_labels: dict[str, Any] | None
     rationale: str | None
     review_event_ids: list[str]          # required
+    agent_output_ids: list[str] = []
 ```
 
 ---

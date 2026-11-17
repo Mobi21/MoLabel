@@ -409,6 +409,33 @@ class TestPromotion:
             SkipReason.no_human_label
         )
 
+    @pytest.mark.parametrize(
+        ("taken", "proposed", "took_ai"),
+        [
+            (("o1",), OTHER, True),
+            ((), {"intent": "refund", "urgent": False, "note": ""}, True),
+            ((), OTHER, False),
+        ],
+    )
+    def test_an_adjudicator_who_took_the_ai_column_accepted_the_proposal(
+        self, taken, proposed, took_ai
+    ):
+        resolution = Resolution(**{**RESOLVED.__dict__, "agent_output_ids": taken})
+        proposal = Proposal(agent_output_id="o1", agent_run_id="run", labels=proposed)
+        result = promote(
+            reviewed(
+                review("a", OTHER, ai_revealed=True),
+                review("b", {"intent": "bug", "urgent": False}, ai_revealed=True),
+                disagreement=True,
+                resolution=resolution,
+                proposals=(proposal,),
+            )
+        )
+
+        assert isinstance(result, GoldItem)
+        assert result.provenance.adjudicator_took_ai is took_ai
+        assert result.provenance.accepted_ai_proposal is took_ai
+
     def test_accepting_a_hidden_proposal_is_not_accepting_a_shown_one(self):
         result = promote(
             reviewed(

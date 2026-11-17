@@ -58,8 +58,8 @@ have sorted keys. The same content renders to the same bytes on any machine.
   `single_reviewer`), the `queue_id`, the `workflow_execution_id`, the
   `adjudication` when there is one, `reviews` (each counted review event with
   its reviewer, decision and whether an AI proposal was shown),
-  `reviewer_ids`, `ai_revealed`, `accepted_ai_proposal`, `model_failure`,
-  `promoted_at` and `promoted_by`.
+  `reviewer_ids`, `ai_revealed`, `accepted_ai_proposal`,
+  `adjudicator_took_ai`, `model_failure`, `promoted_at` and `promoted_by`.
 
 MoLabel recomputes `item_id`, `input_hash` and `content_hash` from the content
 whenever it reads a file. A hand edit to `input` or `expected` therefore gets
@@ -111,8 +111,11 @@ or closed, in one of three ways:
 Expected labels always come from a human review event or an adjudication. An
 agent proposal that no human accepted is never promoted. `ai_revealed` says
 whether a proposal was shown to any human whose review the label rests on.
-`accepted_ai_proposal` says whether one of them accepted a shown proposal.
-P9's bias audits filter on these two fields.
+`adjudicator_took_ai` says whether the adjudicator took an AI proposal's
+column, which the resolve request names in `agent_output_ids`, or resolved to
+labels equal to a proposal the adjudication screen showed.
+`accepted_ai_proposal` says whether a counted reviewer accepted a shown
+proposal or the adjudicator took one. P9's bias audits filter on these fields.
 
 ## Append failures
 

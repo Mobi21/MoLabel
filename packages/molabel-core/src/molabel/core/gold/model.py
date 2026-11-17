@@ -140,7 +140,17 @@ class GoldProvenance(GoldModel):
         description="An AI proposal was shown to a human the label rests on"
     )
     accepted_ai_proposal: bool = Field(
-        description="A counted reviewer accepted an AI proposal they were shown"
+        description=(
+            "A counted reviewer accepted an AI proposal they were shown, or the "
+            "adjudicator took one"
+        )
+    )
+    adjudicator_took_ai: bool = Field(
+        default=False,
+        description=(
+            "The adjudicator took an AI proposal's column, or resolved to labels "
+            "equal to a proposal the adjudication screen showed"
+        ),
     )
     model_failure: GoldModelFailure | None = None
     promoted_at: str

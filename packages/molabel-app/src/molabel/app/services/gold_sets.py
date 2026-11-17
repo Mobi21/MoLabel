@@ -436,6 +436,7 @@ def reviewed_records(
                     labels=outcome.resolved_labels,
                     review_event_id=outcome.review_event_id,
                     ai_revealed=revealed.get(outcome.review_event_id or "", False),
+                    agent_output_ids=tuple(outcome.agent_output_ids),
                 )
                 if outcome is not None
                 else None,

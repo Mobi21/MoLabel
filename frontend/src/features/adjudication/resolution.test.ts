@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DisagreementDetail } from '@/api/generated/types.gen'
 import { rubricFields } from '@/features/review/rubric'
-import { agreedLabels, sourcesOf, take } from './resolution'
+import { agreedLabels, sourcesOf, take, takenProposals } from './resolution'
 
 const fields = rubricFields([
   {
@@ -60,6 +60,21 @@ describe('resolution', () => {
 
   it('settles the fields the reviewers agree on and leaves conflicts open', () => {
     expect(agreedLabels(fields, detail)).toEqual({ urgent: true })
+  })
+
+  it('names the AI proposals whose taken values the labels still hold', () => {
+    const [ada, , ai] = sourcesOf(detail)
+    if (!ada || !ai) throw new Error('expected three columns')
+    const settled = agreedLabels(fields, detail)
+    const fromAi = take(fields, settled, ai, null)
+
+    expect(takenProposals(fields, fromAi, { intent: ai, urgent: ai })).toEqual([
+      'o1',
+    ])
+    expect(
+      takenProposals(fields, { ...fromAi, intent: 'bug' }, { intent: ai }),
+    ).toEqual([])
+    expect(takenProposals(fields, fromAi, { intent: ada })).toEqual([])
   })
 
   it("takes one field or every field from a column's labels", () => {

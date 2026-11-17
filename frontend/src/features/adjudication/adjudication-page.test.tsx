@@ -163,6 +163,30 @@ function resolves(calls: Call[]) {
   return calls.filter((c) => c.path.endsWith('/resolve'))
 }
 
+function serveWithProposal() {
+  const shown = {
+    ...READ,
+    agent_labels: [
+      {
+        agent_output_id: 'o1',
+        agent_run_id: 'run1',
+        labels: { intent: 'shipping' },
+      },
+    ],
+  }
+  return fakeApi([
+    ['GET', /^\/api\/v1\/queues$/, () => ({ items: [] })],
+    ['GET', /\/task-schemas\/s1$/, () => SCHEMA],
+    [
+      'GET',
+      /\/disagreements$/,
+      () => ({ queue_id: 'q1', items: [SUMMARY], total: 1, unresolved: 1 }),
+    ],
+    ['GET', /\/disagreements\/rec1$/, () => shown],
+    ['POST', /\/resolve$/, () => ({ ...shown, status: 'resolved' })],
+  ])
+}
+
 describe('AdjudicationPage', () => {
   it('resolves naming the review events it showed', async () => {
     const calls = serve({ conflictOnce: false })
@@ -178,6 +202,41 @@ describe('AdjudicationPage', () => {
     expect(resolves(calls)[0]?.body).toMatchObject({
       resolved_labels: { intent: 'bug' },
       review_event_ids: ['e1', 'e2'],
+    })
+  })
+
+  it('names the AI proposal whose column the resolution took', async () => {
+    const calls = serveWithProposal()
+    renderAdjudication()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+
+    press('c')
+    press('Enter', { ctrlKey: true })
+
+    await waitFor(() => {
+      expect(resolves(calls)).toHaveLength(1)
+    })
+    expect(resolves(calls)[0]?.body).toMatchObject({
+      resolved_labels: { intent: 'shipping' },
+      agent_output_ids: ['o1'],
+    })
+  })
+
+  it('names no AI proposal once a reviewer column replaces its value', async () => {
+    const calls = serveWithProposal()
+    renderAdjudication()
+    await screen.findByRole('heading', { name: 'ticket-1' })
+
+    press('c')
+    press('b')
+    press('Enter', { ctrlKey: true })
+
+    await waitFor(() => {
+      expect(resolves(calls)).toHaveLength(1)
+    })
+    expect(resolves(calls)[0]?.body).toMatchObject({
+      resolved_labels: { intent: 'bug' },
+      agent_output_ids: [],
     })
   })
 

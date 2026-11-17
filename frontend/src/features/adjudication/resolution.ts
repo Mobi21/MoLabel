@@ -1,6 +1,8 @@
 import type { DisagreementDetail } from '@/api/generated/types.gen'
 import {
   parseLabels,
+  rawLabels,
+  type LabelValue,
   type Labels,
   type RawLabels,
   type RubricField,
@@ -13,6 +15,8 @@ export interface Source {
   letter: (typeof SOURCE_LETTERS)[number] | null
   name: string
   kind: 'reviewer' | 'agent'
+  /** The agent output an agent column shows, null for a reviewer. */
+  agentOutputId: string | null
   labels: RawLabels
   decision: string | null
 }
@@ -22,12 +26,14 @@ export function sourcesOf(detail: DisagreementDetail): Source[] {
     ...detail.reviewer_labels.map((set) => ({
       name: set.reviewer_name,
       kind: 'reviewer' as const,
+      agentOutputId: null,
       labels: set.labels,
       decision: set.decision ?? null,
     })),
     ...detail.agent_labels.map((set) => ({
       name: 'AI proposal',
       kind: 'agent' as const,
+      agentOutputId: set.agent_output_id,
       labels: set.labels,
       decision: null,
     })),
@@ -47,6 +53,35 @@ export function agreedLabels(
   const first = detail.reviewer_labels[0]
   const settled = fields.filter((field) => !conflicts.has(field.name))
   return parseLabels(settled, first?.labels)
+}
+
+function sameValue(a: LabelValue, b: LabelValue | undefined): boolean {
+  return (
+    b !== undefined &&
+    JSON.stringify(rawLabels({ value: a })) ===
+      JSON.stringify(rawLabels({ value: b }))
+  )
+}
+
+/**
+ * The agent proposals whose columns gave values the labels still hold.
+ * `taken` is the column each field was last taken from.
+ */
+export function takenProposals(
+  fields: readonly RubricField[],
+  labels: Labels,
+  taken: Readonly<Record<string, Source>>,
+): string[] {
+  const ids = new Set<string>()
+  for (const field of fields) {
+    const source = taken[field.name]
+    if (!source?.agentOutputId) continue
+    const value = parseLabels([field], source.labels)[field.name]
+    if (value !== undefined && sameValue(value, labels[field.name])) {
+      ids.add(source.agentOutputId)
+    }
+  }
+  return [...ids]
 }
 
 /** Take a source's value for one field, or for every field. */

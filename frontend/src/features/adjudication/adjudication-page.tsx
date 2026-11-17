@@ -50,7 +50,13 @@ import {
   type Binding,
 } from '@/lib/keymap'
 import { cn } from '@/lib/utils'
-import { agreedLabels, sourcesOf, take, type Source } from './resolution'
+import {
+  agreedLabels,
+  sourcesOf,
+  take,
+  takenProposals,
+  type Source,
+} from './resolution'
 
 export function AdjudicationPage() {
   const { queueId = '' } = useParams()
@@ -339,6 +345,7 @@ function Resolver({
   const [labels, setLabels] = useState<Labels>(() =>
     agreedLabels(fields, detail),
   )
+  const [taken, setTaken] = useState<Readonly<Record<string, Source>>>({})
   const [active, setActive] = useState(() =>
     Math.max(
       0,
@@ -403,6 +410,11 @@ function Resolver({
     setLabels((current) =>
       take(fields, current, source, whole ? null : (field?.name ?? null)),
     )
+    const names = whole ? fields.map((f) => f.name) : field ? [field.name] : []
+    setTaken((current) => ({
+      ...current,
+      ...Object.fromEntries(names.map((name) => [name, source])),
+    }))
     setProblem(null)
     if (!whole) setActive((i) => nextConflict(i))
   }
@@ -427,6 +439,7 @@ function Resolver({
         resolved_labels: rawLabels(labels),
         rationale: rationale.trim() === '' ? null : rationale.trim(),
         review_event_ids: detail.reviewer_labels.map((s) => s.review_event_id),
+        agent_output_ids: takenProposals(fields, labels, taken),
       },
     })
   }

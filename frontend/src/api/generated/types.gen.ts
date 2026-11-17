@@ -62,6 +62,12 @@ export type AdjudicationOutcome = {
    */
   review_event_id?: string | null
   /**
+   * Agent Output Ids
+   *
+   * Agent proposals whose columns the adjudicator took values from
+   */
+  agent_output_ids?: Array<string>
+  /**
    * Resolved At
    */
   resolved_at: string
@@ -3418,9 +3424,15 @@ export type GoldProvenance = {
   /**
    * Accepted Ai Proposal
    *
-   * A counted reviewer accepted an AI proposal they were shown
+   * A counted reviewer accepted an AI proposal they were shown, or the adjudicator took one
    */
   accepted_ai_proposal: boolean
+  /**
+   * Adjudicator Took Ai
+   *
+   * The adjudicator took an AI proposal's column, or resolved to labels equal to a proposal the adjudication screen showed
+   */
+  adjudicator_took_ai?: boolean
   model_failure?: GoldModelFailure | null
   /**
    * Promoted At
@@ -6145,6 +6157,12 @@ export type ResolveDisagreement = {
    * The review_event_id of each reviewer_labels entry as read. 409 when the disagreement's review events differ, so the caller reloads it
    */
   review_event_ids: Array<string>
+  /**
+   * Agent Output Ids
+   *
+   * The agent proposals whose columns resolved_labels takes values from, each an agent_labels entry of the disagreement. 422 otherwise
+   */
+  agent_output_ids?: Array<string>
 }
 
 /**
