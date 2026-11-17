@@ -14,9 +14,11 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
+from molabel.app.api.v1.workflows import _LlmAgentRunner
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
 from molabel.core.database import create_all_tables, get_engine
+from molabel.core.providers.base import ProviderError
 
 TEST_SECRET = "workflow-test-secret"
 
@@ -131,19 +133,27 @@ def _seed_task_schema(engine, workspace_id):
     return task_schema_id
 
 
-def _seed_workflow(engine, workspace_id, *, include_export: bool = False):
+def _seed_workflow(
+    engine,
+    workspace_id,
+    *,
+    include_export: bool = False,
+    ingest_config: dict | None = None,
+    agent_config: dict | None = None,
+):
     workflow_id = uuid.uuid4()
     now = datetime.now(UTC).isoformat()
     steps = [
         {
             "step_id": "ingest",
             "step_type": "data_ingest",
-            "config": {"source": "data/reviews.jsonl"},
+            "config": ingest_config or {"source": "data/reviews.jsonl"},
         },
         {
             "step_id": "agent_label",
             "step_type": "agent_run",
-            "config": {
+            "config": agent_config
+            or {
                 "model": "heuristic-agent",
                 "prompt_ref": "prompts/sentiment-demo-v1",
             },
@@ -294,6 +304,145 @@ async def test_execute_workflow_requires_auth(client):
 
 
 @pytest.mark.asyncio
+async def test_execute_failed_step_reports_same_status_as_detail(client, app, tmp_path):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    workflow_id = _seed_workflow(app.state.engine, workspace_id)
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["current_step_id"] == "ingest"
+    assert "Data source not found" in body["error_summary"]
+
+    detail_resp = await client.get(
+        f"/api/v1/workflows/{workflow_id}/executions/{body['execution_id']}"
+    )
+    detail = detail_resp.json()
+    assert body["status"] == detail["status"] == "paused"
+    states = {item["step_id"]: item["status"] for item in detail["step_states"]}
+    assert states["ingest"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_execute_ingests_an_imported_dataset_by_id(client, app, tmp_path):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    headers = {"Cookie": f"molabel_session={token}"}
+    dataset_resp = await client.post(
+        "/api/v1/datasets",
+        json={
+            "workspace_id": str(workspace_id),
+            "dataset_name": "Imported reviews",
+            "source_type": "jsonl",
+        },
+        headers=headers,
+    )
+    assert dataset_resp.status_code == 201, dataset_resp.text
+    dataset_id = dataset_resp.json()["dataset_id"]
+    import_resp = await client.post(
+        f"/api/v1/datasets/{dataset_id}/import",
+        json={
+            "records": [
+                {"id": "r1", "text": "I love how fast this is."},
+                {"id": "r2", "text": "This was slow and bad."},
+            ]
+        },
+        headers=headers,
+    )
+    assert import_resp.status_code == 202, import_resp.text
+    workflow_id = _seed_workflow(
+        app.state.engine, workspace_id, ingest_config={"dataset_id": dataset_id}
+    )
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute", json={}, headers=headers
+    )
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["error_summary"] is None
+    assert body["current_step_id"] == "review"
+    with app.state.engine.connect() as conn:
+        queued = conn.execute(
+            text("SELECT count(*), min(dataset_id) FROM review_tasks")
+        ).first()
+    assert int(queued[0]) == 2
+    assert str(queued[1]) == dataset_id
+
+
+@pytest.mark.asyncio
+async def test_execute_reports_an_empty_dataset_as_a_failed_ingest(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    headers = {"Cookie": f"molabel_session={token}"}
+    dataset_resp = await client.post(
+        "/api/v1/datasets",
+        json={
+            "workspace_id": str(workspace_id),
+            "dataset_name": "Empty",
+            "source_type": "jsonl",
+        },
+        headers=headers,
+    )
+    dataset_id = dataset_resp.json()["dataset_id"]
+    workflow_id = _seed_workflow(
+        app.state.engine, workspace_id, ingest_config={"dataset_id": dataset_id}
+    )
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute", json={}, headers=headers
+    )
+
+    body = resp.json()
+    assert body["current_step_id"] == "ingest"
+    assert "has no records" in body["error_summary"]
+
+
+@pytest.mark.asyncio
+async def test_execute_reports_an_agent_step_that_labels_no_records(
+    client, app, tmp_path, monkeypatch
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    token = _seed_reviewer(app.state.engine, workspace_id)
+    _seed_task_schema(app.state.engine, workspace_id)
+    workflow_id = _seed_workflow(
+        app.state.engine,
+        workspace_id,
+        agent_config={
+            "model": "claude-sonnet-4-20250514",
+            "prompt_ref": "prompts/default.yaml",
+        },
+    )
+    _write_demo_reviews(tmp_path)
+
+    def reject_missing_key(self, **_kwargs):
+        raise ProviderError("Anthropic API error: 401 x-api-key header is required")
+
+    monkeypatch.setattr(_LlmAgentRunner, "_label_record", reject_missing_key)
+
+    resp = await client.post(
+        f"/api/v1/workflows/{workflow_id}/execute",
+        json={},
+        headers={"Cookie": f"molabel_session={token}"},
+    )
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["current_step_id"] == "agent_label"
+    assert "x-api-key header is required" in body["error_summary"]
+
+
+@pytest.mark.asyncio
 async def test_execute_workflow_reaches_review_queue(client, app, tmp_path):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     token = _seed_reviewer(app.state.engine, workspace_id)
@@ -389,7 +538,7 @@ async def test_review_queue_must_complete_before_advance_and_export(
             f"/api/v1/review-tasks/{task['id']}/submit",
             json={
                 "labels": {},
-                "decision": "accept_ai",
+                "decision": "accept",
                 "rationale": "Accepting agent label for benchmark flow.",
                 "auto_claim_next": True,
             },
@@ -444,10 +593,15 @@ async def test_review_queue_must_complete_before_advance_and_export(
             ),
             {"wid": str(workspace_id)},
         ).fetchall()
+        decisions = conn.execute(
+            text("SELECT decision FROM review_events WHERE workspace_id = :wid"),
+            {"wid": str(workspace_id)},
+        ).fetchall()
 
     assert len(record_rows) == 3
     assert all(row[0] is not None for row in record_rows)
     assert all(int(row[1]) == 1 for row in record_rows)
+    assert [row[0] for row in decisions] == ["accept", "accept", "accept"]
 
 
 @pytest.mark.asyncio
@@ -515,7 +669,7 @@ async def test_review_completion_is_required_before_advancing_and_export_runs(
             f"/api/v1/review-tasks/{next_task_id}/submit",
             json={
                 "labels": {},
-                "decision": "accept_ai",
+                "decision": "accept",
                 "auto_claim_next": True,
             },
             headers={"Cookie": f"molabel_session={token}"},

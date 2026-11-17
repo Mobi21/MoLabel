@@ -320,6 +320,51 @@ class TestAgentRun:
         assert not result.success
         assert "Agent run failed" in result.error
 
+    def test_run_that_labels_no_records_reports_why(self) -> None:
+        class FakeAgentService:
+            def run(self, **kwargs) -> dict:
+                return {
+                    "status": "failed",
+                    "total_records": 5,
+                    "completed_records": 0,
+                    "failed_records": 5,
+                    "error_summary": "record r1: ProviderError: missing API key",
+                }
+
+        result = AgentRunExecutor().execute(
+            "agent",
+            {"prompt_ref": "p.yaml", "model": "test-model"},
+            _ctx_with_records(),
+            services={"agent_runner": FakeAgentService()},
+        )
+
+        assert not result.success
+        assert result.error == (
+            "Agent run failed: record r1: ProviderError: missing API key"
+        )
+
+    def test_run_that_labels_no_records_without_a_summary_counts_failures(
+        self,
+    ) -> None:
+        class FakeAgentService:
+            def run(self, **kwargs) -> dict:
+                return {
+                    "status": "failed",
+                    "total_records": 5,
+                    "completed_records": 0,
+                    "failed_records": 5,
+                }
+
+        result = AgentRunExecutor().execute(
+            "agent",
+            {"prompt_ref": "p.yaml", "model": "test-model"},
+            _ctx_with_records(),
+            services={"agent_runner": FakeAgentService()},
+        )
+
+        assert not result.success
+        assert result.error == "Agent run failed: 5 of 5 records failed"
+
 
 class TestAgentCompare:
     def test_basic_compare(self) -> None:

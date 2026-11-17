@@ -3,13 +3,26 @@
 from __future__ import annotations
 
 import pytest
+import yaml
 
 from molabel.core.workflow.parser import parse_workflow_yaml
 from molabel.core.workflow.templates import (
+    bind_template_inputs,
     get_template_path,
     get_template_yaml,
     list_templates,
+    template_needs_dataset,
+    template_needs_task_schema,
 )
+
+GENERIC_TEMPLATE_IDS = [
+    "quick_agentic_label",
+    "human_in_the_loop",
+    "full_quality_pipeline",
+    "benchmark_authority",
+    "agent_comparison",
+    "iterative_refinement",
+]
 
 
 class TestTemplateRegistry:
@@ -138,3 +151,51 @@ class TestSpecificTemplates:
         assert "agreement_analysis" in step_types
         assert "human_adjudication" in step_types
         assert "release_validation" in step_types
+
+
+class TestTemplateInputBinding:
+    """Generic templates bind to a workspace's dataset and task schema."""
+
+    @pytest.mark.parametrize("template_id", GENERIC_TEMPLATE_IDS)
+    def test_generic_template_needs_dataset_and_task_schema(
+        self, template_id: str
+    ) -> None:
+        definition = yaml.safe_load(get_template_yaml(template_id))
+        assert template_needs_dataset(definition)
+        assert template_needs_task_schema(definition)
+
+    def test_grounded_template_has_its_inputs_bound(self) -> None:
+        definition = yaml.safe_load(get_template_yaml("grounded_classification_review"))
+        assert not template_needs_dataset(definition)
+        assert not template_needs_task_schema(definition)
+
+    @pytest.mark.parametrize("template_id", GENERIC_TEMPLATE_IDS)
+    def test_binding_points_every_input_at_the_given_ids(
+        self, template_id: str
+    ) -> None:
+        definition = yaml.safe_load(get_template_yaml(template_id))
+
+        bound = bind_template_inputs(
+            definition, dataset_id="dataset-1", task_schema_id="schema-1"
+        )
+
+        assert not template_needs_dataset(bound)
+        assert not template_needs_task_schema(bound)
+        steps = {step["id"]: step for step in bound["steps"]}
+        ingest = next(s for s in steps.values() if s["type"] == "data_ingest")
+        assert ingest["config"]["dataset_id"] == "dataset-1"
+        assert "source" not in ingest["config"]
+        for step in steps.values():
+            if step["type"] == "data_normalize":
+                assert step["config"]["schema_ref"] == "schema-1"
+        bound_text = yaml.safe_dump(bound)
+        assert "data/raw" not in bound_text
+        assert "schemas/default.yaml" not in bound_text
+
+    def test_binding_leaves_the_input_definition_unchanged(self) -> None:
+        definition = yaml.safe_load(get_template_yaml("human_in_the_loop"))
+        before = yaml.safe_dump(definition)
+
+        bind_template_inputs(definition, dataset_id="d", task_schema_id="s")
+
+        assert yaml.safe_dump(definition) == before

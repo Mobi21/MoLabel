@@ -8,10 +8,10 @@ import { emit } from '../output.js'
 import { readInputText } from '../artifacts/input.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
-  buildClient,
   detectWorkspaceRoot,
   getRuntimeOptions,
   outputMode,
+  requireClient,
 } from './context.js'
 
 type JsonObject = Record<string, unknown>
@@ -318,15 +318,4 @@ function requireField(
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
-}
-
-async function requireClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }

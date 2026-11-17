@@ -11,11 +11,11 @@ import { getDefaultConfigPath, loadConfig, saveConfig } from '../config.js'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
-  buildClient,
   detectWorkspaceRoot,
   getRuntimeOptions,
   loadRuntimeConfig,
   outputMode,
+  requireClient,
 } from './context.js'
 
 export function registerWorkspaceCommands(
@@ -92,17 +92,7 @@ async function runWorkspaceBootstrap(
 ): Promise<void> {
   const basePath = resolve(path ?? options.workspaceRoot ?? process.cwd())
   const runtimeConfig = await loadRuntimeConfig(options)
-  if (!runtimeConfig.baseUrl) {
-    throw new Error(
-      'workspace bootstrap requires --base-url or MOLABEL_BASE_URL',
-    )
-  }
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(
-      'workspace bootstrap requires --base-url or MOLABEL_BASE_URL',
-    )
-  }
+  const client = await requireClient(options, 'workspace bootstrap')
 
   const response = await client.request('/api/v1/cli/workspaces/bootstrap', {
     method: 'POST',
@@ -160,10 +150,7 @@ async function runWorkspaceDecision(
   decision: 'accept' | 'reject',
 ): Promise<void> {
   const proposals = await proposalsForRun(options, runId)
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error('workspace apply/reject requires --base-url or MOLABEL_BASE_URL')
-  }
+  const client = await requireClient(options, 'workspace apply/reject')
   const decided = []
   for (const proposal of proposals) {
     const proposalId = readString(proposal.proposal_id)

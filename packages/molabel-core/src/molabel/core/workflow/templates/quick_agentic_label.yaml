@@ -8,8 +8,7 @@ description: >
 steps:
   - id: ingest
     type: data_ingest
-    config:
-      source: "data/raw/*.jsonl"
+    config: {}
 
   - id: agent_label
     type: agent_run

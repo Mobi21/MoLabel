@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 
 import { ApiClient } from '../client/http.js'
+import { CliFailure } from '../errors.js'
 import {
   detectWorkspace,
   normalizeArtifactSelector,
@@ -59,10 +60,14 @@ export async function buildClient(
 
 export async function requireClient(
   options: CliRuntimeOptions,
+  commandName = 'This command',
 ): Promise<ApiClient> {
   const client = await buildClient(options)
   if (!client) {
-    throw new Error('This command requires --base-url or MOLABEL_BASE_URL')
+    throw new CliFailure(
+      'NO_BACKEND',
+      `${commandName} requires --base-url or MOLABEL_BASE_URL`,
+    )
   }
   return client
 }

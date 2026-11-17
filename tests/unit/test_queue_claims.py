@@ -606,7 +606,7 @@ class TestSubmitSkipRelease:
             f"/api/v1/review-tasks/{task_id}/submit",
             json={
                 "labels": {"sentiment": "positive"},
-                "decision": "accept_ai",
+                "decision": "accept",
                 "rationale": "Model output matches the record",
                 "auto_claim_next": True,
             },
@@ -617,13 +617,92 @@ class TestSubmitSkipRelease:
         assert data["submitted_task"]["status"] == "submitted"
         assert data["next_task"] is not None
         assert data["next_task"]["status"] == "claimed"
+        assert data["deprecations"] == []
 
         events = _review_events_for_task(engine, uuid.UUID(task_id))
         assert len(events) == 1
         event = events[0]
-        assert event[7] == ReviewDecision.accept_ai.value
+        assert event[7] == ReviewDecision.accept.value
         assert json.loads(event[8]) == {"sentiment": "positive"}
         assert event[9] == "Model output matches the record"
+
+    def test_submit_api_records_edit_decision(
+        self, client, engine, reviewer, tasks
+    ) -> None:
+        """POST /review-tasks/{id}/submit accepts the canonical 'edit' decision."""
+        _login(client, reviewer)
+        task_id = client.post(f"/api/v1/queues/{QUEUE_ID}/claim").json()["task"]["id"]
+
+        resp = client.post(
+            f"/api/v1/review-tasks/{task_id}/submit",
+            json={
+                "labels": {"sentiment": "negative"},
+                "decision": "edit",
+                "auto_claim_next": False,
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["deprecations"] == []
+        event = _review_events_for_task(engine, uuid.UUID(task_id))[0]
+        assert event[7] == "edit"
+
+    @pytest.mark.parametrize(
+        ("alias", "canonical"),
+        [
+            ("accept_ai", "accept"),
+            ("edit_ai", "edit"),
+            ("reject_ai", "reject"),
+            ("correct", "edit"),
+        ],
+    )
+    def test_submit_api_normalizes_deprecated_decision_alias(
+        self, client, engine, reviewer, tasks, alias, canonical
+    ) -> None:
+        """Deprecated decision names are stored canonically and flagged."""
+        _login(client, reviewer)
+        task_id = client.post(f"/api/v1/queues/{QUEUE_ID}/claim").json()["task"]["id"]
+
+        resp = client.post(
+            f"/api/v1/review-tasks/{task_id}/submit",
+            json={
+                "labels": {"sentiment": "positive"},
+                "decision": alias,
+                "auto_claim_next": False,
+            },
+        )
+
+        assert resp.status_code == 200
+        deprecations = resp.json()["deprecations"]
+        assert len(deprecations) == 1
+        assert alias in deprecations[0]
+        assert canonical in deprecations[0]
+        event = _review_events_for_task(engine, uuid.UUID(task_id))[0]
+        assert event[7] == canonical
+
+    def test_submit_api_skips_task_for_deprecated_skip_decision(
+        self, client, engine, reviewer, tasks
+    ) -> None:
+        """A pre-rename client submitting decision 'skip' skips the task."""
+        _login(client, reviewer)
+        task_id = client.post(f"/api/v1/queues/{QUEUE_ID}/claim").json()["task"]["id"]
+
+        resp = client.post(
+            f"/api/v1/review-tasks/{task_id}/submit",
+            json={"labels": {"sentiment": "positive"}, "decision": "skip"},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "skipped"
+        assert data["submitted_task"]["id"] == task_id
+        assert data["submitted_task"]["status"] == "skipped"
+        assert data["next_task"]["id"] != task_id
+        assert len(data["deprecations"]) == 1
+        assert "skip" in data["deprecations"][0]
+        assert _review_events_for_task(engine, uuid.UUID(task_id)) == []
+        status = client.get(f"/api/v1/queues/{QUEUE_ID}/status").json()
+        assert (status["skipped"], status["submitted"]) == (1, 0)
 
     def test_submit_api_duplicate_submit_fails_cleanly(
         self, client, engine, reviewer, tasks
@@ -1100,6 +1179,37 @@ class TestQueueStatus:
         assert status["claimed"] == 1
         assert len(status["active_reviewers"]) == 1
         assert status["active_reviewers"][0]["reviewer_id"] == str(reviewer.id)
+
+    def test_queue_list_api(self, client, engine, reviewer, workspace, tasks) -> None:
+        """GET /queues lists each queue in the workspace with its counts."""
+        second = _create_tasks(engine, workspace, count=2, queue_id="second-queue")
+        claim_next(engine, QUEUE_ID, reviewer.id)
+        _login(client, reviewer)
+
+        resp = client.get("/api/v1/queues", params={"workspace_id": str(workspace.id)})
+
+        assert resp.status_code == 200
+        items = {item["queue_id"]: item for item in resp.json()["items"]}
+        assert set(items) == {QUEUE_ID, "second-queue"}
+        assert items[QUEUE_ID]["total"] == 5
+        assert items[QUEUE_ID]["available"] == 4
+        assert items[QUEUE_ID]["claimed"] == 1
+        assert items["second-queue"]["workspace_id"] == str(workspace.id)
+        assert items["second-queue"]["task_schema_id"] == str(second[0].task_schema_id)
+
+    def test_queue_list_api_filters_by_workspace(self, client, reviewer, tasks) -> None:
+        """GET /queues omits queues that belong to other workspaces."""
+        _login(client, reviewer)
+
+        resp = client.get("/api/v1/queues", params={"workspace_id": str(uuid.uuid4())})
+
+        assert resp.status_code == 200
+        assert resp.json()["items"] == []
+
+    def test_queue_list_api_requires_session(self, client, tasks) -> None:
+        """GET /queues requires a reviewer session."""
+        resp = client.get("/api/v1/queues")
+        assert resp.status_code == 401
 
     def test_queue_status_api(self, client, reviewer, tasks) -> None:
         """GET /queues/{queue_id}/status returns queue statistics."""

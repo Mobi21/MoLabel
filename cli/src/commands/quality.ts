@@ -3,9 +3,9 @@ import type { Command } from 'commander'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
-  buildClient,
   getRuntimeOptions,
   outputMode,
+  requireClient,
   resolveWorkspaceId,
 } from './context.js'
 
@@ -64,7 +64,7 @@ async function runQualityDashboard(
   options: CliRuntimeOptions,
   query: QualityQueryOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'quality dashboard')
+  const client = await requireClient(options, 'quality dashboard')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
   const response = await client.getJson(
     `/api/v1/quality/dashboard${buildQuery({
@@ -80,7 +80,7 @@ async function runQualityAgreement(
   options: CliRuntimeOptions,
   query: QualityQueryOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'quality agreement')
+  const client = await requireClient(options, 'quality agreement')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
   const response = await client.getJson(
     `/api/v1/quality/agreement${buildQuery({
@@ -96,7 +96,7 @@ async function runQualityDrift(
   options: CliRuntimeOptions,
   query: QualityQueryOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'quality drift')
+  const client = await requireClient(options, 'quality drift')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
   const response = await client.getJson(
     `/api/v1/quality/drift${buildQuery({
@@ -116,15 +116,4 @@ function buildQuery(params: Record<string, string | undefined>): string {
   }
   const query = search.toString()
   return query ? `?${query}` : ''
-}
-
-async function requireBackendClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }

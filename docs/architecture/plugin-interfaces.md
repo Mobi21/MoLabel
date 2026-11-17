@@ -206,7 +206,7 @@ class ReviewEvent:
     record_id: UUID
     reviewer_id: UUID | None
     source: str  # human | agent | import
-    decision: str | None  # accept, accept_ai, edit_ai, reject_ai, correct, reject, skip
+    decision: str | None  # accept, edit, reject
     labels: dict[str, Any]
     rationale: str | None = None
     confidence: float | None = None

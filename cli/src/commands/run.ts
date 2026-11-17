@@ -2,7 +2,7 @@ import type { Command } from 'commander'
 
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
-import { buildClient, getRuntimeOptions, outputMode } from './context.js'
+import { getRuntimeOptions, outputMode, requireClient } from './context.js'
 
 export function registerRunCommands(
   program: Command,
@@ -125,10 +125,7 @@ async function fetchRunDetail(
   runId: string,
   commandName: string,
 ): Promise<Record<string, unknown>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
+  const client = await requireClient(options, commandName)
   return client.getJson<Record<string, unknown>>(`/api/v1/agent-runs/${runId}`)
 }
 

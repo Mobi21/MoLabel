@@ -8,10 +8,10 @@ import { getDefaultConfigPath, loadConfig, saveConfig } from '../config.js'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
-  buildClient,
   getRuntimeOptions,
   loadRuntimeConfig,
   outputMode,
+  requireClient,
   resolveWorkspaceId,
 } from './context.js'
 
@@ -55,20 +55,7 @@ export function registerSessionCommands(
 }
 
 async function runSessionWhoami(options: CliRuntimeOptions): Promise<void> {
-  const client = await buildClient(options)
-  if (!client) {
-    await emit(
-      {
-        error: {
-          code: 'NO_BACKEND',
-          message: 'No backend base URL configured',
-        },
-      },
-      'json',
-    )
-    return
-  }
-
+  const client = await requireClient(options, 'session whoami')
   const me = await client.getJson('/api/v1/me')
   await emit(me, outputMode(options))
 }
@@ -77,7 +64,7 @@ async function runSessionListReviewers(
   options: CliRuntimeOptions,
   commandOptions: { workspaceId?: string; all?: boolean },
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'session list-reviewers')
+  const client = await requireClient(options, 'session list-reviewers')
   const workspaceId = await resolveWorkspaceId(
     options,
     commandOptions.workspaceId,
@@ -121,7 +108,7 @@ async function runSessionMutation(
   reviewerId: string,
   message: string,
 ): Promise<void> {
-  const client = await requireBackendClient(options, message)
+  const client = await requireClient(options, message)
   const response = await client.request(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -166,15 +153,4 @@ function buildQuery(params: Record<string, string | undefined>): string {
   }
   const query = search.toString()
   return query ? `?${query}` : ''
-}
-
-async function requireBackendClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }

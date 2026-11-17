@@ -6,9 +6,9 @@ import { readInputText } from '../artifacts/input.js'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
-  buildClient,
   getRuntimeOptions,
   outputMode,
+  requireClient,
   resolveWorkspaceId,
 } from './context.js'
 
@@ -94,7 +94,7 @@ async function runExportList(
   options: CliRuntimeOptions,
   query: ExportListOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'export list')
+  const client = await requireClient(options, 'export list')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
   const response = await client.getJson(
     `/api/v1/exports${buildQuery({
@@ -110,7 +110,7 @@ async function runExportCreate(
   options: CliRuntimeOptions,
   bodyOptions: JsonBodyOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'export create')
+  const client = await requireClient(options, 'export create')
   const body = await readJsonBody(
     bodyOptions,
     'export create requires --file, --body-text, or piped stdin',
@@ -123,7 +123,7 @@ async function runExportPreview(
   options: CliRuntimeOptions,
   bodyOptions: JsonBodyOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'export preview')
+  const client = await requireClient(options, 'export preview')
   const body = await readJsonBody(
     bodyOptions,
     'export preview requires --file, --body-text, or piped stdin',
@@ -136,7 +136,7 @@ async function runExportGet(
   options: CliRuntimeOptions,
   exportId: string,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'export get')
+  const client = await requireClient(options, 'export get')
   const response = await client.getJson(`/api/v1/exports/${exportId}`)
   await emit(response, outputMode(options))
 }
@@ -145,7 +145,7 @@ async function runExportValidate(
   options: CliRuntimeOptions,
   exportId: string,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'export validate')
+  const client = await requireClient(options, 'export validate')
   const response = await client.postJson(
     `/api/v1/exports/${exportId}/validate`,
     {},
@@ -157,7 +157,7 @@ async function runExportDownload(
   options: CliRuntimeOptions,
   exportId: string,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'export download')
+  const client = await requireClient(options, 'export download')
   const response = await client.request(
     `/api/v1/exports/${exportId}/download`,
     {
@@ -166,10 +166,7 @@ async function runExportDownload(
   )
   const contentType = response.headers.get('content-type') ?? ''
   if (contentType.includes('application/json')) {
-    await emit(
-      await response.json(),
-      outputMode(options),
-    )
+    await emit(await response.json(), outputMode(options))
     return
   }
   await emit(await response.text(), outputMode(options))
@@ -202,15 +199,4 @@ function buildQuery(params: Record<string, string | undefined>): string {
   }
   const query = search.toString()
   return query ? `?${query}` : ''
-}
-
-async function requireBackendClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }

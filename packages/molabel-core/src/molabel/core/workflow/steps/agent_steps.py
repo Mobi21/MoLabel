@@ -95,6 +95,7 @@ class AgentRunExecutor(StepExecutor):
                 success_count = normalized.completed_records
                 failure_count = normalized.failed_records
                 run_status = normalized.status.value
+                partial_error = normalized.error_summary
             except Exception as e:
                 # Extract partial results from the exception if available
                 partial_results = getattr(e, "partial_results", None)
@@ -173,6 +174,7 @@ class AgentRunExecutor(StepExecutor):
             success_count=success_count,
             failure_count=failure_count,
             status=run_status,
+            error=partial_error,
         )
 
 
@@ -482,8 +484,14 @@ def _build_agent_run_step_result(
     if error:
         summary["error"] = error
 
+    labeled_nothing = status == "failed" and success_count == 0
+    if labeled_nothing:
+        reason = error or f"{failure_count} of {total_records} records failed"
+        step_error = f"Agent run failed: {reason}"
+    else:
+        step_error = f"Agent run failed: {error}" if error and not is_partial else ""
     return StepResult(
-        success=not (status == "failed" and success_count == 0),
+        success=not labeled_nothing,
         output=StepOutput(
             step_id=step_id,
             step_type="agent_run",
@@ -491,5 +499,5 @@ def _build_agent_run_step_result(
             summary=summary,
         ),
         is_partial=is_partial,
-        error=f"Agent run failed: {error}" if error and not is_partial else "",
+        error=step_error,
     )

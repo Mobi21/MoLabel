@@ -6,9 +6,9 @@ import { readInputText } from '../artifacts/input.js'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
-  buildClient,
   getRuntimeOptions,
   outputMode,
+  requireClient,
   resolveWorkspaceId,
 } from './context.js'
 
@@ -25,7 +25,7 @@ interface JsonBodyOptions {
 interface ReleaseCertifyOptions {
   workspaceId?: string
   name?: string
-  version: string
+  releaseVersion: string
   exportId?: string[]
   benchmarkRunId?: string[]
   certificationThreshold?: string
@@ -83,7 +83,7 @@ export function registerReleaseCommands(
   release
     .command('certify')
     .description('Create a release from benchmark certification evidence')
-    .requiredOption('--version <version>', 'Release version')
+    .requiredOption('--release-version <version>', 'Release version')
     .option('--workspace-id <id>', 'Workspace ID')
     .option('--name <name>', 'Release name')
     .option('--export-id <id>', 'Export bundle id', collect, [])
@@ -102,7 +102,7 @@ async function runReleaseList(
   options: CliRuntimeOptions,
   query: ReleaseListOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'release list')
+  const client = await requireClient(options, 'release list')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
   const response = await client.getJson(
     `/api/v1/releases${buildQuery({
@@ -117,7 +117,7 @@ async function runReleaseCreate(
   options: CliRuntimeOptions,
   bodyOptions: JsonBodyOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'release create')
+  const client = await requireClient(options, 'release create')
   const body = await readJsonBody(
     bodyOptions,
     'release create requires --file, --body-text, or piped stdin',
@@ -130,7 +130,7 @@ async function runReleaseGet(
   options: CliRuntimeOptions,
   releaseId: string,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'release get')
+  const client = await requireClient(options, 'release get')
   const response = await client.getJson(`/api/v1/releases/${releaseId}`)
   await emit(response, outputMode(options))
 }
@@ -140,7 +140,7 @@ async function runReleaseApprove(
   releaseId: string,
   commandOptions: { notes?: string },
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'release approve')
+  const client = await requireClient(options, 'release approve')
   const response = await client.postJson(
     `/api/v1/releases/${releaseId}/approve`,
     {
@@ -155,8 +155,11 @@ async function runReleaseCertify(
   options: CliRuntimeOptions,
   commandOptions: ReleaseCertifyOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'release certify')
-  const workspaceId = await resolveWorkspaceId(options, commandOptions.workspaceId)
+  const client = await requireClient(options, 'release certify')
+  const workspaceId = await resolveWorkspaceId(
+    options,
+    commandOptions.workspaceId,
+  )
   const threshold = commandOptions.certificationThreshold
     ? Number(commandOptions.certificationThreshold)
     : 1.0
@@ -165,8 +168,8 @@ async function runReleaseCertify(
   }
   const response = await client.postJson('/api/v1/releases', {
     workspace_id: workspaceId,
-    name: commandOptions.name ?? `Certified ${commandOptions.version}`,
-    version: commandOptions.version,
+    name: commandOptions.name ?? `Certified ${commandOptions.releaseVersion}`,
+    version: commandOptions.releaseVersion,
     export_ids: commandOptions.exportId ?? [],
     benchmark_run_ids: commandOptions.benchmarkRunId ?? [],
     certification_threshold: threshold,
@@ -202,17 +205,6 @@ function buildQuery(params: Record<string, string | undefined>): string {
   }
   const query = search.toString()
   return query ? `?${query}` : ''
-}
-
-async function requireBackendClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }
 
 function collect(value: string, previous: string[]): string[] {

@@ -6,9 +6,9 @@ import { readInputText } from '../artifacts/input.js'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
-  buildClient,
   getRuntimeOptions,
   outputMode,
+  requireClient,
   resolveWorkspaceId,
 } from './context.js'
 
@@ -141,7 +141,7 @@ async function runAgentRunList(
   options: CliRuntimeOptions,
   query: AgentRunListOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'agent-run list')
+  const client = await requireClient(options, 'agent-run list')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
   const response = await client.getJson(
     `/api/v1/agent-runs${buildQuery({
@@ -160,7 +160,7 @@ async function runAgentRunGet(
   options: CliRuntimeOptions,
   agentRunId: string,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'agent-run get')
+  const client = await requireClient(options, 'agent-run get')
   const response = await client.getJson(`/api/v1/agent-runs/${agentRunId}`)
   await emit(response, outputMode(options))
 }
@@ -169,7 +169,7 @@ async function runAgentRunStart(
   options: CliRuntimeOptions,
   bodyOptions: JsonBodyOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'agent-run start')
+  const client = await requireClient(options, 'agent-run start')
   const body = await readJsonBody(
     bodyOptions,
     'agent-run start requires --file, --body-text, or piped stdin',
@@ -182,7 +182,7 @@ async function runAgentRunCompare(
   options: CliRuntimeOptions,
   bodyOptions: JsonBodyOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'agent-run compare')
+  const client = await requireClient(options, 'agent-run compare')
   const body = await readJsonBody(
     bodyOptions,
     'agent-run compare requires --file, --body-text, or piped stdin',
@@ -195,7 +195,7 @@ async function runAgentRunCancel(
   options: CliRuntimeOptions,
   agentRunId: string,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'agent-run cancel')
+  const client = await requireClient(options, 'agent-run cancel')
   const response = await client.postJson(
     `/api/v1/agent-runs/${agentRunId}/cancel`,
     {},
@@ -208,7 +208,7 @@ async function runAgentRunOutputs(
   agentRunId: string,
   query: AgentRunOutputsOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'agent-run outputs')
+  const client = await requireClient(options, 'agent-run outputs')
   const response = await client.getJson(
     `/api/v1/agent-runs/${agentRunId}/outputs${buildQuery({
       normalization_status: query.normalizationStatus,
@@ -222,7 +222,7 @@ async function runAgentRunOutput(
   agentRunId: string,
   recordId: string,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'agent-run output')
+  const client = await requireClient(options, 'agent-run output')
   const response = await client.getJson(
     `/api/v1/agent-runs/${agentRunId}/outputs/${recordId}`,
   )
@@ -233,7 +233,7 @@ async function runAgentRunAnalytics(
   options: CliRuntimeOptions,
   query: AgentRunListOptions,
 ): Promise<void> {
-  const client = await requireBackendClient(options, 'agent-run analytics')
+  const client = await requireClient(options, 'agent-run analytics')
   const workspaceId = await resolveWorkspaceId(options, query.workspaceId)
   const response = await client.getJson(
     `/api/v1/agent-runs/analytics${buildQuery({
@@ -273,15 +273,4 @@ function buildQuery(params: Record<string, string | undefined>): string {
   }
   const query = search.toString()
   return query ? `?${query}` : ''
-}
-
-async function requireBackendClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }

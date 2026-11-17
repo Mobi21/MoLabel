@@ -1,3 +1,5 @@
+import { CliFailure } from '../errors.js'
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -76,10 +78,20 @@ export class ApiClient {
       headers.set('Cookie', `molabel_session=${this.sessionToken}`)
     }
 
-    const response = await fetch(url, {
-      ...init,
-      headers,
-    })
+    let response: Response
+    try {
+      response = await fetch(url, { ...init, headers })
+    } catch (error) {
+      const cause =
+        error instanceof Error && error.cause instanceof Error
+          ? error.cause.message
+          : String(error)
+      throw new CliFailure(
+        'BACKEND_UNREACHABLE',
+        `Cannot reach the MoLabel backend at ${this.baseUrl}`,
+        { url, cause },
+      )
+    }
 
     if (!response.ok) {
       const bodyText = await response.text()

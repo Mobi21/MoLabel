@@ -4,6 +4,7 @@ import type { Command } from 'commander'
 import { parse as parseYaml } from 'yaml'
 
 import { readInputText } from '../artifacts/input.js'
+import { CliFailure } from '../errors.js'
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
 import {
@@ -109,6 +110,14 @@ function registerWorkflowCreateCommand(
     )
     .option('--file <path>', 'Workflow definition file (JSON or YAML)')
     .option('--template <templateId>', 'Built-in workflow template ID')
+    .option(
+      '--dataset <id>',
+      'Dataset ID or slug the template ingests (default: the workspace has one)',
+    )
+    .option(
+      '--task-schema <id>',
+      'Task schema ID or slug the template labels with (default: the workspace has one)',
+    )
     .option('--workspace-id <id>', 'Workspace ID override')
     .option('--name <name>')
     .option('--slug <slug>')
@@ -118,6 +127,8 @@ function registerWorkflowCreateCommand(
       const commandOptions = this.opts<{
         file?: string
         template?: string
+        dataset?: string
+        taskSchema?: string
         workspaceId?: string
         name?: string
         slug?: string
@@ -159,6 +170,8 @@ async function runWorkflowCreate(
   commandOptions: {
     file?: string
     template?: string
+    dataset?: string
+    taskSchema?: string
     workspaceId?: string
     name?: string
     slug?: string
@@ -172,6 +185,15 @@ async function runWorkflowCreate(
       'workflow create accepts either --file or --template, not both',
     )
   }
+  if (
+    (commandOptions.dataset || commandOptions.taskSchema) &&
+    !commandOptions.template
+  ) {
+    throw new CliFailure(
+      'USAGE_ERROR',
+      '--dataset and --task-schema bind a --template; they do nothing without one',
+    )
+  }
 
   const workspaceId = await resolveWorkspaceId(
     options,
@@ -183,7 +205,11 @@ async function runWorkflowCreate(
       ? await readWorkflowTemplateDefinition(
           client,
           commandOptions.template,
-          workspaceId,
+          {
+            workspaceId,
+            datasetId: commandOptions.dataset,
+            taskSchemaId: commandOptions.taskSchema,
+          },
           compactWorkflowOverrides({
             name: commandOptions.name,
             slug: commandOptions.slug,
@@ -215,11 +241,26 @@ async function runWorkflowRun(
 ): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const execution = await client.postJson(
+  const execution = await client.postJson<Record<string, unknown>>(
     `/api/v1/workflows/${workflow.workflow_id}/execute`,
     {},
   )
+  assertExecutionDidNotFail(execution)
   await emit(execution, outputMode(options))
+}
+
+function assertExecutionDidNotFail(execution: Record<string, unknown>): void {
+  const status = readString(execution.status)
+  const errorSummary = readString(execution.error_summary)
+  if (!errorSummary && status !== 'failed') {
+    return
+  }
+  const stepId = readString(execution.current_step_id) ?? 'unknown'
+  throw new CliFailure(
+    'WORKFLOW_RUN_FAILED',
+    `Workflow step '${stepId}' failed: ${errorSummary ?? `status ${String(status)}`}`,
+    execution,
+  )
 }
 
 async function runWorkflowExecutions(
@@ -255,10 +296,11 @@ async function runWorkflowAdvance(
 ): Promise<void> {
   const client = await requireClient(options)
   const workflow = await resolveWorkflowRemote(client, selector)
-  const execution = await client.postJson(
+  const execution = await client.postJson<Record<string, unknown>>(
     `/api/v1/workflows/${workflow.workflow_id}/executions/${executionId}/steps/${stepId}/advance`,
     {},
   )
+  assertExecutionDidNotFail(execution)
   await emit(execution, outputMode(options))
 }
 
@@ -352,7 +394,11 @@ async function readWorkflowDefinitionFile(
 async function readWorkflowTemplateDefinition(
   client: Awaited<ReturnType<typeof requireClient>>,
   templateId: string,
-  workspaceId: string,
+  bindings: {
+    workspaceId: string
+    datasetId: string | undefined
+    taskSchemaId: string | undefined
+  },
   overrides: {
     name?: string
     slug?: string
@@ -360,8 +406,15 @@ async function readWorkflowTemplateDefinition(
     filePath?: string
   },
 ): Promise<Record<string, unknown>> {
+  const query = new URLSearchParams({ workspace_id: bindings.workspaceId })
+  if (bindings.datasetId) {
+    query.set('dataset_id', bindings.datasetId)
+  }
+  if (bindings.taskSchemaId) {
+    query.set('task_schema_id', bindings.taskSchemaId)
+  }
   const template = await client.getJson<{ yaml?: unknown }>(
-    `/api/v1/cli/workflow-templates/${templateId}`,
+    `/api/v1/cli/workflow-templates/${templateId}?${query.toString()}`,
   )
   const yaml = readString(template.yaml)
   if (!yaml) {
@@ -373,7 +426,7 @@ async function readWorkflowTemplateDefinition(
   }
 
   return buildWorkflowCreateBody(parsed, {
-    workspaceId,
+    workspaceId: bindings.workspaceId,
     ...compactWorkflowOverrides({
       name: overrides.name,
       slug: overrides.slug,

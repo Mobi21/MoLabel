@@ -208,13 +208,13 @@ class TestSubmitCorrectionService:
             task_id,
             reviewer.id,
             {"sentiment": "negative"},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
             "Changed my mind after re-reading",
         )
 
         assert correction is not None
         assert correction["labels"] == {"sentiment": "negative"}
-        assert correction["decision"] == ReviewDecision.correct.value
+        assert correction["decision"] == ReviewDecision.edit.value
         assert correction["rationale"] == "Changed my mind after re-reading"
 
         # Now there should be 2 events
@@ -249,7 +249,7 @@ class TestSubmitCorrectionService:
             task_id,
             reviewer.id,
             {"sentiment": "negative"},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
         )
 
         assert correction is not None
@@ -287,7 +287,7 @@ class TestSubmitCorrectionService:
             task_id,
             reviewer.id,
             {"sentiment": "negative"},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
             "New rationale",
         )
 
@@ -328,7 +328,7 @@ class TestSubmitCorrectionService:
             task_id,
             reviewer.id,
             {"sentiment": "negative", "score": 0.3},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
         )
 
         assert correction is not None
@@ -361,7 +361,7 @@ class TestSubmitCorrectionService:
             task_id,
             reviewer.id,
             {"sentiment": "neutral"},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
             "First correction",
         )
         assert corr1 is not None
@@ -372,7 +372,7 @@ class TestSubmitCorrectionService:
             task_id,
             reviewer.id,
             {"sentiment": "negative"},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
             "Second correction",
         )
         assert corr2 is not None
@@ -404,7 +404,7 @@ class TestSubmitCorrectionService:
             task_id,
             reviewer.id,
             {"sentiment": "negative"},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
         )
         assert result is None
 
@@ -433,7 +433,7 @@ class TestSubmitCorrectionService:
             task_id,
             second_reviewer.id,
             {"sentiment": "negative"},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
         )
         assert result is None
 
@@ -446,7 +446,7 @@ class TestSubmitCorrectionService:
             uuid.uuid4(),
             reviewer.id,
             {"sentiment": "negative"},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
         )
         assert result is None
 
@@ -474,7 +474,7 @@ class TestSubmitCorrectionService:
             task_id,
             reviewer.id,
             {"sentiment": "negative"},
-            ReviewDecision.correct,
+            ReviewDecision.edit,
         )
         assert correction is not None
         assert correction["source"] == "human"
@@ -524,7 +524,9 @@ class TestCorrectionEndpoint:
         data = resp.json()
         assert data["message"] == "correction_submitted"
         assert data["event"]["labels"] == {"sentiment": "negative"}
-        assert data["event"]["decision"] == "correct"
+        assert data["event"]["decision"] == "edit"
+        assert len(data["deprecations"]) == 1
+        assert "'correct'" in data["deprecations"][0]
         assert data["event"]["rationale"] == "Actually, this is negative"
         assert data["event"]["supersedes_event_id"] is not None
         assert data["event"]["source"] == "human"
@@ -561,7 +563,7 @@ class TestCorrectionEndpoint:
             f"/api/v1/review-tasks/{task_id}/correct",
             json={
                 "labels": {"sentiment": "negative"},
-                "decision": "correct",
+                "decision": "edit",
             },
         )
 
@@ -591,7 +593,7 @@ class TestCorrectionEndpoint:
             f"/api/v1/review-tasks/{task_id}/correct",
             json={
                 "labels": {"sentiment": "negative"},
-                "decision": "correct",
+                "decision": "edit",
             },
         )
         assert resp.status_code == 409
@@ -603,7 +605,7 @@ class TestCorrectionEndpoint:
             f"/api/v1/review-tasks/{fake_id}/correct",
             json={
                 "labels": {"sentiment": "negative"},
-                "decision": "correct",
+                "decision": "edit",
             },
         )
         assert resp.status_code == 401
@@ -636,7 +638,7 @@ class TestCorrectionEndpoint:
             f"/api/v1/review-tasks/{task_id}/correct",
             json={
                 "labels": {"sentiment": "negative"},
-                "decision": "correct",
+                "decision": "edit",
             },
         )
         assert resp.status_code == 409

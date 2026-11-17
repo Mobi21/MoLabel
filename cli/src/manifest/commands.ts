@@ -257,6 +257,14 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       flags: [
         { name: '--file', description: 'Workflow definition file' },
         { name: '--template', description: 'Built-in workflow template ID' },
+        {
+          name: '--dataset',
+          description: 'Dataset ID or slug the template ingests',
+        },
+        {
+          name: '--task-schema',
+          description: 'Task schema ID or slug the template labels with',
+        },
         { name: '--workspace-id', description: 'Workspace ID override' },
         { name: '--name', description: 'Workflow name' },
         { name: '--slug', description: 'Workflow slug' },
@@ -271,6 +279,14 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       flags: [
         { name: '--file', description: 'Workflow definition file' },
         { name: '--template', description: 'Built-in workflow template ID' },
+        {
+          name: '--dataset',
+          description: 'Dataset ID or slug the template ingests',
+        },
+        {
+          name: '--task-schema',
+          description: 'Task schema ID or slug the template labels with',
+        },
         { name: '--workspace-id', description: 'Workspace ID override' },
         { name: '--name', description: 'Workflow name' },
         { name: '--slug', description: 'Workflow slug' },
@@ -312,6 +328,17 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       name: 'workflow cancel',
       group: 'workflow',
       description: 'Cancel a workflow execution',
+    },
+    {
+      name: 'queue list',
+      group: 'queue',
+      description: 'List review queues and their task counts',
+      flags: [
+        {
+          name: '--workspace-id',
+          description: 'Only list queues in this workspace',
+        },
+      ],
     },
     {
       name: 'queue status',
@@ -423,6 +450,13 @@ export const COMMAND_MANIFEST: CommandManifestDocument = {
       name: 'release certify',
       group: 'release',
       description: 'Create a release from benchmark certification evidence',
+      flags: [
+        {
+          name: '--release-version',
+          description: 'Release version',
+          required: true,
+        },
+      ],
     },
     {
       name: 'artifact read',

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import bindparam, text
@@ -18,10 +19,14 @@ from molabel.app.utils import get_engine
 from molabel.core.agents.queue_binding import deserialize_agent_output_ids
 from molabel.core.data.snapshot_service import SnapshotService
 from molabel.core.models import Dataset, DatasetSnapshot, Record
+from molabel.core.types import canonical_review_decision
 from molabel.core.workflow.templates import (
+    bind_template_inputs,
     get_template_path,
     get_template_yaml,
     list_templates,
+    template_needs_dataset,
+    template_needs_task_schema,
 )
 
 router = APIRouter(prefix="", tags=["cli"])
@@ -38,9 +43,15 @@ class WorkflowTemplateSummary(BaseModel):
     validated_by_benchmarks: list[str] = Field(default_factory=list)
 
 
+class WorkflowTemplateBindings(BaseModel):
+    dataset_id: str | None = None
+    task_schema_id: str | None = None
+
+
 class WorkflowTemplateDetail(WorkflowTemplateSummary):
     absolute_path: str
     yaml: str
+    bindings: WorkflowTemplateBindings | None = None
 
 
 class SnapshotRestoreResponse(BaseModel):
@@ -103,13 +114,58 @@ async def workflow_templates() -> list[WorkflowTemplateSummary]:
 
 
 @router.get("/workflow-templates/{template_id}", response_model=WorkflowTemplateDetail)
-async def get_workflow_template(template_id: str) -> WorkflowTemplateDetail:
-    """Return a built-in workflow template with its YAML content."""
+async def get_workflow_template(
+    request: Request,
+    template_id: str,
+    workspace_id: str | None = None,
+    dataset_id: str | None = None,
+    task_schema_id: str | None = None,
+) -> WorkflowTemplateDetail:
+    """Return a built-in workflow template with its YAML content.
+
+    With ``workspace_id``, the template's data and task-schema inputs are bound
+    to that workspace: to the named dataset and task schema when given, else
+    to the only one the workspace has.
+    """
     try:
         template_path = get_template_path(template_id)
         yaml_text = get_template_yaml(template_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    bindings = None
+    if workspace_id is not None:
+        definition = yaml.safe_load(yaml_text)
+        with get_engine(request).connect() as conn:
+            bindings = WorkflowTemplateBindings(
+                dataset_id=_pick_template_input(
+                    _workspace_datasets(conn, workspace_id),
+                    selector=dataset_id,
+                    required=template_needs_dataset(definition),
+                    label="dataset",
+                    option="dataset_id (molabel workflow create --dataset)",
+                ),
+                task_schema_id=_pick_template_input(
+                    _workspace_task_schemas(conn, workspace_id),
+                    selector=task_schema_id,
+                    required=template_needs_task_schema(definition),
+                    label="task schema",
+                    option="task_schema_id (molabel workflow create --task-schema)",
+                ),
+            )
+        yaml_text = yaml.safe_dump(
+            bind_template_inputs(
+                definition,
+                dataset_id=bindings.dataset_id,
+                task_schema_id=bindings.task_schema_id,
+            ),
+            sort_keys=False,
+        )
+    elif dataset_id is not None or task_schema_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="workspace_id is required to bind a dataset or task schema",
+        )
 
     template = next(
         (item for item in list_templates() if item["id"] == template_id), None
@@ -128,6 +184,76 @@ async def get_workflow_template(template_id: str) -> WorkflowTemplateDetail:
         validated_by_benchmarks=list(template.get("validated_by_benchmarks", [])),
         absolute_path=str(template_path),
         yaml=yaml_text,
+        bindings=bindings,
+    )
+
+
+def _workspace_datasets(conn: Any, workspace_id: str) -> list[tuple[str, str, str]]:
+    rows = conn.execute(
+        text(
+            "SELECT id, dataset_slug, dataset_name FROM datasets "
+            "WHERE workspace_id = :wid ORDER BY created_at"
+        ),
+        {"wid": workspace_id},
+    ).fetchall()
+    return [(str(row[0]), str(row[1]), str(row[2])) for row in rows]
+
+
+def _workspace_task_schemas(conn: Any, workspace_id: str) -> list[tuple[str, str, str]]:
+    rows = conn.execute(
+        text(
+            "SELECT id, task_schema_slug, title FROM task_schemas "
+            "WHERE workspace_id = :wid AND is_active = 1 ORDER BY created_at"
+        ),
+        {"wid": workspace_id},
+    ).fetchall()
+    return [(str(row[0]), str(row[1]), str(row[2])) for row in rows]
+
+
+def _pick_template_input(
+    candidates: list[tuple[str, str, str]],
+    *,
+    selector: str | None,
+    required: bool,
+    label: str,
+    option: str,
+) -> str | None:
+    """Resolve a template input from (id, slug, name) candidates."""
+    if selector is not None:
+        for candidate_id, _slug, _name in candidates:
+            if selector == candidate_id:
+                return candidate_id
+        slug_matches = [c for c in candidates if c[1] == selector]
+        if len(slug_matches) == 1:
+            return slug_matches[0][0]
+        if not slug_matches:
+            raise HTTPException(
+                status_code=404, detail=f"No {label} '{selector}' in this workspace"
+            )
+        listed = ", ".join(f"{cid} ({name})" for cid, _slug, name in slug_matches)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{len(slug_matches)} {label}s share the slug '{selector}'. "
+                f"Pass {option} with one of these IDs: {listed}"
+            ),
+        )
+    if not required:
+        return None
+    if len(candidates) == 1:
+        return candidates[0][0]
+    if not candidates:
+        raise HTTPException(
+            status_code=400,
+            detail=f"This template needs a {label}, and the workspace has none",
+        )
+    listed = ", ".join(f"{cid} ({name})" for cid, _slug, name in candidates)
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"This template needs a {label}, and the workspace has "
+            f"{len(candidates)}. Pass {option} with one of: {listed}"
+        ),
     )
 
 
@@ -356,8 +482,11 @@ async def get_benchmark_run_facts(
                 ),
                 {"queue_id": queue_id},
             ):
-                key = str(decision or "").strip() or "unspecified"
-                decision_counts[key] = int(count or 0)
+                key = (
+                    canonical_review_decision(str(decision or "").strip())
+                    or "unspecified"
+                )
+                decision_counts[key] = decision_counts.get(key, 0) + int(count or 0)
 
             latest_event_rows = conn.execute(
                 text(

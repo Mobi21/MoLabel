@@ -27,12 +27,12 @@ async function captureCliJson(
 ): Promise<{ exitCode: number; json: unknown }> {
   const chunks: string[] = []
   const originalWrite = process.stdout.write.bind(process.stdout)
-  process.stdout.write = ((chunk: string | Uint8Array) => {
+  process.stdout.write = (chunk: string | Uint8Array) => {
     chunks.push(
       typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'),
     )
     return true
-  })
+  }
 
   try {
     const result = await runCli(argv)
@@ -44,6 +44,21 @@ async function captureCliJson(
   } finally {
     process.stdout.write = originalWrite
   }
+}
+
+function readInvalidPackReport(json: unknown): {
+  ok: boolean
+  errors: string[]
+  warnings: string[]
+} {
+  const envelope = json as {
+    error: {
+      code: string
+      details: { ok: boolean; errors: string[]; warnings: string[] }
+    }
+  }
+  expect(envelope.error.code).toBe('BENCHMARK_PACK_INVALID')
+  return envelope.error.details
 }
 
 async function createPack(): Promise<{
@@ -321,11 +336,7 @@ describe('benchmark cli', () => {
       '--strict',
     ])
     expect(strict.exitCode).toBe(1)
-    const strictPayload = strict.json as {
-      ok: boolean
-      errors: string[]
-      warnings: string[]
-    }
+    const strictPayload = readInvalidPackReport(strict.json)
     expect(strictPayload.ok).toBe(false)
     expect(strictPayload.errors).toContain(
       'No reference-workspace/ found; this is acceptable but limits baseline debugging.',
@@ -354,7 +365,7 @@ describe('benchmark cli', () => {
       invalidRoot,
     ])
     expect(failure.exitCode).toBe(1)
-    const failurePayload = failure.json as { ok: boolean; errors: string[] }
+    const failurePayload = readInvalidPackReport(failure.json)
     expect(failurePayload.ok).toBe(false)
     expect(failurePayload.errors.length).toBeGreaterThan(0)
   })
@@ -611,7 +622,7 @@ describe('benchmark cli', () => {
       root,
     ])
     expect(result.exitCode).toBe(1)
-    const payload = result.json as { ok: boolean; errors: string[] }
+    const payload = readInvalidPackReport(result.json)
     expect(payload.ok).toBe(false)
     expect(payload.errors).toContain(
       'metrics.yaml primary_metric_id missing_metric is not declared in metrics[]',

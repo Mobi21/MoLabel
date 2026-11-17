@@ -112,7 +112,9 @@ async def test_workflows_crud_execute_pause_cancel(
         assert resp.status_code == 202, resp.text
         body = resp.json()
         assert body["workflow_definition_id"] == workflow_id
-        assert body["status"] in ("pending", "running")
+        assert body["status"] == "paused"
+        assert body["current_step_id"] == "ingest"
+        assert body["error_summary"]
         execution_id = body["execution_id"]
 
     with checkpoint(ctx, "list_executions"):

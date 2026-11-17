@@ -968,6 +968,26 @@ class _WorkflowDataLoader:
         self._workspace_id = workspace_id
         self._workspace_root = workspace_root
 
+    def load_dataset_records(self, dataset_id: str) -> list[_LoadedRecord]:
+        dataset = self._conn.execute(
+            text("SELECT id FROM datasets WHERE id = :id AND workspace_id = :wid"),
+            {"id": dataset_id, "wid": self._workspace_id},
+        ).first()
+        if dataset is None:
+            raise LookupError(f"Dataset not found in this workspace: {dataset_id}")
+        rows = self._conn.execute(
+            text(
+                "SELECT id FROM records WHERE dataset_id = :dataset_id "
+                "ORDER BY sequence_index, created_at"
+            ),
+            {"dataset_id": dataset_id},
+        ).fetchall()
+        if not rows:
+            raise LookupError(
+                f"Dataset {dataset_id} has no records. Import records first."
+            )
+        return [_LoadedRecord(str(row[0])) for row in rows]
+
     def load_records(
         self,
         source: str,
@@ -1471,6 +1491,9 @@ class _LlmAgentRunner:
             if failed == 0
             else ("partially_completed" if completed > 0 else "failed")
         )
+        error_summary = (
+            "; ".join(error_summary_parts[:5]) if error_summary_parts else None
+        )
         finished_at = datetime.now(UTC).isoformat()
         self._conn.execute(
             text(
@@ -1490,9 +1513,7 @@ class _LlmAgentRunner:
                 "status": final_status,
                 "completed": completed,
                 "failed": failed,
-                "error_summary": "; ".join(error_summary_parts[:5])
-                if error_summary_parts
-                else None,
+                "error_summary": error_summary,
                 "completed_at": finished_at,
                 "updated_at": finished_at,
             },
@@ -1516,6 +1537,7 @@ class _LlmAgentRunner:
             "batch_size": max(1, len(record_ids)),
             "batch_count": 1 if record_ids else 0,
             "event_count": completed,
+            "error_summary": error_summary,
         }
 
     def _label_record(
@@ -2561,10 +2583,7 @@ async def execute_workflow(
 
     if exec_row is None:
         raise HTTPException(status_code=500, detail="Execution was not persisted")
-    execution = _execution_row_to_model(exec_row)
-    if execution.status == "paused" and execution.error_summary:
-        execution.status = "running"
-    return execution
+    return _execution_row_to_model(exec_row)
 
 
 @router.get(

@@ -131,6 +131,27 @@ class TestSessionToken:
         token = f"{payload_b64}.{sig}"
         assert verify_session_token(token, TEST_SECRET) is None
 
+    def test_padded_legacy_token_still_verifies(self) -> None:
+        """Tokens issued with base64 padding before the unpadded format verify."""
+        import base64
+        import hashlib
+        import hmac
+        import json
+
+        reviewer_id = uuid.uuid4()
+        payload_json = json.dumps(
+            {"reviewer_id": str(reviewer_id), "issued_at": 1700000000.1},
+            separators=(",", ":"),
+        )
+        payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode(
+            "ascii"
+        )
+        assert payload_b64.endswith("=")
+        sig = hmac.new(
+            TEST_SECRET.encode(), payload_b64.encode(), hashlib.sha256
+        ).hexdigest()
+        assert verify_session_token(f"{payload_b64}.{sig}", TEST_SECRET) == reviewer_id
+
     def test_token_payload_is_base64url_encoded(self) -> None:
         """Token payload is base64url-encoded, not plain JSON."""
         reviewer_id = uuid.uuid4()
@@ -142,7 +163,8 @@ class TestSessionToken:
         import base64
         import json
 
-        decoded = base64.urlsafe_b64decode(payload_part.encode("ascii")).decode("utf-8")
+        padded = payload_part + "=" * (-len(payload_part) % 4)
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
         data = json.loads(decoded)
         assert data["reviewer_id"] == str(reviewer_id)
 
@@ -494,6 +516,21 @@ class TestSessionEndpoints:
         )
         set_cookie = resp.headers.get("set-cookie", "")
         assert "samesite=strict" in set_cookie.lower()
+
+    def test_session_cookie_value_is_unquoted_token(self, client, reviewer) -> None:
+        """The Set-Cookie value is the bare token for every payload length."""
+        for issued_at in (1700000000.0, 1700000000.1, 1700000000.12):
+            with patch(
+                "molabel.app.services.session.time.time", return_value=issued_at
+            ):
+                resp = client.post(
+                    "/api/v1/sessions",
+                    json={"reviewer_id": str(reviewer.id)},
+                )
+            set_cookie = resp.headers.get("set-cookie", "")
+            cookie_value = set_cookie.split(";", 1)[0].split("=", 1)[1]
+            assert '"' not in cookie_value
+            assert verify_session_token(cookie_value, TEST_SECRET) == reviewer.id
 
 
 # ===================================================================

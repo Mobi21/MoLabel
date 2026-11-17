@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+import yaml
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.pool import StaticPool
@@ -170,9 +171,220 @@ async def test_workflow_templates_are_listable_and_fetchable(client):
     assert "yaml" in body and "steps" in body["yaml"]
 
 
+def _seed_template_inputs(
+    engine, workspace_id: uuid.UUID, *, datasets: int, task_schemas: int
+) -> tuple[list[str], list[str]]:
+    dataset_ids = [str(uuid.uuid4()) for _ in range(datasets)]
+    schema_ids = [str(uuid.uuid4()) for _ in range(task_schemas)]
+    now = datetime.now(UTC).isoformat()
+    with engine.connect() as conn:
+        for index, dataset_id in enumerate(dataset_ids):
+            conn.execute(
+                text(
+                    "INSERT INTO datasets (id, dataset_name, dataset_slug, "
+                    "source_type, canonical_id_strategy, indexing_mode, "
+                    "record_count, labeled_count, health_status, created_at, "
+                    "updated_at, workspace_id) VALUES (:id, :name, :slug, 'jsonl', "
+                    "'source_record_id', 'projection', 0, 0, 'healthy', :now, "
+                    ":now, :wid)"
+                ),
+                {
+                    "id": dataset_id,
+                    "name": f"Dataset {index}",
+                    "slug": f"dataset-{index}",
+                    "now": now,
+                    "wid": str(workspace_id),
+                },
+            )
+        for index, schema_id in enumerate(schema_ids):
+            conn.execute(
+                text(
+                    "INSERT INTO task_schemas (id, task_schema_slug, version, "
+                    "task_type, title, label_fields, blind_review_policy, "
+                    "is_active, is_frozen, created_at, updated_at, workspace_id) "
+                    "VALUES (:id, :slug, 1, 'classification', :title, '[]', "
+                    "'show_agent_outputs', 1, 0, :now, :now, :wid)"
+                ),
+                {
+                    "id": schema_id,
+                    "slug": f"schema-{index}",
+                    "title": f"Schema {index}",
+                    "now": now,
+                    "wid": str(workspace_id),
+                },
+            )
+        conn.commit()
+    return dataset_ids, schema_ids
+
+
 @pytest.mark.asyncio
-async def test_benchmark_run_facts_returns_persisted_queue_counts(
+async def test_template_binds_to_the_single_dataset_and_task_schema(
     client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    (dataset_id,), (schema_id,) = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=1, task_schemas=1
+    )
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={"workspace_id": str(workspace_id)},
+    )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["bindings"] == {"dataset_id": dataset_id, "task_schema_id": schema_id}
+    steps = {step["id"]: step for step in yaml.safe_load(body["yaml"])["steps"]}
+    assert steps["ingest"]["config"] == {"dataset_id": dataset_id}
+    assert steps["agent_label"]["config"]["task_schema_id"] == schema_id
+    assert steps["review"]["config"]["task_schema_id"] == schema_id
+
+
+@pytest.mark.asyncio
+async def test_template_binding_uses_the_named_dataset_and_task_schema(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    dataset_ids, schema_ids = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=2, task_schemas=2
+    )
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={
+            "workspace_id": str(workspace_id),
+            "dataset_id": "dataset-1",
+            "task_schema_id": schema_ids[0],
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["bindings"] == {
+        "dataset_id": dataset_ids[1],
+        "task_schema_id": schema_ids[0],
+    }
+
+
+@pytest.mark.asyncio
+async def test_template_binding_rejects_an_ambiguous_dataset(client, app, tmp_path):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    dataset_ids, _ = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=2, task_schemas=1
+    )
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={"workspace_id": str(workspace_id)},
+    )
+
+    assert resp.status_code == 400
+    message = resp.json()["error"]["message"]
+    assert all(dataset_id in message for dataset_id in dataset_ids)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("table", "slug_column", "param"),
+    [
+        ("datasets", "dataset_slug", "dataset_id"),
+        ("task_schemas", "task_schema_slug", "task_schema_id"),
+    ],
+)
+async def test_template_binding_rejects_a_shared_slug(
+    client, app, tmp_path, table, slug_column, param
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    dataset_ids, schema_ids = _seed_template_inputs(
+        app.state.engine, workspace_id, datasets=2, task_schemas=2
+    )
+    with app.state.engine.connect() as conn:
+        conn.execute(text(f"UPDATE {table} SET {slug_column} = 'shared'"))
+        conn.commit()
+    params = {
+        "workspace_id": str(workspace_id),
+        "dataset_id": dataset_ids[0],
+        "task_schema_id": schema_ids[0],
+        param: "shared",
+    }
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop", params=params
+    )
+
+    assert resp.status_code == 400, resp.text
+    message = resp.json()["error"]["message"]
+    expected_ids = dataset_ids if table == "datasets" else schema_ids
+    assert all(candidate in message for candidate in expected_ids)
+
+
+@pytest.mark.asyncio
+async def test_template_binding_rejects_a_workspace_with_no_dataset(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    _seed_template_inputs(app.state.engine, workspace_id, datasets=0, task_schemas=1)
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={"workspace_id": str(workspace_id)},
+    )
+
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_template_binding_rejects_an_unknown_dataset(client, app, tmp_path):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+    _seed_template_inputs(app.state.engine, workspace_id, datasets=1, task_schemas=1)
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/human_in_the_loop",
+        params={"workspace_id": str(workspace_id), "dataset_id": "missing"},
+    )
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_template_with_bound_inputs_needs_no_workspace_dataset(
+    client, app, tmp_path
+):
+    workspace_id = _seed_workspace(app.state.engine, tmp_path)
+
+    resp = await client.get(
+        "/api/v1/cli/workflow-templates/grounded_classification_review",
+        params={"workspace_id": str(workspace_id)},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["bindings"] == {"dataset_id": None, "task_schema_id": None}
+    steps = yaml.safe_load(resp.json()["yaml"])["steps"]
+    ingest = next(step for step in steps if step["type"] == "data_ingest")
+    assert ingest["config"]["source"] == "workbench/benchmarks/splits/test.jsonl"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored_decisions", "decision_counts", "semantic_decision_counts"),
+    [
+        (("accept", "accept"), {"accept": 2}, {"accept_ai": 1, "edit_ai": 1}),
+        (("accept_ai", "accept"), {"accept": 2}, {"accept_ai": 1, "edit_ai": 1}),
+        (
+            ("edit_ai", "reject_ai"),
+            {"edit": 1, "reject": 1},
+            {"accept_ai": 1, "reject_ai": 1},
+        ),
+        (("correct", "skip"), {"edit": 1, "skip": 1}, {"correct": 1, "skip": 1}),
+    ],
+    ids=["canonical", "legacy-accept-ai", "legacy-edit-reject", "legacy-correct-skip"],
+)
+async def test_benchmark_run_facts_returns_persisted_queue_counts(
+    client,
+    app,
+    tmp_path,
+    stored_decisions,
+    decision_counts,
+    semantic_decision_counts,
 ):
     workspace_id = _seed_workspace(app.state.engine, tmp_path)
     token = _seed_reviewer(app.state.engine, workspace_id)
@@ -321,9 +533,8 @@ async def test_benchmark_run_facts_returns_persisted_queue_counts(
                     "dataset_id": str(dataset_id),
                 },
             )
-        for task_id, record_id, decision in (
-            (task_ids[0], record_ids[0], "accept"),
-            (task_ids[1], record_ids[1], "accept"),
+        for task_id, record_id, decision in zip(
+            task_ids, record_ids, stored_decisions, strict=False
         ):
             conn.execute(
                 text(
@@ -367,9 +578,8 @@ async def test_benchmark_run_facts_returns_persisted_queue_counts(
     assert body["available_count"] == 1
     assert body["claimed_count"] == 0
     assert body["review_event_count"] == 2
-    assert body["decision_counts"]["accept"] == 2
-    assert body["semantic_decision_counts"]["accept_ai"] == 1
-    assert body["semantic_decision_counts"]["edit_ai"] == 1
+    assert body["decision_counts"] == decision_counts
+    assert body["semantic_decision_counts"] == semantic_decision_counts
     assert body["queue_empty"] is False
     assert body["review_completion_rate"] == pytest.approx(2 / 3)
     assert body["summary_path"].endswith("summary.json")

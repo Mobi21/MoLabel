@@ -27,8 +27,9 @@ logger = logging.getLogger(__name__)
 class DataIngestExecutor(StepExecutor):
     """Executor for data_ingest steps (WF-004).
 
-    Loads records from a source path via a data loader service. Creates
-    dataset and record set entries in the context.
+    Loads records from a source path, or from an existing dataset when
+    ``dataset_id`` is set, via a data loader service. Creates dataset and
+    record set entries in the context.
     """
 
     def validate(
@@ -38,8 +39,8 @@ class DataIngestExecutor(StepExecutor):
         context: WorkflowContext,
     ) -> list[str]:
         errors: list[str] = []
-        if not config.get("source"):
-            errors.append("data_ingest requires 'source' in config")
+        if not config.get("source") and not config.get("dataset_id"):
+            errors.append("data_ingest requires 'source' or 'dataset_id' in config")
         return errors
 
     def execute(
@@ -50,15 +51,20 @@ class DataIngestExecutor(StepExecutor):
         services: dict[str, Any] | None = None,
     ) -> StepResult:
         services = services or {}
-        source = config["source"]
+        bound_dataset_id = config.get("dataset_id")
+        source = config.get("source") or f"dataset:{bound_dataset_id}"
         loader = services.get("data_loader")
 
-        dataset_id = str(uuid.uuid4())
+        dataset_id = str(bound_dataset_id or uuid.uuid4())
         record_ids: list[str] = []
 
         if loader is not None:
             try:
-                records = loader.load_records(source, config)
+                records = (
+                    loader.load_dataset_records(str(bound_dataset_id))
+                    if bound_dataset_id
+                    else loader.load_records(source, config)
+                )
                 for record in records:
                     record_ids.append(str(record.id))
             except Exception as e:

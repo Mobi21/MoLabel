@@ -5,7 +5,7 @@ import type { Command } from 'commander'
 
 import { emit } from '../output.js'
 import type { CliRuntimeOptions } from '../types.js'
-import { buildClient, getRuntimeOptions, outputMode } from './context.js'
+import { getRuntimeOptions, outputMode, requireClient } from './context.js'
 
 type JsonObject = Record<string, unknown>
 
@@ -20,7 +20,7 @@ export function registerReviewCommands(
     .description('Submit a review for a claimed task')
     .option('--labels-json <json>')
     .option('--labels-file <path>')
-    .option('--decision <decision>')
+    .option('--decision <decision>', 'accept, edit, or reject')
     .option('--rationale <text>')
     .option('--no-auto-claim-next')
     .action(async function (this: Command, taskId: string) {
@@ -86,7 +86,7 @@ export function registerReviewCommands(
     .description('Submit a correction for a previously reviewed task')
     .option('--labels-json <json>')
     .option('--labels-file <path>')
-    .option('--decision <decision>')
+    .option('--decision <decision>', 'accept, edit, or reject')
     .option('--rationale <text>')
     .action(async function (this: Command, taskId: string) {
       const options = this.opts<{
@@ -219,15 +219,4 @@ function readJsonObjectFromText(text: string): JsonObject {
     throw new Error('Expected a JSON object')
   }
   return parsed as JsonObject
-}
-
-async function requireClient(
-  options: CliRuntimeOptions,
-  commandName: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof buildClient>>>> {
-  const client = await buildClient(options)
-  if (!client) {
-    throw new Error(`${commandName} requires --base-url or MOLABEL_BASE_URL`)
-  }
-  return client
 }

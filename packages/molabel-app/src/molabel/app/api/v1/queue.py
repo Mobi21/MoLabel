@@ -11,7 +11,7 @@ to avoid triggering SQLAlchemy mapper configuration for the full model graph.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -22,6 +22,7 @@ from molabel.app.services.claims import (
     claim_next,
     get_queue_status,
     get_reviewer_visibility,
+    list_queues,
     pop_expired_notifications,
     release_claim,
     reveal_ai,
@@ -37,7 +38,12 @@ from molabel.core.adjudication.adjudication_service import (
 from molabel.core.adjudication.adjudication_service import (
     AdjudicationService,
 )
-from molabel.core.types import AdjudicationResolution, ReviewDecision
+from molabel.core.types import (
+    CANONICAL_REVIEW_DECISION,
+    AdjudicationResolution,
+    DeprecatedReviewDecision,
+    ReviewDecision,
+)
 
 router = APIRouter(tags=["queue"])
 
@@ -145,8 +151,14 @@ class SubmitRequest(BaseModel):
     """Request body for submitting a review."""
 
     labels: dict[str, Any] = Field(..., description="Review labels/annotations")
-    decision: ReviewDecision | None = Field(
-        default=None, description="Optional review decision (accept/reject/etc.)"
+    decision: ReviewDecision | DeprecatedReviewDecision | Literal["skip"] | None = (
+        Field(
+            default=None,
+            description=(
+                "accept, edit, or reject. Deprecated aliases are normalized. "
+                "The deprecated 'skip' skips the task like POST .../skip."
+            ),
+        )
     )
     rationale: str | None = Field(
         default=None, description="Optional reviewer rationale"
@@ -163,6 +175,7 @@ class SubmitResponse(BaseModel):
     next_task: BlindReviewTaskResponse | None = None
     queue_empty: bool = False
     message: str = "submitted"
+    deprecations: list[str] = Field(default_factory=list)
 
 
 class SkipResponse(BaseModel):
@@ -207,8 +220,9 @@ class CorrectionRequest(BaseModel):
     """Request body for submitting a review correction (RV-004)."""
 
     labels: dict[str, Any] = Field(..., description="Corrected labels")
-    decision: ReviewDecision | None = Field(
-        default=None, description="Updated review decision"
+    decision: ReviewDecision | DeprecatedReviewDecision | None = Field(
+        default=None,
+        description="accept, edit, or reject. Deprecated aliases are normalized.",
     )
     rationale: str | None = Field(
         default=None, description="Rationale for the correction"
@@ -240,6 +254,7 @@ class CorrectionResponse(BaseModel):
 
     event: CorrectionEventResponse
     message: str = "correction_submitted"
+    deprecations: list[str] = Field(default_factory=list)
 
 
 class QueueActiveReviewer(BaseModel):
@@ -250,6 +265,26 @@ class QueueActiveReviewer(BaseModel):
     avatar_color: str | None = None
     current_task_id: str
     current_record_id: str
+
+
+class QueueSummary(BaseModel):
+    """One review queue with its per-status task counts."""
+
+    queue_id: str
+    workspace_id: str
+    task_schema_id: str
+    total: int
+    available: int
+    claimed: int
+    submitted: int
+    skipped: int
+    created_at: str
+
+
+class QueueListResponse(BaseModel):
+    """Response for listing review queues."""
+
+    items: list[QueueSummary]
 
 
 class QueueStatusResponse(BaseModel):
@@ -303,6 +338,19 @@ def _add_notification_headers(
         response.headers["X-MoLabel-Notification"] = "claim_expired"
         # Include count for the frontend to know how many expired.
         response.headers["X-MoLabel-Expired-Count"] = str(len(notifications))
+
+
+def _canonical_decision(
+    decision: ReviewDecision | DeprecatedReviewDecision | None,
+) -> tuple[ReviewDecision | None, list[str]]:
+    """Map a deprecated decision name to its canonical decision."""
+    if not isinstance(decision, DeprecatedReviewDecision):
+        return decision, []
+    canonical = CANONICAL_REVIEW_DECISION[decision]
+    return canonical, [
+        f"Decision '{decision.value}' is deprecated; use '{canonical.value}'. "
+        "Whether the AI suggestion was shown is recorded as ai_revealed."
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -372,17 +420,28 @@ async def submit_review_endpoint(
 
     _add_notification_headers(response, reviewer.id)
 
-    try:
-        submitted = submit_review(
-            engine,
-            task_id,
-            reviewer.id,
-            body.labels,
-            body.decision,
-            body.rationale,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if body.decision == "skip":
+        submitted = skip_task(engine, task_id, reviewer.id)
+        message = "skipped"
+        deprecations = [
+            "Decision 'skip' is deprecated; use POST /review-tasks/{task_id}/skip "
+            "(molabel review skip). The task was skipped and its labels and "
+            "rationale were not stored."
+        ]
+    else:
+        decision, deprecations = _canonical_decision(body.decision)
+        try:
+            submitted = submit_review(
+                engine,
+                task_id,
+                reviewer.id,
+                body.labels,
+                decision,
+                body.rationale,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        message = "submitted"
 
     if submitted is None:
         raise HTTPException(
@@ -407,7 +466,8 @@ async def submit_review_endpoint(
         submitted_task=submitted_task,
         next_task=next_task_resp,
         queue_empty=queue_empty,
-        message="submitted",
+        message=message,
+        deprecations=deprecations,
     )
 
 
@@ -587,6 +647,7 @@ async def submit_correction_endpoint(
     engine = get_engine(request)
 
     _add_notification_headers(response, reviewer.id)
+    decision, deprecations = _canonical_decision(body.decision)
 
     try:
         result = submit_correction(
@@ -594,7 +655,7 @@ async def submit_correction_endpoint(
             task_id,
             reviewer.id,
             body.labels,
-            body.decision,
+            decision,
             body.rationale,
         )
     except ValueError as exc:
@@ -609,12 +670,26 @@ async def submit_correction_endpoint(
     return CorrectionResponse(
         event=CorrectionEventResponse(**result),
         message="correction_submitted",
+        deprecations=deprecations,
     )
 
 
 # ---------------------------------------------------------------------------
 # Queue status
 # ---------------------------------------------------------------------------
+
+
+@router.get("/queues", response_model=QueueListResponse)
+async def list_queues_endpoint(
+    request: Request,
+    response: Response,
+    reviewer: CurrentReviewer,
+    workspace_id: str | None = None,
+) -> QueueListResponse:
+    """List review queues, optionally limited to one workspace."""
+    _add_notification_headers(response, reviewer.id)
+    queues = list_queues(get_engine(request), workspace_id)
+    return QueueListResponse(items=[QueueSummary(**queue) for queue in queues])
 
 
 @router.get(
