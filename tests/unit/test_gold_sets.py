@@ -139,6 +139,36 @@ class TestItemFile:
         data = render_items([item("a", "bug"), item("b", "refund")])
         assert file_hash(data.replace(b"\n", b"\r\n")) == file_hash(data)
 
+    @pytest.mark.parametrize("separator", ["\x85", "\u2028", "\u2029"])
+    def test_a_unicode_line_separator_in_content_survives_write_and_read(
+        self, separator
+    ):
+        odd = GoldItem.build(
+            task_schema=SCHEMA,
+            input={"text": f"first{separator}second"},
+            expected={"intent": f"re{separator}fund"},
+            input_ref=GoldInputRef(record_id="r1"),
+            provenance=provenance(),
+        )
+        items = (odd, item("b", "bug", record="r2"))
+
+        data = render_items(items)
+
+        assert len(data.decode("utf-8").splitlines()) == 2
+        assert parse_items(SCHEMA, data) == items
+        written_raw = "".join(
+            json.dumps(i.model_dump(mode="json"), ensure_ascii=False) + "\n"
+            for i in items
+        ).encode("utf-8")
+        assert separator.encode("utf-8") in written_raw
+        assert parse_items(SCHEMA, written_raw) == items
+
+    def test_a_file_with_crlf_line_ends_reads_as_its_lf_form(self):
+        items = (item("a", "bug"), item("b", "refund", record="r2"))
+        data = render_items(items)
+
+        assert parse_items(SCHEMA, data.replace(b"\n", b"\r\n")) == items
+
 
 class TestMerge:
     def test_a_new_input_is_appended_after_the_items_the_set_holds(self):

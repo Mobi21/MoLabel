@@ -26,6 +26,13 @@ FORMAT_VERSION = 1
 
 _ITEM_NAMESPACE = uuid.UUID("9b1c4d57-3f0e-5a8e-9c61-6d2f7a40b8e3")
 
+_LINE_SEPARATOR_ESCAPES = {"\x85": "\\u0085", "\u2028": "\\u2028", "\u2029": "\\u2029"}
+"""Characters that ``ensure_ascii=False`` writes raw and editors break lines on.
+
+JSON allows them only inside strings, so escaping them there keeps one item
+per line for every tool that reads the file.
+"""
+
 
 class GoldFileError(ValueError):
     """A gold file that does not parse, with the 1-based line it failed on."""
@@ -201,7 +208,10 @@ class GoldItem(GoldModel):
         )
 
     def line(self) -> str:
-        return json.dumps(self.model_dump(mode="json"), ensure_ascii=False)
+        line = json.dumps(self.model_dump(mode="json"), ensure_ascii=False)
+        for separator, escape in _LINE_SEPARATOR_ESCAPES.items():
+            line = line.replace(separator, escape)
+        return line
 
 
 def render_items(items: Iterable[GoldItem]) -> bytes:
@@ -210,13 +220,16 @@ def render_items(items: Iterable[GoldItem]) -> bytes:
 
 
 def parse_items(task_schema: str, data: bytes) -> tuple[GoldItem, ...]:
-    """The items of a ``gold.jsonl`` file. Blank lines are allowed."""
+    """The items of a ``gold.jsonl`` file. Blank lines are allowed.
+
+    Lines end at LF alone; the CR of a CRLF end is JSON whitespace.
+    """
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise GoldFileError(f"not UTF-8: {exc}") from exc
     items: list[GoldItem] = []
-    for number, line in enumerate(text.splitlines(), start=1):
+    for number, line in enumerate(text.split("\n"), start=1):
         if not line.strip():
             continue
         try:
