@@ -164,6 +164,33 @@ MoLabel uses lightweight reviewer profiles. No password auth, no tokens.
 - All mutation endpoints record the active `reviewer_id` in audit logs
 - If no session cookie is present, the server returns HTTP 401 with a redirect hint to the profile selection screen. The frontend handles the redirect.
 
+### Browser Origins
+
+A web page open in the user's browser can send requests to the local API, and
+the browser stamps each one with the page's `Origin`. The server refuses every
+request, on every path, whose `Origin` is not one of its own loopback origins
+on the port it listens on: `http://localhost:<port>`, `http://127.0.0.1:<port>`
+and `http://[::1]:<port>`. `Origin: null`, another port, another scheme and
+another host are all refused. A request with no `Origin` header, as the CLI
+and curl send, goes on to the session checks as before.
+
+`MOLABEL_ALLOWED_ORIGINS` adds origins, comma-separated, and is empty by
+default. It is also the whole CORS allowlist, so CORS never grants an origin
+the check refuses. The server's own origins are same-origin and need no CORS
+headers. The Vite dev and preview servers proxy `/api` and pass the browser's
+`Origin` through, so the GUI's origin must be allowed: `uv run molabel-dev`
+adds `http://localhost:5173` and `http://127.0.0.1:5173`, and the Playwright
+setup adds the preview origin. To run Vite on its own against a backend you
+started, start the backend with
+`MOLABEL_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`.
+
+| HTTP Status | Code                 | When                                         |
+|-------------|----------------------|----------------------------------------------|
+| 403         | `ORIGIN_NOT_ALLOWED` | The request's `Origin` is not an allowed one |
+
+`details.origin` echoes the refused origin and `details.allowed_origins` lists
+the allowed ones.
+
 ### Common Response Types
 
 These Pydantic models are referenced throughout the spec.

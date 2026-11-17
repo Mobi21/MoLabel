@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+_VITE_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
+
 
 def _find_project_root() -> Path:
     """Walk up from CWD to find the uv workspace root.
@@ -28,13 +30,18 @@ def main() -> None:
     """Start both FastAPI and Vite dev servers.
 
     The FastAPI server runs on port 8000 with auto-reload.
-    The Vite frontend dev server runs on port 5173.
+    The Vite frontend dev server runs on port 5173 and proxies ``/api`` to it.
+    The proxy passes the browser's ``Origin`` through, so the API is told to
+    allow the Vite origins.
     Ctrl-C (SIGINT) or SIGTERM cleanly shuts down both processes.
     """
     project_root = _find_project_root()
     frontend_dir = project_root / "frontend"
 
     env = {**os.environ}
+    env["MOLABEL_ALLOWED_ORIGINS"] = ",".join(
+        filter(None, [env.get("MOLABEL_ALLOWED_ORIGINS"), *_VITE_ORIGINS])
+    )
 
     # SE-012: respect MOLABEL_HOST / MOLABEL_PORT for network binding.
     host = env.get("MOLABEL_HOST", "127.0.0.1")

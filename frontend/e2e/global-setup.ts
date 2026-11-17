@@ -8,7 +8,15 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import { API_PORT, API_URL, REPO, e2eRoot, seedPath, type Seed } from './env'
+import {
+  API_PORT,
+  API_URL,
+  REPO,
+  WEB_URL,
+  e2eRoot,
+  seedPath,
+  type Seed,
+} from './env'
 
 const CLI = join(REPO, 'cli', 'dist', 'bin', 'molabel.js')
 const FIXTURE = join(
@@ -306,10 +314,12 @@ export default async function globalSetup() {
     ],
     {
       cwd: launch,
-      // The run's folder is under the OS temp folder, outside home on CI.
+      // The run's folder is under the OS temp folder, outside home on CI. The
+      // preview server proxies /api and passes the page's Origin through.
       env: keylessEnv({
         MOLABEL_DATA_DIR: data,
         MOLABEL_ALLOWED_WORKSPACE_ROOTS: root,
+        MOLABEL_ALLOWED_ORIGINS: WEB_URL,
       }),
       stdio: 'ignore',
     },

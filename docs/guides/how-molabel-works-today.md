@@ -76,6 +76,13 @@ or `;` on Windows) when the server has it set. Drive and share roots, the home
 folder and an allowed parent itself are always refused. A workspace registered
 earlier outside the allowed parents keeps working, and `molabel doctor` and
 `molabel status` list it under `workspace_roots_not_allowed`.
+
+The API takes browser requests only from its own loopback origin
+(`http://localhost:<port>`, `http://127.0.0.1:<port>` or `http://[::1]:<port>`)
+and from the origins in `MOLABEL_ALLOWED_ORIGINS`, so a web page the user has
+open cannot drive it. A request from any other origin, `null` included, gets
+403 `ORIGIN_NOT_ALLOWED`. The CLI sends no `Origin` and is not affected.
+`uv run molabel-dev` allows the Vite origin it starts.
 `docs/architecture/api-specification.md` has the error codes.
 
 ### 2.3 Frontend
