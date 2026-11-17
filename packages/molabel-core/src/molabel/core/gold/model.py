@@ -275,11 +275,12 @@ class GoldSetHeader(GoldModel):
 
 @dataclass(frozen=True)
 class GoldSet:
-    """A set as read: its header, its items, and the hash of its items file."""
+    """A set as read: its header, its items, and its items file's bytes."""
 
     header: GoldSetHeader
     items: tuple[GoldItem, ...]
-    file_hash: str
+    data: bytes
+    """``gold.jsonl`` byte for byte, as read or as it is to be written."""
 
     @classmethod
     def new(cls, *, slug: str, name: str, task_schema: str, now: str) -> Self:
@@ -294,27 +295,57 @@ class GoldSet:
             created_at=now,
             updated_at=now,
         )
-        return cls(header=header, items=(), file_hash=file_hash(data))
+        return cls(header=header, items=(), data=data)
+
+    @property
+    def file_hash(self) -> str:
+        return file_hash(self.data)
 
     @property
     def content_hash_matches(self) -> bool:
         """Whether the items file is the one MoLabel last wrote."""
         return self.header.content_hash == self.file_hash
 
-    def revised(
+    def appended(
         self,
-        items: Sequence[GoldItem],
+        added: Sequence[GoldItem],
         *,
         now: str,
         sources: Sequence[GoldSetSource] = (),
     ) -> Self | None:
-        """The next version holding *items*, or None if the file would not change.
+        """The next version with *added* as lines after the file's bytes.
 
-        It also lists *sources* the header does not list yet.
+        Every earlier line stays byte for byte, hand formatting included. It
+        also lists *sources* the header does not list yet. None when there is
+        nothing to add.
+        """
+        if not added:
+            return None
+        data = self.data
+        if data and not data.endswith(b"\n"):
+            data += b"\n"
+        return self._next(
+            data + render_items(added), (*self.items, *added), now, sources
+        )
+
+    def revised(self, items: Sequence[GoldItem], *, now: str) -> Self | None:
+        """The next version holding *items*, every line rendered afresh.
+
+        None if the file would not change. Only an operation that changes
+        existing items, such as dedupe, rewrites the whole file.
         """
         data = render_items(items)
         if file_hash(data) == self.file_hash:
             return None
+        return self._next(data, items, now, ())
+
+    def _next(
+        self,
+        data: bytes,
+        items: Sequence[GoldItem],
+        now: str,
+        sources: Sequence[GoldSetSource],
+    ) -> Self:
         listed = [*self.header.sources]
         for source in sources:
             if all(s.queue_id != source.queue_id for s in listed):
@@ -329,7 +360,7 @@ class GoldSet:
                 "updated_at": now,
             }
         )
-        return type(self)(header=header, items=tuple(items), file_hash=file_hash(data))
+        return type(self)(header=header, items=tuple(items), data=data)
 
 
 class GoldItemRef(BaseModel):

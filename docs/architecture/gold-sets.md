@@ -26,16 +26,22 @@ schema. Promotion from a queue of another schema answers
 `GOLD_TASK_SCHEMA_MISMATCH`.
 
 Every write goes through `workspace_files`. It takes the workspace lock, checks
-each path with the `workspace_paths` guard, refuses a name Windows cannot
-hold (`422 PATH_NOT_PORTABLE`, so a slug such as `con` or `lpt1` is refused),
-and restores both files if the write fails. It replaces `gold.jsonl` before `gold.yaml`, so the header's
-`content_hash` and `item_count` always describe a file already on disk. A
-process killed between the two leaves the previous header beside the new
-items, and every read reports that, as below. The header goes through `dump_yaml`, which keeps a person's
-comments and key order. Both files are UTF-8 with LF line ends. Items keep the
-order they were added in, so an append is lines added at the end. Within an
-item the fields keep a fixed order and free-form objects (`input`, `expected`)
-have sorted keys. The same content renders to the same bytes on any machine.
+each path with the `workspace_paths` guard, refuses a name Windows cannot hold
+(`422 PATH_NOT_PORTABLE`, so a slug such as `con` or `lpt1` is refused), and
+restores both files if the write fails. It replaces `gold.jsonl` before
+`gold.yaml`, so the header's `content_hash` and `item_count` always describe a
+file already on disk. A process killed between the two leaves the previous
+header beside the new items, and every read reports that, as below. The header
+goes through `dump_yaml`, which keeps a person's comments and key order. Both
+files are UTF-8 with LF line ends.
+
+Items keep the order they were added in. Promote and append write new lines
+after the file's bytes and leave every earlier line as it is, hand formatting
+included. Only dedupe, which removes items, renders the whole file again.
+Within an item the fields keep a fixed order and free-form objects (`input`,
+`expected`) have sorted keys. U+0085, U+2028 and U+2029 are escaped inside
+strings, so every editor sees one item per line. The same content renders to
+the same bytes on any machine.
 
 ## Item shape
 

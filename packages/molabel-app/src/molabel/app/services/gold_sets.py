@@ -152,7 +152,7 @@ def read_gold_set(folder: WorkspaceFolder, slug: str) -> StoredGoldSet:
     except GoldFileError as exc:
         raise _invalid(entry, f"{ITEMS_FILENAME} {exc}", line=exc.line) from exc
     return StoredGoldSet(
-        gold=GoldSet(header=header, items=items, file_hash=file_hash(data)),
+        gold=GoldSet(header=header, items=items, data=data),
         definition_path=entry.definition_path,
     )
 
@@ -161,7 +161,7 @@ def _write(files: WorkspaceFiles, stored: StoredGoldSet, gold: GoldSet) -> str:
     return files.write_gold_set(
         gold.header.gold_set_id,
         header=gold.header.model_dump(mode="json"),
-        items=render_items(gold.items),
+        items=gold.data,
         definition_path=stored.definition_path,
     )
 
@@ -226,7 +226,7 @@ def create_gold_set(
         path = files.write_gold_set(
             slug,
             header=gold.header.model_dump(mode="json"),
-            items=render_items(()),
+            items=gold.data,
             definition_path=None,
         )
     return path, gold
@@ -509,14 +509,10 @@ def promote_to_gold(
 
         merged = merge(gold.items, candidates)
         contributing = {item.provenance.queue_id for item in merged.added}
-        revised = (
-            gold.revised(
-                merged.items,
-                now=promoted_at,
-                sources=[sources[q] for q in sources if q in contributing],
-            )
-            if merged.added
-            else None
+        revised = gold.appended(
+            merged.added,
+            now=promoted_at,
+            sources=[sources[q] for q in sources if q in contributing],
         )
         if revised is not None:
             _write(files, stored, revised)

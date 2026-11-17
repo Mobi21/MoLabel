@@ -423,6 +423,32 @@ async def test_one_reviewers_labels_need_the_opt_in_and_say_so(client, app, tmp_
 
 
 @pytest.mark.asyncio
+async def test_a_promotion_adds_lines_and_leaves_earlier_bytes_as_they_are(
+    client, app, tmp_path
+):
+    _, tokens, queue_id, _ = await _reviewed_and_adjudicated(client, app, tmp_path)
+    await _create(client, tokens[0])
+    r3 = _external_ids(app)["r3"]
+    await _promote(client, tokens[0], {"queue_id": queue_id, "record_ids": [r3]})
+    path = _items_path(tmp_path)
+    (line,) = path.read_text("utf-8").splitlines()
+    compacted = json.dumps(json.loads(line), separators=(",", ":")).encode()
+    path.write_bytes(compacted)
+
+    report = await _promote(client, tokens[0], {"queue_id": queue_id})
+
+    assert report["counts"]["added"] == 5
+    data = path.read_bytes()
+    assert data.startswith(compacted + b"\n")
+    assert len(data.splitlines()) == 6
+    assert data.endswith(b"}\n")
+    header = _header(tmp_path)
+    assert (header["version"], header["item_count"]) == (3, 6)
+    assert header["content_hash"] == _sha256(path)
+    assert report["gold_set"]["content_hash_matches"] is True
+
+
+@pytest.mark.asyncio
 async def test_promoting_named_records_promotes_only_those(client, app, tmp_path):
     _, tokens, queue_id, _ = await _reviewed_and_adjudicated(client, app, tmp_path)
     await _create(client, tokens[0])

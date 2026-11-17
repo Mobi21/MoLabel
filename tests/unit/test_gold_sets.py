@@ -222,7 +222,7 @@ class TestVersions:
         gold = GoldSet.new(slug="g", name="G", task_schema=SCHEMA, now=NOW)
         source = GoldSetSource(queue_id="q1", workflow_execution_id="e1")
 
-        revised = gold.revised([item("a", "bug")], now="later", sources=[source])
+        revised = gold.appended([item("a", "bug")], now="later", sources=[source])
 
         assert revised is not None
         assert revised.header.version == 2
@@ -236,16 +236,35 @@ class TestVersions:
 
     def test_a_write_that_leaves_the_file_as_it_is_changes_nothing(self):
         gold = GoldSet.new(slug="g", name="G", task_schema=SCHEMA, now=NOW)
-        once = gold.revised([item("a", "bug")], now=NOW)
+        once = gold.appended([item("a", "bug")], now=NOW)
         assert once is not None
         assert once.revised(list(once.items), now="later") is None
+        assert once.appended([], now="later") is None
 
     def test_a_source_is_listed_once(self):
         gold = GoldSet.new(slug="g", name="G", task_schema=SCHEMA, now=NOW)
         source = GoldSetSource(queue_id="q1")
-        v2 = gold.revised([item("a", "bug")], now=NOW, sources=[source])
-        v3 = v2.revised([item("a", "bug"), item("b", "bug")], now=NOW, sources=[source])
+        v2 = gold.appended([item("a", "bug")], now=NOW, sources=[source])
+        v3 = v2.appended([item("b", "bug")], now=NOW, sources=[source])
         assert [s.queue_id for s in v3.header.sources] == ["q1"]
+
+    def test_an_append_keeps_every_earlier_byte_and_adds_lines_at_the_end(self):
+        first = item("a", "bug")
+        compacted = json.dumps(json.loads(first.line()), separators=(",", ":"))
+        held = GoldSet(
+            header=GoldSet.new(slug="g", name="G", task_schema=SCHEMA, now=NOW).header,
+            items=(first,),
+            data=compacted.encode(),
+        )
+
+        v2 = held.appended([item("b", "refund", record="r2")], now=NOW)
+
+        assert v2.data == (
+            compacted.encode() + b"\n" + render_items([item("b", "refund", "r2")])
+        )
+        assert v2.header.content_hash == file_hash(v2.data)
+        assert v2.header.previous_hash == file_hash(compacted.encode())
+        assert v2.header.item_count == 2
 
 
 class TestDedupe:
