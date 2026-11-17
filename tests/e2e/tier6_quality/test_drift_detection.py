@@ -102,7 +102,7 @@ async def test_chi_squared_drift_detection(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-drift-detection-test",
+                "path": client.workspace_dir("ws-drift-detection-test"),
                 "workspace_name": "Drift Detection Test",
             },
         )

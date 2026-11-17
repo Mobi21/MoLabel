@@ -1,14 +1,17 @@
-"""Automatic database migration runner (DB-003, DB-004, DB-006).
+"""Bring a MoLabel database to the latest Alembic revision (DB-003, DB-004).
 
-Detects the current schema version, optionally backs up the database,
-and applies any pending Alembic migrations.  Intended to be called on
-FastAPI startup so users never see an out-of-date schema.
+Alembic is the only thing that creates or alters tables. A database created
+by ``SQLModel.metadata.create_all`` before Alembic owned the schema has tables
+but no ``alembic_version``; it is stamped at the baseline revision, whose DDL
+is frozen at exactly that schema, and then upgraded like any other. It is
+stamped only if it has every table and column of that baseline.
 """
 
 from __future__ import annotations
 
 import logging
-import shutil
+import sqlite3
+from contextlib import AbstractContextManager, closing, nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,147 +19,134 @@ from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import engine_from_config, event, pool
+from filelock import FileLock
+from sqlalchemy import Connection, Engine, create_engine, inspect
 
 logger = logging.getLogger(__name__)
 
-# The migrations directory lives alongside this module inside molabel-core.
 _MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
-
-def _set_sqlite_wal(engine) -> None:
-    """Attach WAL and FK pragma listeners to a SQLAlchemy engine."""
-
-    @event.listens_for(engine, "connect")
-    def _set_pragma(dbapi_connection, _connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+#: The revision whose DDL equals the pre-Alembic ``create_all`` schema.
+BASELINE_REVISION = "001"
 
 
-def _make_alembic_config(db_url: str) -> AlembicConfig:
-    """Build a programmatic Alembic Config (no alembic.ini needed)."""
+class IncompleteBaselineError(RuntimeError):
+    """A database without ``alembic_version`` lacks part of the baseline schema."""
+
+
+def _alembic_config(engine: Engine) -> AlembicConfig:
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
-    cfg.set_main_option("sqlalchemy.url", db_url)
+    cfg.set_main_option(
+        "sqlalchemy.url", engine.url.render_as_string(hide_password=False)
+    )
     return cfg
 
 
-def _db_url_from_path(db_path: Path) -> str:
-    return f"sqlite:///{db_path}"
+def _sqlite_path(engine: Engine) -> Path | None:
+    database = engine.url.database
+    if engine.url.get_backend_name() != "sqlite" or not database:
+        return None
+    if database == ":memory:" or database.startswith("file:"):
+        return None
+    return Path(database)
 
 
-# ------------------------------------------------------------------
-# DB-006: Schema version query
-# ------------------------------------------------------------------
+def _migration_lock(engine: Engine) -> AbstractContextManager[object]:
+    """An OS-level lock beside a SQLite database file, held by one process at a time."""
+    db_path = _sqlite_path(engine)
+    if db_path is None:
+        return nullcontext()
+    return FileLock(db_path.with_name(f"{db_path.name}.migrate.lock"))
 
 
-def get_schema_version(db_path: Path) -> str | None:
-    """Read the current Alembic schema version from a database.
-
-    Returns ``None`` if no ``alembic_version`` table exists (i.e. the
-    database has never been migrated).
-    """
-    url = _db_url_from_path(db_path)
-    engine = engine_from_config(
-        {"sqlalchemy.url": url}, prefix="sqlalchemy.", poolclass=pool.NullPool
-    )
-    _set_sqlite_wal(engine)
-    try:
-        with engine.connect() as conn:
-            ctx = MigrationContext.configure(conn)
-            heads = ctx.get_current_heads()
-            return heads[0] if heads else None
-    finally:
-        engine.dispose()
-
-
-# ------------------------------------------------------------------
-# DB-004: Pre-migration backup
-# ------------------------------------------------------------------
-
-
-def _backup_database(db_path: Path) -> Path:
-    """Copy the SQLite file to a timestamped backup and return the path."""
+def _backup(db_path: Path) -> Path:
+    """Copy the database through SQLite, so rows still in the WAL are included."""
     ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup_path = db_path.with_suffix(f".backup.{ts}.sqlite")
-    shutil.copy2(db_path, backup_path)
+    with (
+        closing(sqlite3.connect(db_path)) as source,
+        closing(sqlite3.connect(backup_path)) as target,
+    ):
+        source.backup(target)
     logger.info("Database backed up to %s", backup_path)
     return backup_path
 
 
-def _has_pending_migrations(db_path: Path) -> bool:
-    """Return True when there are Alembic revisions newer than the DB."""
-    url = _db_url_from_path(db_path)
-    cfg = _make_alembic_config(url)
-    script = ScriptDirectory.from_config(cfg)
+def _columns(conn: Connection) -> dict[str, set[str]]:
+    found = inspect(conn)
+    return {
+        table: {column["name"] for column in found.get_columns(table)}
+        for table in found.get_table_names()
+        if table != "alembic_version"
+    }
 
-    engine = engine_from_config(
-        {"sqlalchemy.url": url}, prefix="sqlalchemy.", poolclass=pool.NullPool
-    )
-    _set_sqlite_wal(engine)
+
+def _baseline_columns() -> dict[str, set[str]]:
+    """The tables and columns that the baseline revision creates."""
+    scratch = create_engine("sqlite://")
     try:
-        with engine.connect() as conn:
-            ctx = MigrationContext.configure(conn)
-            current_heads = set(ctx.get_current_heads())
-            script_heads = set(script.get_heads())
-            return current_heads != script_heads
+        with scratch.begin() as conn:
+            cfg = _alembic_config(scratch)
+            cfg.attributes["connection"] = conn
+            alembic_command.upgrade(cfg, BASELINE_REVISION)
+            return _columns(conn)
     finally:
-        engine.dispose()
+        scratch.dispose()
 
 
-# ------------------------------------------------------------------
-# DB-003 / DB-005: Run pending migrations (supports multi-skip)
-# ------------------------------------------------------------------
-
-
-def run_migrations(db_path: Path) -> None:
-    """Detect current schema version and apply all pending migrations.
-
-    1. Check for pending migrations.
-    2. If any exist, back up the database file (DB-004).
-    3. Run ``alembic upgrade head`` programmatically (DB-005 — Alembic
-       handles multi-skip natively via its revision chain).
-    4. Log progress for every step.
-
-    Parameters
-    ----------
-    db_path:
-        Absolute path to the workspace SQLite database file.
-    """
-    if not db_path.exists():
-        logger.info(
-            "Database %s does not exist yet; migrations will create it.", db_path
+def _require_baseline(conn: Connection) -> None:
+    present = _columns(conn)
+    baseline = _baseline_columns()
+    missing_tables = sorted(baseline.keys() - present.keys())
+    missing_columns = sorted(
+        f"{table}.{column}"
+        for table, columns in baseline.items()
+        if table in present
+        for column in columns - present[table]
+    )
+    if missing_tables or missing_columns:
+        raise IncompleteBaselineError(
+            f"{conn.engine.url.render_as_string(hide_password=True)} has tables "
+            f"but no alembic_version, and lacks part of the baseline schema "
+            f"(revision {BASELINE_REVISION}), so it cannot be stamped. "
+            f"Missing tables: {', '.join(missing_tables) or 'none'}. "
+            f"Missing columns: {', '.join(missing_columns) or 'none'}. "
+            "The database was not changed."
         )
 
-    url = _db_url_from_path(db_path)
 
-    # Check whether anything needs to be done.
-    if db_path.exists() and not _has_pending_migrations(db_path):
-        logger.info("Database schema is up-to-date — no migrations to run.")
-        return
+def upgrade_database(engine: Engine) -> None:
+    """Run ``alembic upgrade head`` on *engine*, stamping pre-Alembic databases.
 
-    # DB-004: back up before touching an existing database.
-    if db_path.exists():
-        _backup_database(db_path)
+    Processes sharing a SQLite file migrate one at a time; each re-reads the
+    revision once it holds the lock. Raises :class:`IncompleteBaselineError`,
+    and changes nothing, when a database without ``alembic_version`` is
+    missing tables or columns of the baseline revision.
+    """
+    cfg = _alembic_config(engine)
+    head = ScriptDirectory.from_config(cfg).get_current_head()
 
-    logger.info("Running database migrations for %s …", db_path)
+    with _migration_lock(engine):
+        with engine.connect() as conn:
+            current = MigrationContext.configure(conn).get_current_heads()
+            if current == (head,):
+                return
+            tables = set(inspect(conn).get_table_names())
+            pre_alembic = bool(tables) and "alembic_version" not in tables
+            if pre_alembic:
+                _require_baseline(conn)
 
-    cfg = _make_alembic_config(url)
+        db_path = _sqlite_path(engine)
+        if tables and db_path is not None:
+            _backup(db_path)
 
-    # Provide the connection to env.py via config.attributes so that we
-    # share a single engine with WAL pragma.
-    engine = engine_from_config(
-        {"sqlalchemy.url": url}, prefix="sqlalchemy.", poolclass=pool.NullPool
-    )
-    _set_sqlite_wal(engine)
-    try:
-        with engine.connect() as connection:
-            cfg.attributes["connection"] = connection
+        with engine.begin() as conn:
+            cfg.attributes["connection"] = conn
+            if pre_alembic:
+                logger.info(
+                    "Stamping pre-Alembic database at baseline %s", BASELINE_REVISION
+                )
+                alembic_command.stamp(cfg, BASELINE_REVISION)
             alembic_command.upgrade(cfg, "head")
-    finally:
-        engine.dispose()
-
-    new_version = get_schema_version(db_path)
-    logger.info("Migrations complete — schema is now at revision %s.", new_version)
+    logger.info("Database schema is at revision %s", head)

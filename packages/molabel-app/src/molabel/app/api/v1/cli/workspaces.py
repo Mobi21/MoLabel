@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from molabel.app.api.v1.prompts import index_prompt
+from molabel.app.api.v1.task_schemas import index_task_schema
+from molabel.app.api.v1.workflows import index_workflow
+from molabel.app.server_state import (
+    LegacyDatabase,
+    launch_folder_database,
+    legacy_databases,
+)
 from molabel.app.services.session import (
     AVATAR_COLORS,
     COOKIE_HTTPONLY,
@@ -20,9 +30,25 @@ from molabel.app.services.session import (
     create_session_token,
 )
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import (
+    MANIFEST_FILENAME,
+    PROMPT,
+    TASK_SCHEMA,
+    WORKFLOW,
+    WorkspaceFolder,
+    read_config,
+    workspace_lock,
+)
+from molabel.app.workspace_paths import (
+    WorkspacePathError,
+    new_workspace_root,
+    resolve_in_workspace,
+)
 from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
+from molabel.core.manifest import load_manifest
 
 router = APIRouter(prefix="", tags=["cli"])
+logger = logging.getLogger(__name__)
 
 _APP_VERSION = "0.1.0"
 _CORE_VERSION = "0.1.0"
@@ -45,6 +71,7 @@ class CLIStatusResponse(BaseModel):
     manifest_path: str | None = None
     detection_mode: str | None = None
     workspace_count: int = 0
+    legacy_databases: list[LegacyDatabase] = Field(default_factory=list)
     checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -78,54 +105,56 @@ class WorkspaceBootstrapResponse(BaseModel):
     missing_requirements: list[str] = Field(default_factory=list)
     session_created: bool = False
     reviewer_id: str | None = None
-
-
-def _resolve_path(path: str) -> Path:
-    return Path(path).expanduser().resolve()
+    legacy_databases: list[LegacyDatabase] = Field(default_factory=list)
 
 
 def _detect_workspace(path: Path) -> object:
     return WorkspaceBootstrapper().detect_project(path)
 
 
-def _upsert_workspace(
-    request: Request,
-    *,
-    workspace_id: uuid.UUID,
-    workspace_name: str,
-    root_path: str,
-    manifest_path: str,
-) -> None:
-    engine = get_engine(request)
-    now = datetime.now(UTC).isoformat()
-    slug = workspace_name.lower().replace(" ", "-")
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO workspaces "
-                "(id, workspace_name, workspace_slug, core_version, root_path, "
-                "manifest_path, created_at, updated_at) "
-                "VALUES (:id, :name, :slug, :version, :root_path, :manifest, "
-                ":now, :now) "
-                "ON CONFLICT(id) DO UPDATE SET "
-                "workspace_name = excluded.workspace_name, "
-                "workspace_slug = excluded.workspace_slug, "
-                "core_version = excluded.core_version, "
-                "root_path = excluded.root_path, "
-                "manifest_path = excluded.manifest_path, "
-                "updated_at = excluded.updated_at"
-            ),
-            {
-                "id": str(workspace_id),
-                "name": workspace_name,
-                "slug": slug,
-                "version": _CORE_VERSION,
-                "root_path": root_path,
-                "manifest": manifest_path,
-                "now": now,
-            },
+def _reindex_config_files(engine, folder: WorkspaceFolder) -> list[ManifestConflict]:
+    """Rewrite the index rows of every listed config file from the file.
+
+    Missing files are already reported by manifest conflict detection; a file
+    that cannot be read as its kind is reported here and its row left alone.
+    """
+    manifest = load_manifest(resolve_in_workspace(folder.path, MANIFEST_FILENAME))
+    listed = [
+        (kind, entry, index)
+        for kind, entries, index in (
+            (TASK_SCHEMA, manifest.task_schemas, index_task_schema),
+            (PROMPT, manifest.prompts, index_prompt),
+            (WORKFLOW, manifest.workflows, index_workflow),
         )
-        conn.commit()
+        for entry in entries
+    ]
+    problems: list[ManifestConflict] = []
+    with engine.begin() as conn:
+        for kind, entry, index in listed:
+            slug = getattr(entry, kind.id_field)
+            path = entry.definition_path
+            if not path:
+                continue
+            try:
+                if not resolve_in_workspace(folder.path, path).is_file():
+                    continue
+                index(
+                    conn,
+                    workspace_id=folder.workspace_id,
+                    slug=slug,
+                    document=read_config(folder, path),
+                    file_path=path,
+                )
+            except (ValueError, yaml.YAMLError, WorkspacePathError) as exc:
+                problems.append(
+                    ManifestConflict(
+                        conflict_type="schema_mismatch",
+                        entity_type=kind.id_field.removesuffix("_id"),
+                        entity_id=slug,
+                        message=f"{path} was not indexed: {exc}",
+                    )
+                )
+    return problems
 
 
 @router.get("/status", response_model=CLIStatusResponse)
@@ -140,14 +169,18 @@ async def status(
             text("SELECT count(*) FROM workspaces")
         ).first()
     workspace_count = int(workspace_count_row[0]) if workspace_count_row else 0
+    legacy = legacy_databases(engine, [launch_folder_database()])
 
     if path is None:
-        return CLIStatusResponse(workspace_count=workspace_count)
+        return CLIStatusResponse(
+            workspace_count=workspace_count, legacy_databases=legacy
+        )
 
-    workspace_path = _resolve_path(path)
+    workspace_path = new_workspace_root(path)
     if not workspace_path.exists():
         return CLIStatusResponse(
             workspace_count=workspace_count,
+            legacy_databases=legacy,
             workspace_detected=False,
             workspace_root=str(workspace_path),
         )
@@ -155,6 +188,7 @@ async def status(
     detection = _detect_workspace(workspace_path)
     return CLIStatusResponse(
         workspace_count=workspace_count,
+        legacy_databases=legacy,
         workspace_detected=bool(detection.is_project),
         workspace_name=detection.suggested_name,
         workspace_root=str(workspace_path),
@@ -168,7 +202,7 @@ async def detect_workspace(
     body: WorkspaceDetectRequest,
 ) -> WorkspaceDetectResponse:
     """Detect whether a path contains a MoLabel workspace."""
-    workspace_path = _resolve_path(body.path)
+    workspace_path = new_workspace_root(body.path)
     if not workspace_path.exists():
         raise HTTPException(status_code=404, detail="Workspace path not found")
 
@@ -193,22 +227,33 @@ async def bootstrap_workspace(
     body: WorkspaceBootstrapRequest,
 ) -> WorkspaceBootstrapResponse:
     """Bootstrap a workspace from a local path."""
-    workspace_path = _resolve_path(body.path)
+    workspace_path = new_workspace_root(body.path)
     workspace_path.mkdir(parents=True, exist_ok=True)
-
-    result = WorkspaceBootstrapper().bootstrap(
-        workspace_path,
-        workspace_name=body.workspace_name,
-    )
-    _upsert_workspace(
-        request,
-        workspace_id=result.workspace_id,
-        workspace_name=result.workspace_name,
-        root_path=result.root_path,
-        manifest_path=result.manifest_path,
-    )
+    # Refuse a manifest that links out of the folder before bootstrap reads it.
+    resolve_in_workspace(workspace_path, MANIFEST_FILENAME)
 
     engine = get_engine(request)
+    legacy = legacy_databases(
+        engine,
+        [
+            launch_folder_database(),
+            resolve_in_workspace(workspace_path, "workbench/molabel.db"),
+        ],
+    )
+    for notice in legacy:
+        logger.warning("LEGACY DATABASE NOT LOADED: %s", notice.message)
+    with workspace_lock(workspace_path):
+        result = WorkspaceBootstrapper().bootstrap(
+            workspace_path,
+            engine=engine,
+            workspace_name=body.workspace_name,
+        )
+        index_problems = _reindex_config_files(
+            engine,
+            WorkspaceFolder(
+                str(result.workspace_id), result.workspace_name, Path(result.root_path)
+            ),
+        )
     reviewer_id: uuid.UUID | None = None
     with engine.connect() as conn:
         row = conn.execute(
@@ -268,8 +313,10 @@ async def bootstrap_workspace(
                 message=conflict["message"],
             )
             for conflict in result.conflicts
-        ],
+        ]
+        + index_problems,
         missing_requirements=list(result.missing_requirements),
         session_created=reviewer_id is not None,
         reviewer_id=str(reviewer_id) if reviewer_id is not None else None,
+        legacy_databases=legacy,
     )

@@ -1,4 +1,4 @@
-"""Database engine, table creation, and session helpers (DM-001, DM-002).
+"""Database engine and session helpers (DM-001, DM-002).
 
 Provides a thin wrapper around SQLModel / SQLAlchemy for the MoLabel
 operational SQLite database.  The engine is configured with WAL mode for
@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from sqlalchemy import event
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, create_engine
 
 
 def get_engine(db_path: str | Path, *, echo: bool = False):
@@ -37,19 +37,6 @@ def get_engine(db_path: str | Path, *, echo: bool = False):
         cursor.close()
 
     return engine
-
-
-def create_all_tables(engine) -> None:
-    """Create every table registered with SQLModel metadata.
-
-    All model modules must be imported before calling this function so
-    that their tables are registered.  The ``molabel.core.models``
-    package import achieves this.
-    """
-    # Ensure all model classes are loaded into SQLModel.metadata.
-    import molabel.core.models  # noqa: F401
-
-    SQLModel.metadata.create_all(engine)
 
 
 @contextmanager

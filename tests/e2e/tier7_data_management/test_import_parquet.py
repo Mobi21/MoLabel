@@ -30,7 +30,7 @@ async def test_import_parquet(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-parquet-import-test",
+                "path": client.workspace_dir("ws-parquet-import-test"),
                 "workspace_name": "Parquet Import Test",
             },
         )

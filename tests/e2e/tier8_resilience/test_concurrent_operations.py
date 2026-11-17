@@ -29,7 +29,7 @@ async def test_concurrent_operations(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-concurrent-ops-test",
+                "path": client.workspace_dir("ws-concurrent-ops-test"),
                 "workspace_name": "Concurrent Ops Test",
             },
         )

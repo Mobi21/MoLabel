@@ -49,7 +49,7 @@ class TestAppSecret:
         """Secret is generated and persisted when none exists."""
         secret = get_or_create_app_secret(tmp_path)
         assert len(secret) > 0
-        secret_path = tmp_path / ".molabel" / "app_secret"
+        secret_path = tmp_path / "app_secret"
         assert secret_path.is_file()
         assert secret_path.read_text().strip() == secret
 
@@ -60,10 +60,10 @@ class TestAppSecret:
         assert secret1 == secret2
 
     def test_creates_directory_structure(self, tmp_path: Path) -> None:
-        """The .molabel directory is created if it does not exist."""
-        workbench = tmp_path / "deep" / "nested"
-        get_or_create_app_secret(workbench)
-        assert (workbench / ".molabel" / "app_secret").is_file()
+        """The secret directory is created if it does not exist."""
+        secret_dir = tmp_path / "deep" / "nested"
+        get_or_create_app_secret(secret_dir)
+        assert (secret_dir / "app_secret").is_file()
 
     def test_secret_is_sufficiently_long(self, tmp_path: Path) -> None:
         """The generated secret has enough entropy (128 hex chars = 64 bytes)."""

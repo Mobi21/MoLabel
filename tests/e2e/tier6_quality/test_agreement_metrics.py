@@ -238,7 +238,7 @@ async def test_krippendorffs_alpha_ordinal_and_missing(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-agreement-metrics-test",
+                "path": client.workspace_dir("ws-agreement-metrics-test"),
                 "workspace_name": "Agreement Metrics Test",
             },
         )

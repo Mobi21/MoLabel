@@ -10,7 +10,8 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import create_engine, select
 
 from molabel.core.agents.agent_run_orchestrator import AgentRunOrchestrator
-from molabel.core.database import create_all_tables, get_session
+from molabel.core.database import get_session
+from molabel.core.migration_runner import upgrade_database
 from molabel.core.models.agent_event import AgentEvent
 from molabel.core.models.agent_run import AgentRun
 from molabel.core.models.dataset import Dataset
@@ -36,7 +37,7 @@ def db_engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    create_all_tables(engine)
+    upgrade_database(engine)
     return engine
 
 

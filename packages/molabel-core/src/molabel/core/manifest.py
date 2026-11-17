@@ -7,6 +7,7 @@ between the on-disk manifest and workspace state.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -44,6 +45,20 @@ class TaskSchemaManifestEntry(BaseModel):
     definition_path: str | None = None
 
 
+class PromptManifestEntry(BaseModel):
+    """A prompt template file within the workspace manifest."""
+
+    prompt_id: str
+    definition_path: str | None = None
+
+
+class WorkflowManifestEntry(BaseModel):
+    """A workflow definition file within the workspace manifest."""
+
+    workflow_id: str
+    definition_path: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # WorkspaceManifest
 # ---------------------------------------------------------------------------
@@ -58,6 +73,8 @@ class WorkspaceManifest(BaseModel):
     enabled_plugins: list[str] = PydanticField(default_factory=list)
     datasets: list[DatasetManifestEntry] = PydanticField(default_factory=list)
     task_schemas: list[TaskSchemaManifestEntry] = PydanticField(default_factory=list)
+    prompts: list[PromptManifestEntry] = PydanticField(default_factory=list)
+    workflows: list[WorkflowManifestEntry] = PydanticField(default_factory=list)
     export_targets: list[dict[str, Any]] = PydanticField(default_factory=list)
     validation_gates: list[dict[str, Any]] = PydanticField(default_factory=list)
 
@@ -86,18 +103,23 @@ def load_manifest(path: Path) -> WorkspaceManifest:
     return WorkspaceManifest.model_validate(data)
 
 
-def save_manifest(manifest: WorkspaceManifest, path: Path) -> None:
-    """Write a *WorkspaceManifest* to *path* as YAML.
+def dump_manifest(manifest: WorkspaceManifest) -> str:
+    """Render a *WorkspaceManifest* as YAML.
 
     Uses ``default_flow_style=False`` and ``sort_keys=False`` so the
     output matches the human-authored fixture style.
     """
-    data = manifest.model_dump(mode="json")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        yaml.dump(data, default_flow_style=False, sort_keys=False),
-        encoding="utf-8",
+    return yaml.dump(
+        manifest.model_dump(mode="json"), default_flow_style=False, sort_keys=False
     )
+
+
+def save_manifest(manifest: WorkspaceManifest, path: Path) -> None:
+    """Write a *WorkspaceManifest* to *path* as YAML."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temp.write_text(dump_manifest(manifest), encoding="utf-8")
+    os.replace(temp, path)
 
 
 # ---------------------------------------------------------------------------
@@ -158,21 +180,27 @@ def detect_conflicts(
                     )
                 )
 
-    # 2. Task schema definition file existence
-    for ts in manifest.task_schemas:
-        if ts.definition_path:
-            full = workspace_path / ts.definition_path
-            if not full.exists():
-                conflicts.append(
-                    ManifestConflict(
-                        conflict_type=ConflictType.file_deleted,
-                        entity_type="task_schema",
-                        entity_id=ts.task_schema_id,
-                        message=(
-                            f"Definition path does not exist: {ts.definition_path}"
-                        ),
-                    )
+    # 2. Config definition file existence
+    definitions = [
+        ("task_schema", ts.task_schema_id, ts.definition_path)
+        for ts in manifest.task_schemas
+    ]
+    definitions += [
+        ("prompt", pr.prompt_id, pr.definition_path) for pr in manifest.prompts
+    ]
+    definitions += [
+        ("workflow", w.workflow_id, w.definition_path) for w in manifest.workflows
+    ]
+    for entity_type, entity_id, definition_path in definitions:
+        if definition_path and not (workspace_path / definition_path).exists():
+            conflicts.append(
+                ManifestConflict(
+                    conflict_type=ConflictType.file_deleted,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    message=f"Definition path does not exist: {definition_path}",
                 )
+            )
 
     # 3. Plugin availability (canonical plugin ID / capability checks)
     available_plugins: set[str] = set()

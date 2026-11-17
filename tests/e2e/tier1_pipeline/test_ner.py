@@ -62,7 +62,7 @@ async def test_full_pipeline_ner(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ner-test",
+                "path": client.workspace_dir("ner-test"),
                 "workspace_name": "NER Test WS",
             },
         )

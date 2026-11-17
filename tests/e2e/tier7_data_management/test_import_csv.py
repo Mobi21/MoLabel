@@ -31,7 +31,7 @@ async def test_import_csv(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-csv-import-test",
+                "path": client.workspace_dir("ws-csv-import-test"),
                 "workspace_name": "CSV Import Test",
             },
         )

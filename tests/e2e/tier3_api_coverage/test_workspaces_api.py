@@ -53,7 +53,10 @@ async def test_workspace_full_crud_and_reindex(
     with checkpoint(ctx, "create_workspace"):
         resp = await client.post(
             f"{BASE}/workspaces",
-            json={"path": "/tmp/ws-t3-01", "workspace_name": "T3 Workspace"},
+            json={
+                "path": client.workspace_dir("ws-t3-01"),
+                "workspace_name": "T3 Workspace",
+            },
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()
@@ -134,7 +137,10 @@ async def test_workspace_401_without_session(
     with checkpoint(ctx, "create_without_auth_returns_201"):
         resp = await client.post(
             f"{BASE}/workspaces",
-            json={"path": "/tmp/ws-no-auth", "workspace_name": "No Auth WS"},
+            json={
+                "path": client.workspace_dir("ws-no-auth"),
+                "workspace_name": "No Auth WS",
+            },
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()

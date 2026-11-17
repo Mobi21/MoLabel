@@ -75,7 +75,10 @@ async def test_unicode(client, ctx):
     with checkpoint(ctx, "setup"):
         ws = await client.post(
             "/api/v1/workspaces",
-            json={"path": "/tmp/ws-unicode-test", "workspace_name": "Unicode Test"},
+            json={
+                "path": client.workspace_dir("ws-unicode-test"),
+                "workspace_name": "Unicode Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

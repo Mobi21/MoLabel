@@ -31,7 +31,7 @@ async def test_dataset_operations(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-dataset-operations-test",
+                "path": client.workspace_dir("ws-dataset-operations-test"),
                 "workspace_name": "Dataset Operations Test",
             },
         )

@@ -8,8 +8,8 @@ It is designed for a different operating model than a typical annotation tool:
 - the public interface for agents is the `molabel` CLI,
 - the backend API stays behind that CLI for normal project work,
 - the GUI is the manual control room for inspection, review, and adjudication,
-- and canonical project state lives on disk instead of being trapped in a
-  hosted service.
+- and config (task schemas, prompts, workflows) is files in the workspace
+  folder, while review in progress is kept in a local SQLite database. <!-- DRAFT: needs Mobi approval -->
 
 If you want a human-governed system where external agents can do real data
 operations work without bypassing review, auditability, or file ownership,

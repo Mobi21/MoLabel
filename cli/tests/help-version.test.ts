@@ -32,6 +32,24 @@ describe('help and version', () => {
     expect(result.stdout.trim()).toBe(packageJson.version)
   })
 
+  it('lists --version in top-level help', async () => {
+    const result = await runCliCapture(['--help'])
+
+    expect(result.stdout).toContain('-V, --version')
+  })
+
+  it.each([
+    [['release', 'certify', '--version', '1.0.0']],
+    [['release', 'list', '--version']],
+    [['workflow', 'run', 'demo', '-V']],
+  ])('rejects --version under a subcommand: %j', async (args) => {
+    const result = await runCliCapture(args)
+
+    expect(result.exitCode).toBe(1)
+    expect(readErrorCode(result)).toBe('USAGE_ERROR')
+    expect(result.stdout).not.toContain('0.1.0')
+  })
+
   it('reports a missing subcommand as a usage error envelope', async () => {
     const result = await runCliCapture(['workflow'])
 

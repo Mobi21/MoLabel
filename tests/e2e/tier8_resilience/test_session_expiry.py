@@ -44,7 +44,7 @@ async def test_session_expiry(client, ctx):
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-session-test-workspace",
+                "path": client.workspace_dir("ws-session-test-workspace"),
                 "workspace_name": "Session Test Workspace",
             },
         )

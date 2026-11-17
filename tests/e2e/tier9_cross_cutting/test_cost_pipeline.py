@@ -34,7 +34,10 @@ async def _setup(client: InstrumentedClient) -> str:
 
     ws = await client.post(
         f"{BASE}/workspaces",
-        json={"path": "/tmp/ws-cost-pipeline", "workspace_name": "Cost Pipeline WS"},
+        json={
+            "path": client.workspace_dir("ws-cost-pipeline"),
+            "workspace_name": "Cost Pipeline WS",
+        },
     )
     assert ws.status_code == 201
     return ws.json()["workspace_id"]

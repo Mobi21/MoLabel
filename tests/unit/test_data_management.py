@@ -23,7 +23,8 @@ import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import create_engine
 
-from molabel.core.database import create_all_tables, get_session
+from molabel.core.database import get_session
+from molabel.core.migration_runner import upgrade_database
 from molabel.core.types import ReviewEventSource, TrustLevel
 
 # ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ def db_engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    create_all_tables(engine)
+    upgrade_database(engine)
     return engine
 
 
@@ -184,7 +185,7 @@ class TestProjectDetection:
 class TestWorkspaceBootstrap:
     """DT-001, DT-016: Workspace bootstrap operations."""
 
-    def test_bootstrap_from_manifest(self, tmp_path):
+    def test_bootstrap_from_manifest(self, tmp_path, db_engine):
         from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 
         ws_id = str(uuid.uuid4())
@@ -201,37 +202,37 @@ class TestWorkspaceBootstrap:
         (tmp_path / "train.csv").write_text("a,b\n1,2\n")
 
         bootstrapper = WorkspaceBootstrapper()
-        result = bootstrapper.bootstrap(tmp_path)
+        result = bootstrapper.bootstrap(tmp_path, engine=db_engine)
 
         assert result.mode == "manifest"
         assert result.workspace_name == "My Project"
         assert result.datasets_discovered == 1
         assert result.workspace_id == uuid.UUID(ws_id)
 
-    def test_bootstrap_heuristic(self, tmp_path):
+    def test_bootstrap_heuristic(self, tmp_path, db_engine):
         from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 
         (tmp_path / "data.csv").write_text("x,y\n1,2\n")
         (tmp_path / "data.jsonl").write_text('{"a": 1}\n')
 
         bootstrapper = WorkspaceBootstrapper()
-        result = bootstrapper.bootstrap(tmp_path)
+        result = bootstrapper.bootstrap(tmp_path, engine=db_engine)
 
         assert result.mode == "heuristic"
         assert result.files_discovered >= 2
         # Should have created a manifest.
         assert (tmp_path / "workbench.project.yaml").exists()
 
-    def test_bootstrap_empty(self, tmp_path):
+    def test_bootstrap_empty(self, tmp_path, db_engine):
         from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 
         bootstrapper = WorkspaceBootstrapper()
-        result = bootstrapper.bootstrap(tmp_path)
+        result = bootstrapper.bootstrap(tmp_path, engine=db_engine)
 
         assert result.mode == "empty"
         assert (tmp_path / "workbench.project.yaml").exists()
 
-    def test_bootstrap_missing_requirements(self, tmp_path):
+    def test_bootstrap_missing_requirements(self, tmp_path, db_engine):
         from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 
         ws_id = str(uuid.uuid4())
@@ -247,11 +248,11 @@ class TestWorkspaceBootstrap:
         )
 
         bootstrapper = WorkspaceBootstrapper()
-        result = bootstrapper.bootstrap(tmp_path)
+        result = bootstrapper.bootstrap(tmp_path, engine=db_engine)
         # May or may not have pyarrow installed, but the check runs.
         assert isinstance(result.missing_requirements, list)
 
-    def test_bootstrap_conflict_detection(self, tmp_path):
+    def test_bootstrap_conflict_detection(self, tmp_path, db_engine):
         from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 
         ws_id = str(uuid.uuid4())
@@ -267,7 +268,7 @@ class TestWorkspaceBootstrap:
         )
 
         bootstrapper = WorkspaceBootstrapper()
-        result = bootstrapper.bootstrap(tmp_path)
+        result = bootstrapper.bootstrap(tmp_path, engine=db_engine)
 
         assert len(result.conflicts) >= 1
         assert result.conflicts[0]["type"] == "file_deleted"
@@ -1538,7 +1539,7 @@ class TestDerivedSubsets:
 class TestConcurrentBootstrap:
     """Concurrent bootstrap: second bootstrap should detect existing workspace."""
 
-    def test_second_bootstrap_detects_existing(self, tmp_path):
+    def test_second_bootstrap_detects_existing(self, tmp_path, db_engine):
         from molabel.core.data.workspace_bootstrap import WorkspaceBootstrapper
 
         (tmp_path / "data.csv").write_text("a,b\n1,2\n")
@@ -1546,12 +1547,12 @@ class TestConcurrentBootstrap:
         bootstrapper = WorkspaceBootstrapper()
 
         # First bootstrap.
-        result1 = bootstrapper.bootstrap(tmp_path)
+        result1 = bootstrapper.bootstrap(tmp_path, engine=db_engine)
         assert result1.mode in ("heuristic", "manifest")
         assert (tmp_path / "workbench.project.yaml").exists()
 
         # Second bootstrap should detect the manifest.
-        result2 = bootstrapper.bootstrap(tmp_path)
+        result2 = bootstrapper.bootstrap(tmp_path, engine=db_engine)
         assert result2.mode == "manifest"
 
 

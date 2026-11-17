@@ -40,7 +40,7 @@ async def test_all_eight_agent_roles(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-agent-roles-test",
+                "path": client.workspace_dir("ws-agent-roles-test"),
                 "workspace_name": "Agent Roles Test",
             },
         )

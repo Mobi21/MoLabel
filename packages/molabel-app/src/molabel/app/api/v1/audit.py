@@ -47,32 +47,6 @@ class AuditEvent(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _ensure_audit_table(engine) -> None:
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS audit_events ("
-                "id TEXT PRIMARY KEY, "
-                "workspace_id TEXT, "
-                "event_type TEXT, "
-                "actor TEXT, "
-                "actor_name TEXT, "
-                "object_type TEXT, "
-                "object_id TEXT, "
-                "summary TEXT, "
-                "details TEXT, "
-                "created_at TEXT)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_audit_events_workspace_id "
-                "ON audit_events(workspace_id)"
-            )
-        )
-        conn.commit()
-
-
 def _parse_datetime(value: Any) -> datetime:
     if isinstance(value, datetime):
         return value
@@ -131,7 +105,6 @@ async def list_audit_events(
     event type, actor, object type/id, and time range.
     """
     engine = get_engine(request)
-    _ensure_audit_table(engine)
     query = (
         "SELECT id, workspace_id, event_type, actor, actor_name, object_type, "
         "object_id, summary, details, created_at "
@@ -178,7 +151,6 @@ async def get_audit_event(
     Returns 404 if the audit event does not exist.
     """
     engine = get_engine(request)
-    _ensure_audit_table(engine)
     with engine.connect() as conn:
         row = conn.execute(
             text(

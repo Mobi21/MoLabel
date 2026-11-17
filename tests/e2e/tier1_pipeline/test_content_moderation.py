@@ -51,7 +51,7 @@ async def test_full_pipeline_content_moderation(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/content-mod-test",
+                "path": client.workspace_dir("content-mod-test"),
                 "workspace_name": "Content Moderation WS",
             },
         )

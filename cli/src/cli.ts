@@ -5,6 +5,8 @@ import { registerCommands } from './commands/index.js'
 import { CliFailure } from './errors.js'
 import type { CliRuntimeOptions } from './types.js'
 
+const VERSION = '0.1.0'
+
 export interface ProgramRunResult {
   exitCode: number
 }
@@ -13,7 +15,6 @@ export function createProgram(runtime: CliRuntimeOptions = {}): Command {
   const program = new Command()
   program.name('molabel')
   program.description('MoLabel agent CLI')
-  program.version('0.1.0')
   program.exitOverride()
 
   program
@@ -23,6 +24,7 @@ export function createProgram(runtime: CliRuntimeOptions = {}): Command {
     .option('--session <token>', 'session token override')
     .option('--json', 'force JSON output')
     .option('--raw', 'emit raw output where supported')
+    .option('-V, --version', 'output the version number')
 
   registerCommands(program, runtime)
 
@@ -40,6 +42,11 @@ export async function runCli(
   const program = createProgram(runtime)
   const previousExitCode = process.exitCode
   try {
+    if (requestsVersion(program, argv.slice(2))) {
+      process.stdout.write(`${VERSION}
+`)
+      return { exitCode: 0 }
+    }
     await program.parseAsync(argv)
     const exitCode = typeof process.exitCode === 'number' ? process.exitCode : 0
     return { exitCode }
@@ -53,6 +60,23 @@ export async function runCli(
   } finally {
     process.exitCode = previousExitCode
   }
+}
+
+// Commander recognises root options after subcommands too, so its built-in
+// version option would print the version for `release certify --version 1.0`.
+function requestsVersion(program: Command, args: string[]): boolean {
+  const { operands, unknown } = program.parseOptions(args)
+  if (program.opts<{ version?: boolean }>().version !== true) {
+    return false
+  }
+  if (operands.length === 0 && unknown.length === 0) {
+    return true
+  }
+  throw new CommanderError(
+    1,
+    'molabel.version',
+    "--version is only accepted on its own, as 'molabel --version'",
+  )
 }
 
 interface ErrorBody {

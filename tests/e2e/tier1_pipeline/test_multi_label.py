@@ -51,7 +51,7 @@ async def test_full_pipeline_multi_label(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/multi-label-test",
+                "path": client.workspace_dir("multi-label-test"),
                 "workspace_name": "Multi-Label Topic WS",
             },
         )

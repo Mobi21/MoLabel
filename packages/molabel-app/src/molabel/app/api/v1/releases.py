@@ -20,6 +20,12 @@ from molabel.app.api.v1.exports import ExportSummary
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import workspace_lock
+from molabel.app.workspace_paths import (
+    glob_in_workspace,
+    registered_root,
+    resolve_in_workspace,
+)
 
 router = APIRouter(prefix="/releases", tags=["releases"])
 
@@ -109,63 +115,6 @@ class ReleaseApproval(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _ensure_release_tables(engine) -> None:
-    """Create release/audit tables when lightweight test DBs omit migrations."""
-
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS releases ("
-                "id TEXT PRIMARY KEY, "
-                "release_slug TEXT, "
-                "version TEXT, "
-                "name TEXT, "
-                "description TEXT, "
-                "status TEXT, "
-                "export_bundle_ids TEXT NOT NULL, "
-                "validation_run_ids TEXT, "
-                "dataset_snapshot_id TEXT, "
-                "quality_summary TEXT, "
-                "signed_off_by TEXT, "
-                "signed_off_at TEXT, "
-                "release_metadata TEXT, "
-                "manifest_path TEXT, "
-                "workspace_id TEXT, "
-                "created_at TEXT, "
-                "released_at TEXT, "
-                "revoked_at TEXT)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_releases_workspace_id "
-                "ON releases(workspace_id)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS audit_events ("
-                "id TEXT PRIMARY KEY, "
-                "workspace_id TEXT, "
-                "event_type TEXT, "
-                "actor TEXT, "
-                "actor_name TEXT, "
-                "object_type TEXT, "
-                "object_id TEXT, "
-                "summary TEXT, "
-                "details TEXT, "
-                "created_at TEXT)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_audit_events_workspace_id "
-                "ON audit_events(workspace_id)"
-            )
-        )
-        conn.commit()
-
-
 def _json_loads(value: Any, default: Any) -> Any:
     if value is None:
         return default
@@ -218,20 +167,17 @@ def _metric_value(summary: dict[str, Any], metric_id: str) -> float | None:
 
 
 def _benchmark_summary_candidates(root: Path) -> list[tuple[str, Path, dict[str, Any]]]:
-    runs_root = root / "workbench" / "benchmarks" / "runs"
-    if not runs_root.exists():
-        return []
-
+    runs_root = resolve_in_workspace(root, "workbench/benchmarks/runs")
     candidates: list[tuple[str, Path, dict[str, Any]]] = []
-    for summary_path in sorted(runs_root.glob("**/summary.json")):
+    for match in glob_in_workspace(root, runs_root, "**/summary.json"):
         try:
-            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary = json.loads(match.resolved.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
         if not isinstance(summary, dict):
             continue
-        run_id = str(summary.get("run_id") or summary_path.parent.name)
-        candidates.append((run_id, summary_path, summary))
+        run_id = str(summary.get("run_id") or match.path.parent.name)
+        candidates.append((run_id, match.path, summary))
     return candidates
 
 
@@ -426,13 +372,7 @@ def _release_detail_to_summary(detail: ReleaseDetail) -> ReleaseSummary:
 
 def _workspace_root(engine, workspace_id: str) -> Path | None:
     with engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT root_path FROM workspaces WHERE id = :id"),
-            {"id": workspace_id},
-        ).first()
-    if row is None or not row[0]:
-        return None
-    return Path(str(row[0]))
+        return registered_root(conn, workspace_id)
 
 
 def _write_proof_manifest(
@@ -470,13 +410,15 @@ def _write_proof_manifest(
     if root is None:
         return proof_manifest, None
 
-    release_dir = root / "workbench" / "releases" / _slugify(data.version)
-    release_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = release_dir / "proof-manifest.json"
-    manifest_path.write_text(
-        json.dumps(proof_manifest, indent=2, sort_keys=True),
-        encoding="utf-8",
+    manifest_path = resolve_in_workspace(
+        root, f"workbench/releases/{_slugify(data.version)}/proof-manifest.json"
     )
+    with workspace_lock(root):
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps(proof_manifest, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
     return proof_manifest, str(manifest_path)
 
 
@@ -530,7 +472,6 @@ async def list_releases(
     Returns a paginated list of releases, optionally filtered by status.
     """
     engine = get_engine(request)
-    _ensure_release_tables(engine)
     query = (
         "SELECT id, release_slug, version, name, description, status, "
         "export_bundle_ids, validation_run_ids, dataset_snapshot_id, "
@@ -563,7 +504,6 @@ async def create_release(
     Validation gates are evaluated if specified.
     """
     engine = get_engine(request)
-    _ensure_release_tables(engine)
     release_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     validation_report = _validation_report(
@@ -636,7 +576,6 @@ async def create_release(
 
 
 def _get_release_detail(engine, release_id: str) -> ReleaseDetail:
-    _ensure_release_tables(engine)
     with engine.connect() as conn:
         row = conn.execute(
             text(

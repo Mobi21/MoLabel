@@ -32,7 +32,7 @@ async def test_export_jsonl(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-jsonl-export-test",
+                "path": client.workspace_dir("ws-jsonl-export-test"),
                 "workspace_name": "JSONL Export Test",
             },
         )

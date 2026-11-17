@@ -23,7 +23,7 @@ from sqlalchemy import create_engine, text
 import molabel.core.workflow.engine as workflow_engine
 from molabel.app.main import create_app
 from molabel.app.services.session import get_or_create_app_secret
-from molabel.core.database import create_all_tables
+from molabel.core.migration_runner import upgrade_database
 from molabel.core.providers.anthropic_adapter import AnthropicAdapter
 from molabel.core.providers.model_defaults import MINIMAX_M27_HIGHSPEED
 from molabel.core.quality.grounded_benchmarks import (
@@ -231,7 +231,7 @@ class GroundedBackendServer:
             f"sqlite:///{self.db_path}",
             connect_args={"check_same_thread": False},
         )
-        create_all_tables(engine)
+        upgrade_database(engine)
         app.state.engine = engine
         app.state.app_secret = get_or_create_app_secret(self.workbench_root)
 

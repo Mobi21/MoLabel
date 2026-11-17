@@ -26,7 +26,10 @@ async def test_snapshot_lifecycle(client, ctx):
     with checkpoint(ctx, "setup"):
         ws = await client.post(
             "/api/v1/workspaces",
-            json={"path": "/tmp/ws-snapshot-test", "workspace_name": "Snapshot Test"},
+            json={
+                "path": client.workspace_dir("ws-snapshot-test"),
+                "workspace_name": "Snapshot Test",
+            },
         )
         assert ws.status_code == 201
         ws_id = ws.json()["workspace_id"]

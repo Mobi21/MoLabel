@@ -96,7 +96,10 @@ async def test_overlap_records_multiple_reviewers(
         # Also verify API-level overlap flag in queue claim response
         ws_resp = await client.post(
             "/api/v1/workspaces",
-            json={"path": "/tmp/ws-overlap-ws", "workspace_name": "overlap-ws"},
+            json={
+                "path": client.workspace_dir("ws-overlap-ws"),
+                "workspace_name": "overlap-ws",
+            },
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]

@@ -24,8 +24,17 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from molabel.app.api.v1 import router as v1_router
 from molabel.app.schemas import ErrorDetail, ErrorResponse, HealthResponse
+from molabel.app.server_state import (
+    launch_folder_database,
+    legacy_databases,
+    server_db_url,
+)
 from molabel.app.services.session import get_or_create_app_secret
-from molabel.core.database import create_all_tables
+from molabel.app.workspace_paths import (
+    WorkspacePathError,
+    workspace_path_error_handler,
+)
+from molabel.core.migration_runner import upgrade_database
 
 # ---------------------------------------------------------------------------
 # Network binding configuration (SE-012)
@@ -53,13 +62,12 @@ logger = logging.getLogger(__name__)
 
 
 def _create_engine_from_env():
-    """Create a SQLAlchemy engine from the MOLABEL_DB_URL environment variable.
+    """Create the server's SQLAlchemy engine (see ``server_db_url``).
 
-    Defaults to a file-based SQLite database at ``molabel.db``.
     In-memory databases (used in tests) get a StaticPool so the same
     connection is reused across requests within a single process.
     """
-    db_url = os.environ.get("MOLABEL_DB_URL", "sqlite:///molabel.db")
+    db_url = server_db_url()
     # Normalise async driver URLs to their sync equivalents — the app uses
     # synchronous SQLAlchemy throughout.
     db_url = db_url.replace("sqlite+aiosqlite", "sqlite")
@@ -93,7 +101,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     SE-007: Claim expiry background task.
     """
     engine = _create_engine_from_env()
-    create_all_tables(engine)
+    upgrade_database(engine)
+    for legacy in legacy_databases(engine, [launch_folder_database()]):
+        logger.warning("LEGACY DATABASE NOT LOADED: %s", legacy.message)
     app.state.engine = engine
     app.state.app_secret = get_or_create_app_secret()
 
@@ -137,6 +147,8 @@ def create_app() -> FastAPI:
     app.include_router(v1_router)
 
     # ----- exception handlers -----
+
+    app.add_exception_handler(WorkspacePathError, workspace_path_error_handler)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(

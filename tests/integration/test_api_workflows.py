@@ -17,7 +17,8 @@ from sqlalchemy import text
 from molabel.app.api.v1.workflows import _LlmAgentRunner
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
-from molabel.core.database import create_all_tables, get_engine
+from molabel.core.database import get_engine
+from molabel.core.migration_runner import upgrade_database
 from molabel.core.providers.base import ProviderError
 
 TEST_SECRET = "workflow-test-secret"
@@ -28,7 +29,7 @@ def app(tmp_path):
     """Create a fresh FastAPI application with an in-memory database."""
     application = create_app()
     engine = get_engine(tmp_path / "workflows.db")
-    create_all_tables(engine)
+    upgrade_database(engine)
     application.state.engine = engine
     application.state.app_secret = TEST_SECRET
     application.state.test_workspace_root = tmp_path

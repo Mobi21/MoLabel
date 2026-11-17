@@ -43,7 +43,7 @@ async def test_claim_expiry_returns_to_pool(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-claim-expiry-ws",
+                "path": client.workspace_dir("ws-claim-expiry-ws"),
                 "workspace_name": "claim-expiry-ws",
             },
         )

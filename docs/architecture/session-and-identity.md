@@ -73,7 +73,7 @@ The server assigns the `id` and `avatar_color`. The client cannot specify these.
 ### Session Cookie
 
 - Cookie name: `molabel_session`
-- Value: a signed token containing the reviewer `id` and `issued_at`. Signed with an application secret (auto-generated on first app launch, stored in `workbench/.molabel/app_secret`). The signature prevents cookie tampering (a reviewer cannot change their `id` by editing the cookie value).
+- Value: a signed token containing the reviewer `id` and `issued_at`. Signed with an application secret (auto-generated on first app launch, stored as `app_secret` in the server data directory, next to the server database; see `docs/guides/how-molabel-works-today.md` section 4.2). The signature prevents cookie tampering (a reviewer cannot change their `id` by editing the cookie value).
 - Flags: `HttpOnly` (not accessible to JavaScript), `SameSite=Strict` (not sent on cross-site requests), `Path=/`.
 - `Secure` flag: NOT set (the app runs over plain HTTP on localhost). If HTTPS is configured, the flag should be set.
 - Expiry: none (session cookie — persists until browser closes or user switches profiles). This is intentional: reviewers working on a local network should not be interrupted by session timeouts.

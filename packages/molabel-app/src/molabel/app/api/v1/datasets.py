@@ -9,8 +9,8 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from contextlib import nullcontext
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -20,6 +20,12 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import (
+    workspace_files,
+    workspace_folder,
+)
+from molabel.app.workspace_paths import registered_root, resolve_in_workspace
+from molabel.core.manifest import DatasetManifestEntry
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -455,13 +461,22 @@ async def create_dataset(
     body: DatasetCreate,
     _reviewer: CurrentReviewer,
 ) -> DatasetDetail:
-    """Create a new dataset (API-009)."""
+    """Create a new dataset (API-009) and list it in the workspace manifest."""
     engine = get_engine(request)
+    folder = workspace_folder(engine, body.workspace_id)
     dataset_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     slug = body.dataset_name.lower().replace(" ", "-")
-
-    with engine.connect() as conn:
+    with workspace_files(folder) as files, engine.connect() as conn:
+        files.list_dataset(
+            DatasetManifestEntry(
+                dataset_id=slug,
+                loader_plugin=body.loader_plugin,
+                record_kind=body.record_kind,
+                canonical_id_strategy=body.canonical_id_strategy,
+                indexing_mode=body.indexing_mode,
+            ),
+        )
         conn.execute(
             text(
                 "INSERT INTO datasets "
@@ -487,6 +502,7 @@ async def create_dataset(
         )
         conn.commit()
 
+    with engine.connect() as conn:
         row = conn.execute(
             text(
                 "SELECT id, dataset_name, dataset_slug, workspace_id, "
@@ -526,10 +542,14 @@ async def import_dataset(
     records_imported = 0
     records_skipped = 0
     deferred_import = False
+    imported_file: str | None = None
 
     with engine.connect() as conn:
         row = conn.execute(
-            text("SELECT id, workspace_id, record_kind FROM datasets WHERE id = :id"),
+            text(
+                "SELECT id, workspace_id, record_kind, dataset_slug "
+                "FROM datasets WHERE id = :id"
+            ),
             {"id": str(dataset_id)},
         ).first()
         if row is None:
@@ -556,27 +576,19 @@ async def import_dataset(
             import_rows = []
             deferred_import = True
         else:
-            # Resolve source URI to a file path
-            workspace_row = conn.execute(
-                text("SELECT root_path FROM workspaces WHERE id = :wid"),
-                {"wid": workspace_id},
-            ).first()
-            workspace_root = (
-                Path(str(workspace_row[0])).expanduser().resolve()
-                if workspace_row and workspace_row[0]
-                else Path.cwd()
-            )
-            source_path = (workspace_root / source_uri).resolve()
-            if not source_path.is_relative_to(workspace_root):
+            workspace_root = registered_root(conn, workspace_id)
+            if workspace_root is None:
                 raise HTTPException(
                     status_code=400,
-                    detail="Source path escapes workspace root",
+                    detail="Dataset workspace has no root folder to import from",
                 )
+            source_path = resolve_in_workspace(workspace_root, source_uri)
             if not source_path.is_file():
                 raise HTTPException(
                     status_code=400,
                     detail=f"Source file not found: {source_uri}",
                 )
+            imported_file = source_path.relative_to(workspace_root).as_posix()
             for line in source_path.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
@@ -591,6 +603,13 @@ async def import_dataset(
                     )
                     records_skipped += 1
 
+    # Take the workspace lock before the first database write, as every route does.
+    manifest_change = (
+        nullcontext()
+        if imported_file is None
+        else workspace_files(workspace_folder(engine, workspace_id))
+    )
+    with manifest_change as files, engine.connect() as conn:
         # Check existing records to avoid duplicates
         existing_rows = conn.execute(
             text("SELECT id, external_id FROM records WHERE dataset_id = :dataset_id"),
@@ -681,6 +700,8 @@ async def import_dataset(
                 "dataset_id": str(dataset_id),
             },
         )
+        if files is not None:
+            files.add_dataset_source(str(row[3]), imported_file)
         conn.commit()
 
     return ImportStatus(

@@ -18,6 +18,7 @@ from sqlalchemy import text
 from molabel.app.middleware.session import CurrentReviewer
 from molabel.app.schemas import PaginatedResponse, QueryParams
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import PROMPT, workspace_files, workspace_folder
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
@@ -137,58 +138,112 @@ async def get_prompt(
     raise HTTPException(status_code=404, detail="Prompt not found")
 
 
+_PROMPT_INSERT_SQL = text(
+    """
+    INSERT INTO prompt_templates (
+        id, prompt_slug, version, name, description,
+        system_instructions, task_rubric, few_shot_examples,
+        instruction_patches, output_schema,
+        parent_version_id, refinement_source_batch_id,
+        is_frozen, file_path, created_at, workspace_id
+    ) VALUES (
+        :id, :prompt_slug, :version, :name, :description,
+        :system_instructions, :task_rubric,
+        :few_shot_examples, NULL, NULL,
+        NULL, NULL, 0, :file_path, :created_at,
+        :workspace_id
+    )
+    """
+)
+
+
+def _prompt_slug(name: str) -> str:
+    return name.lower().replace(" ", "-")[:64]
+
+
+def _prompt_params(body: PromptCreate, *, slug: str, file_path: str) -> dict[str, Any]:
+    return {
+        "prompt_slug": slug,
+        "version": "v1",
+        "name": body.name,
+        "description": None,
+        "system_instructions": body.system_instructions,
+        "task_rubric": body.task_rubric,
+        "few_shot_examples": json.dumps(
+            [ex.model_dump() for ex in body.few_shot_examples]
+        )
+        if body.few_shot_examples
+        else None,
+        "file_path": file_path,
+        "workspace_id": body.workspace_id,
+    }
+
+
+def index_prompt(
+    conn: Any, *, workspace_id: str, slug: str, document: dict[str, Any], file_path: str
+) -> None:
+    """Rewrite the index row for a prompt file from the file's contents."""
+    body = PromptCreate(**{**document, "workspace_id": workspace_id})
+    params = _prompt_params(body, slug=slug, file_path=file_path)
+    existing = conn.execute(
+        text(
+            "SELECT id FROM prompt_templates "
+            "WHERE workspace_id = :workspace_id AND prompt_slug = :prompt_slug"
+        ),
+        params,
+    ).first()
+    if existing is None:
+        conn.execute(
+            _PROMPT_INSERT_SQL,
+            {
+                **params,
+                "id": str(uuid.uuid4()),
+                "created_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        return
+    conn.execute(
+        text(
+            "UPDATE prompt_templates SET name = :name, "
+            "system_instructions = :system_instructions, task_rubric = :task_rubric, "
+            "few_shot_examples = :few_shot_examples, file_path = :file_path "
+            "WHERE id = :id"
+        ),
+        {**params, "id": str(existing[0])},
+    )
+
+
 @router.post("", response_model=PromptDetail, status_code=201)
 async def create_prompt(
     request: Request,
     body: PromptCreate,
     reviewer: CurrentReviewer,
 ) -> PromptDetail:
-    """Create a new prompt template (API-055)."""
+    """Create a new prompt template (API-055) and write its file."""
     engine = get_engine(request)
+    folder = workspace_folder(engine, body.workspace_id)
     now = datetime.now(UTC)
-    now_iso = now.isoformat()
     prompt_id = str(uuid.uuid4())
-    prompt_slug = body.name.lower().replace(" ", "-")[:64]
+    prompt_slug = _prompt_slug(body.name)
     content_hash = hashlib.sha256(
         (body.system_instructions + (body.task_rubric or "")).encode("utf-8")
     ).hexdigest()[:12]
-    file_path = f"prompts/{prompt_slug}.yaml"
-
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                INSERT INTO prompt_templates (
-                    id, prompt_slug, version, name, description,
-                    system_instructions, task_rubric, few_shot_examples,
-                    instruction_patches, output_schema,
-                    parent_version_id, refinement_source_batch_id,
-                    is_frozen, file_path, created_at, workspace_id
-                ) VALUES (
-                    :id, :prompt_slug, :version, :name, :description,
-                    :system_instructions, :task_rubric,
-                    :few_shot_examples, NULL, NULL,
-                    NULL, NULL, 0, :file_path, :created_at,
-                    :workspace_id
-                )
-                """
+    with workspace_files(folder) as files, engine.connect() as conn:
+        file_path = files.write_config(
+            PROMPT,
+            slug=prompt_slug,
+            document=body.model_dump(
+                mode="json", exclude={"workspace_id"}, exclude_none=True
             ),
+            file_path=None,
+            overwrite=False,
+        )
+        conn.execute(
+            _PROMPT_INSERT_SQL,
             {
+                **_prompt_params(body, slug=prompt_slug, file_path=file_path),
                 "id": prompt_id,
-                "prompt_slug": prompt_slug,
-                "version": "v1",
-                "name": body.name,
-                "description": None,
-                "system_instructions": body.system_instructions,
-                "task_rubric": body.task_rubric,
-                "few_shot_examples": json.dumps(
-                    [ex.model_dump() for ex in body.few_shot_examples]
-                )
-                if body.few_shot_examples
-                else None,
-                "file_path": file_path,
-                "created_at": now_iso,
-                "workspace_id": body.workspace_id,
+                "created_at": now.isoformat(),
             },
         )
         conn.commit()

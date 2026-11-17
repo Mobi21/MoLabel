@@ -36,7 +36,10 @@ async def test_full_pipeline_text_classification(
     with checkpoint(ctx, "workspace_setup"):
         ws_resp = await client.post(
             "/api/v1/workspaces",
-            json={"path": "/tmp/sentiment-test", "workspace_name": "Sentiment Test WS"},
+            json={
+                "path": client.workspace_dir("sentiment-test"),
+                "workspace_name": "Sentiment Test WS",
+            },
         )
         assert ws_resp.status_code == 201, ws_resp.text
         ws_data = ws_resp.json()

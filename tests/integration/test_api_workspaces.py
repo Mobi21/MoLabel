@@ -10,7 +10,8 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from molabel.app.main import create_app
-from molabel.core.database import create_all_tables, get_engine
+from molabel.core.database import get_engine
+from molabel.core.migration_runner import upgrade_database
 
 
 @pytest.fixture()
@@ -18,7 +19,7 @@ def app():
     """Create a fresh FastAPI application with an in-memory database."""
     application = create_app()
     engine = get_engine(":memory:")
-    create_all_tables(engine)
+    upgrade_database(engine)
     application.state.engine = engine
     application.state.app_secret = "test-secret-for-workspace-tests"
     return application

@@ -15,6 +15,7 @@ from sqlmodel import create_engine
 
 from molabel.app.main import create_app
 from molabel.app.services.session import create_session_token
+from molabel.core.migration_runner import upgrade_database
 
 _SECRET = "quality-test-secret"
 
@@ -26,31 +27,13 @@ _SECRET = "quality-test-secret"
 
 @pytest.fixture()
 def _db():
-    """In-memory SQLite engine with workspace + reviewer tables."""
+    """In-memory SQLite engine migrated to the current schema."""
     eng = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    with eng.connect() as conn:
-        conn.execute(
-            text(
-                "CREATE TABLE workspaces ("
-                "id TEXT PRIMARY KEY, workspace_name TEXT, workspace_slug TEXT UNIQUE, "
-                "core_version TEXT, root_path TEXT, manifest_path TEXT, "
-                "created_at TEXT, updated_at TEXT)"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE TABLE reviewer_profiles ("
-                "id TEXT PRIMARY KEY, display_name TEXT, avatar_color TEXT, "
-                "is_operator INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1, "
-                "preferences TEXT, created_at TEXT, last_active_at TEXT, "
-                "workspace_id TEXT REFERENCES workspaces(id))"
-            )
-        )
-        conn.commit()
+    upgrade_database(eng)
     return eng
 
 
@@ -63,8 +46,9 @@ def _seed(_db):
     with _db.connect() as conn:
         conn.execute(
             text(
-                "INSERT INTO workspaces VALUES "
-                "(:id,'Test','test','0.1.0','/tmp','/tmp/m.yaml',:now,:now)"
+                "INSERT INTO workspaces (id, workspace_name, workspace_slug, "
+                "core_version, root_path, manifest_path, created_at, updated_at) "
+                "VALUES (:id,'Test','test','0.1.0','/tmp','/tmp/m.yaml',:now,:now)"
             ),
             {"id": ws_id, "now": now},
         )

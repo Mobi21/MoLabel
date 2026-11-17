@@ -38,7 +38,10 @@ async def test_draft_saving_last_write_wins(
     with checkpoint(ctx, "workspace_and_data_setup"):
         ws_resp = await client.post(
             "/api/v1/workspaces",
-            json={"path": "/tmp/ws-draft-test-ws", "workspace_name": "draft-test-ws"},
+            json={
+                "path": client.workspace_dir("ws-draft-test-ws"),
+                "workspace_name": "draft-test-ws",
+            },
         )
         assert ws_resp.status_code == 201
         ws_id = ws_resp.json()["workspace_id"]

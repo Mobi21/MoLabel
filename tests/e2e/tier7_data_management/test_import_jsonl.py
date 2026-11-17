@@ -31,7 +31,7 @@ async def test_import_jsonl(client, ctx):
         ws = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-jsonl-import-test",
+                "path": client.workspace_dir("ws-jsonl-import-test"),
                 "workspace_name": "JSONL Import Test",
             },
         )

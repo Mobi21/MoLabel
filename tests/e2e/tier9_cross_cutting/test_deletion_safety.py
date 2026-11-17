@@ -34,7 +34,7 @@ async def _setup(client: InstrumentedClient) -> dict:
     ws = await client.post(
         f"{BASE}/workspaces",
         json={
-            "path": "/tmp/ws-deletion-safety",
+            "path": client.workspace_dir("ws-deletion-safety"),
             "workspace_name": "Deletion Safety WS",
         },
     )

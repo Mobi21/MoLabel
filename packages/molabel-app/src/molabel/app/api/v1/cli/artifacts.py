@@ -16,6 +16,13 @@ from sqlalchemy import text
 
 from molabel.app.api.v1.cli.deps import CurrentCliReviewer
 from molabel.app.utils import get_engine
+from molabel.app.workspace_config import workspace_lock
+from molabel.app.workspace_paths import (
+    WorkspaceRoot,
+    glob_in_workspace,
+    request_workspace,
+    resolve_in_workspace,
+)
 from molabel.core.export.atomic_writer import AtomicWriter
 
 router = APIRouter(prefix="", tags=["cli"])
@@ -156,10 +163,12 @@ class ArtifactProposalDecisionRequest(BaseModel):
     notes: str | None = None
 
 
-def _workspace_root_from_request(workspace_root: str | None) -> Path:
-    if workspace_root is not None:
-        return Path(workspace_root).expanduser().resolve()
-    return Path.cwd().resolve()
+def _request_workspace(
+    request: Request, *, workspace_root: str | None, workspace_id: str | None
+) -> WorkspaceRoot:
+    return request_workspace(
+        get_engine(request), workspace_root=workspace_root, workspace_id=workspace_id
+    )
 
 
 def _selector_looks_like_path(selector: str) -> bool:
@@ -208,30 +217,20 @@ def _proposal_id() -> str:
     return str(uuid.uuid4())
 
 
-def _ensure_within_root(root: Path, candidate: Path) -> Path:
-    resolved = candidate.resolve()
-    if not resolved.is_relative_to(root):
-        raise HTTPException(status_code=400, detail="Resolved path escapes workspace")
-    return resolved
-
-
-def _proposal_root(workspace_root: str | None) -> Path:
-    root = _workspace_root_from_request(workspace_root)
-    proposal_root = root / "workbench" / "proposals" / "artifacts"
-    proposal_root.mkdir(parents=True, exist_ok=True)
-    return proposal_root
-
-
-def _proposal_path(workspace_root: str | None, proposal_id: str) -> Path:
+def _proposal_path(root: Path, proposal_id: str) -> Path:
     try:
         uuid.UUID(proposal_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid proposal id") from exc
-    return _proposal_root(workspace_root) / f"{proposal_id}.json"
+    path = resolve_in_workspace(
+        root, f"workbench/proposals/artifacts/{proposal_id}.json"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
-def _load_proposal(workspace_root: str | None, proposal_id: str) -> dict[str, Any]:
-    path = _proposal_path(workspace_root, proposal_id)
+def _load_proposal(root: Path, proposal_id: str) -> dict[str, Any]:
+    path = _proposal_path(root, proposal_id)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Artifact proposal not found")
     try:
@@ -306,19 +305,15 @@ def _audit_events_for_object(
 
 def _release_links_for_proposal(
     *,
-    workspace_root: str | None,
+    root: Path,
     proposal_id: str,
     resolved_path: str | None,
 ) -> list[dict[str, Any]]:
-    root = _workspace_root_from_request(workspace_root)
-    releases_root = root / "workbench" / "releases"
-    if not releases_root.exists():
-        return []
-
+    releases_root = resolve_in_workspace(root, "workbench/releases")
     links: list[dict[str, Any]] = []
-    for manifest_path in releases_root.glob("**/proof-manifest.json"):
+    for match in glob_in_workspace(root, releases_root, "**/proof-manifest.json"):
         try:
-            manifest_text = manifest_path.read_text(encoding="utf-8")
+            manifest_text = match.resolved.read_text(encoding="utf-8")
             manifest = json.loads(manifest_text)
         except (OSError, json.JSONDecodeError):
             continue
@@ -331,7 +326,7 @@ def _release_links_for_proposal(
                 "release_id": manifest.get("release_id"),
                 "version": manifest.get("version"),
                 "status": manifest.get("status"),
-                "manifest_path": str(manifest_path),
+                "manifest_path": str(match.path),
             }
         )
     return links
@@ -341,16 +336,19 @@ def _build_artifact_trace(
     request: Request,
     *,
     payload: dict[str, Any],
-    workspace_root: str | None,
-    workspace_id: str | None,
+    workspace: WorkspaceRoot,
 ) -> dict[str, Any]:
     resolved_path = str(payload.get("resolved_path") or "")
-    current_hash = _hash_file(Path(resolved_path)) if resolved_path else None
+    current_hash = (
+        _hash_file(resolve_in_workspace(workspace.path, resolved_path))
+        if resolved_path
+        else None
+    )
     expected_hash = payload.get("expected_hash") or payload.get("current_hash")
     proposal_id = str(payload["proposal_id"])
     audit_events = _audit_events_for_object(
         request,
-        workspace_id=workspace_id,
+        workspace_id=workspace.workspace_id,
         object_id=proposal_id,
     )
     return {
@@ -384,7 +382,7 @@ def _build_artifact_trace(
         "audit_event_ids": [event["id"] for event in audit_events if event.get("id")],
         "audit_events": audit_events,
         "release_links": _release_links_for_proposal(
-            workspace_root=workspace_root,
+            root=workspace.path,
             proposal_id=proposal_id,
             resolved_path=resolved_path or None,
         ),
@@ -403,21 +401,6 @@ def _record_audit_event(
 ) -> None:
     engine = get_engine(request)
     with engine.connect() as conn:
-        conn.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS audit_events ("
-                "id TEXT PRIMARY KEY, "
-                "workspace_id TEXT, "
-                "event_type TEXT, "
-                "actor TEXT, "
-                "actor_name TEXT, "
-                "object_type TEXT, "
-                "object_id TEXT, "
-                "summary TEXT, "
-                "details TEXT, "
-                "created_at TEXT)"
-            )
-        )
         conn.execute(
             text(
                 "INSERT INTO audit_events ("
@@ -482,7 +465,7 @@ def _resolve_db_artifact(
         manifest = Path(str(row[3] or "workbench.project.yaml"))
         if not manifest.is_absolute():
             manifest = root / manifest
-        path = _ensure_within_root(root, manifest)
+        path = resolve_in_workspace(root, str(manifest))
         return str(row[0]), path, {"workspace_name": str(row[1])}
 
     if kind == "dataset":
@@ -562,10 +545,7 @@ def _resolve_db_artifact(
     file_path = str(row[2]) if row[2] else None
     if file_path is None:
         raise HTTPException(status_code=404, detail="Artifact file path unavailable")
-    path = Path(file_path)
-    if not path.is_absolute():
-        path = root / path
-    path = _ensure_within_root(root, path)
+    path = resolve_in_workspace(root, file_path)
     metadata = {
         "slug": str(row[1]),
         "label": str(row[3]),
@@ -579,31 +559,23 @@ def _resolve_artifact_path(
     *,
     kind: ArtifactKind,
     selector: str,
-    workspace_root: str | None,
-    workspace_id: str | None,
+    workspace: WorkspaceRoot,
 ) -> tuple[Path, dict[str, Any]]:
     if kind == "workspace_manifest":
-        root = _workspace_root_from_request(workspace_root)
-        return root / "workbench.project.yaml", {}
+        return resolve_in_workspace(workspace.path, "workbench.project.yaml"), {}
 
     try:
         _artifact_id, path, metadata = _resolve_db_artifact(
             request,
             kind=kind,
             selector=selector,
-            workspace_id=workspace_id,
+            workspace_id=workspace.workspace_id,
         )
         return path, metadata
     except HTTPException:
-        root = _workspace_root_from_request(workspace_root)
         canonical = _canonical_artifact_relative_path(kind=kind, selector=selector)
-        if canonical is not None:
-            return _ensure_within_root(root, root / canonical), {}
-
-        candidate = Path(selector)
-        if not candidate.is_absolute():
-            candidate = root / candidate
-        return _ensure_within_root(root, candidate), {}
+        relative = canonical.as_posix() if canonical is not None else selector
+        return resolve_in_workspace(workspace.path, relative), {}
 
 
 @router.post("/selectors/resolve", response_model=SelectorResolveResponse)
@@ -635,14 +607,16 @@ async def resolve_selector(
         )
 
     if body.kind == "workspace_manifest":
-        root = _workspace_root_from_request(body.workspace_root)
+        workspace = _request_workspace(
+            request, workspace_root=body.workspace_root, workspace_id=body.workspace_id
+        )
         return SelectorResolveResponse(
             kind=body.kind,
             selector=body.selector,
             resolved=True,
-            resolved_path=str(root / "workbench.project.yaml"),
+            resolved_path=str(workspace.path / "workbench.project.yaml"),
             display_name="workspace manifest",
-            workspace_id=body.workspace_id,
+            workspace_id=workspace.workspace_id,
         )
 
     if body.kind == "dataset":
@@ -701,8 +675,9 @@ async def read_artifact(
         request,
         kind=body.kind,
         selector=body.selector,
-        workspace_root=body.workspace_root,
-        workspace_id=body.workspace_id,
+        workspace=_request_workspace(
+            request, workspace_root=body.workspace_root, workspace_id=body.workspace_id
+        ),
     )
     if not path.exists():
         return ArtifactReadResponse(
@@ -736,8 +711,9 @@ async def diff_artifact(
         request,
         kind=body.kind,
         selector=body.selector,
-        workspace_root=body.workspace_root,
-        workspace_id=body.workspace_id,
+        workspace=_request_workspace(
+            request, workspace_root=body.workspace_root, workspace_id=body.workspace_id
+        ),
     )
     current_content = path.read_text(encoding="utf-8") if path.exists() else ""
     current_hash = _hash_file(path)
@@ -773,12 +749,11 @@ async def create_artifact_proposal(
     reviewer: CurrentCliReviewer,
 ) -> ArtifactProposalResponse:
     """Create a durable artifact diff proposal without applying it."""
+    workspace = _request_workspace(
+        request, workspace_root=body.workspace_root, workspace_id=body.workspace_id
+    )
     path, _metadata = _resolve_artifact_path(
-        request,
-        kind=body.kind,
-        selector=body.selector,
-        workspace_root=body.workspace_root,
-        workspace_id=body.workspace_id,
+        request, kind=body.kind, selector=body.selector, workspace=workspace
     )
     current_content = path.read_text(encoding="utf-8") if path.exists() else ""
     current_hash = _hash_file(path)
@@ -789,7 +764,7 @@ async def create_artifact_proposal(
         and current_hash != body.expected_hash
     )
     proposal_id = _proposal_id()
-    proposal_path = _proposal_path(body.workspace_root, proposal_id)
+    proposal_path = _proposal_path(workspace.path, proposal_id)
     diff = "".join(
         difflib.unified_diff(
             current_content.splitlines(keepends=True),
@@ -826,7 +801,7 @@ async def create_artifact_proposal(
     _record_audit_event(
         request,
         reviewer=reviewer,
-        workspace_id=body.workspace_id,
+        workspace_id=workspace.workspace_id,
         event_type="artifact_proposed",
         object_id=proposal_id,
         summary=f"Proposed artifact change for {body.kind}:{body.selector}",
@@ -853,13 +828,11 @@ async def trace_artifact_proposal(
     workspace_id: str | None = None,
 ) -> ArtifactTraceResponse:
     """Return a chain-of-custody trace for a durable artifact proposal."""
-    payload = _load_proposal(workspace_root, proposal_id)
-    trace = _build_artifact_trace(
-        request,
-        payload=payload,
-        workspace_root=workspace_root,
-        workspace_id=workspace_id,
+    workspace = _request_workspace(
+        request, workspace_root=workspace_root, workspace_id=workspace_id
     )
+    payload = _load_proposal(workspace.path, proposal_id)
+    trace = _build_artifact_trace(request, payload=payload, workspace=workspace)
     safe_payload = dict(payload)
     safe_payload.pop("content", None)
     return ArtifactTraceResponse(
@@ -880,7 +853,10 @@ async def decide_artifact_proposal(
     reviewer: CurrentCliReviewer,
 ) -> ArtifactProposalResponse:
     """Accept or reject a durable artifact diff proposal."""
-    payload = _load_proposal(body.workspace_root, proposal_id)
+    workspace = _request_workspace(
+        request, workspace_root=body.workspace_root, workspace_id=body.workspace_id
+    )
+    payload = _load_proposal(workspace.path, proposal_id)
     if payload.get("status") in {"accepted", "rejected"}:
         raise HTTPException(status_code=409, detail="Artifact proposal is closed")
     if payload.get("status") == "conflicted" and body.decision == "accept":
@@ -893,28 +869,28 @@ async def decide_artifact_proposal(
             request,
             kind=payload["kind"],
             selector=payload["selector"],
-            workspace_root=body.workspace_root,
-            workspace_id=body.workspace_id,
+            workspace=workspace,
         )
-        current_hash = _hash_file(path)
         expected_hash = payload.get("expected_hash") or payload.get("current_hash")
-        if current_hash is not None and expected_hash != current_hash:
-            payload["status"] = "conflicted"
-            payload["has_conflict"] = True
-            payload["decision_notes"] = body.notes
-            payload["decided_by"] = str(reviewer.id)
-            payload["decided_at"] = decided_at.isoformat()
-            _write_proposal(_proposal_path(body.workspace_root, proposal_id), payload)
-            raise HTTPException(
-                status_code=409,
-                detail="Artifact changed since proposal creation",
+        with workspace_lock(workspace.path):
+            current_hash = _hash_file(path)
+            if expected_hash != current_hash:
+                payload["status"] = "conflicted"
+                payload["has_conflict"] = True
+                payload["decision_notes"] = body.notes
+                payload["decided_by"] = str(reviewer.id)
+                payload["decided_at"] = decided_at.isoformat()
+                _write_proposal(_proposal_path(workspace.path, proposal_id), payload)
+                raise HTTPException(
+                    status_code=409,
+                    detail="Artifact changed since proposal creation",
+                )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            result = AtomicWriter().write_atomic(
+                str(payload["content"]).encode("utf-8"),
+                path,
+                skip_conflict_check=True,
             )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        result = AtomicWriter().write_atomic(
-            str(payload["content"]).encode("utf-8"),
-            path,
-            skip_conflict_check=True,
-        )
         if not result.success or result.final_path is None:
             raise HTTPException(
                 status_code=500,
@@ -937,11 +913,11 @@ async def decide_artifact_proposal(
     payload["write_result"] = (
         write_result.model_dump(mode="json") if write_result is not None else None
     )
-    _write_proposal(_proposal_path(body.workspace_root, proposal_id), payload)
+    _write_proposal(_proposal_path(workspace.path, proposal_id), payload)
     _record_audit_event(
         request,
         reviewer=reviewer,
-        workspace_id=body.workspace_id,
+        workspace_id=workspace.workspace_id,
         event_type=(
             "artifact_proposal_accepted"
             if body.decision == "accept"
@@ -968,33 +944,35 @@ async def write_artifact(
     _reviewer: CurrentCliReviewer,
 ) -> ArtifactWriteResponse:
     """Write canonical artifact content after an expected-hash check."""
-    path, _metadata = _resolve_artifact_path(
-        request,
-        kind=body.kind,
-        selector=body.selector,
-        workspace_root=body.workspace_root,
-        workspace_id=body.workspace_id,
+    workspace = _request_workspace(
+        request, workspace_root=body.workspace_root, workspace_id=body.workspace_id
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    current_hash = _hash_file(path)
-    if path.exists():
+    path, _metadata = _resolve_artifact_path(
+        request, kind=body.kind, selector=body.selector, workspace=workspace
+    )
+    with workspace_lock(workspace.path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        current_hash = _hash_file(path)
         if body.expected_hash is None:
-            raise HTTPException(
-                status_code=409,
-                detail="expected_hash is required when overwriting an existing file",
-            )
-        if current_hash != body.expected_hash:
+            if current_hash is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "expected_hash is required when overwriting an existing file"
+                    ),
+                )
+        elif current_hash != body.expected_hash:
             raise HTTPException(
                 status_code=409,
                 detail="Artifact changed since it was read",
             )
 
-    writer = AtomicWriter()
-    result = writer.write_atomic(
-        body.content.encode("utf-8"),
-        path,
-        skip_conflict_check=True,
-    )
+        writer = AtomicWriter()
+        result = writer.write_atomic(
+            body.content.encode("utf-8"),
+            path,
+            skip_conflict_check=True,
+        )
     if not result.success or result.final_path is None:
         raise HTTPException(
             status_code=500,

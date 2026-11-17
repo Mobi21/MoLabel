@@ -40,7 +40,7 @@ async def test_batch_partial_failure_eight_of_ten(
         ws_resp = await client.post(
             "/api/v1/workspaces",
             json={
-                "path": "/tmp/ws-batch-partial-failure-test",
+                "path": client.workspace_dir("ws-batch-partial-failure-test"),
                 "workspace_name": "Batch Partial Failure Test",
             },
         )

@@ -54,7 +54,7 @@ async def test_session_persistence(
             resp = await client.post(
                 f"{BASE}/workspaces",
                 json={
-                    "path": f"/tmp/ws-session-{i}",
+                    "path": client.workspace_dir(f"ws-session-{i}"),
                     "workspace_name": f"Session WS {i}",
                 },
             )

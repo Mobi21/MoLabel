@@ -22,15 +22,18 @@ Unlike server-deployed applications where operators control upgrades, MoLabel is
 Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 
 ### Alembic Configuration
-- `alembic.ini` is generated at workspace bootstrap time (not shipped in the repo)
+- There is no `alembic.ini`. `molabel.core.migration_runner` builds the Alembic config in code
 - The migration env (`env.py`) reads the SQLModel metadata from the data model definitions
-- Migrations are auto-generated from model changes using `alembic revision --autogenerate`
-- Each migration has a descriptive name: `001_initial_schema.py`, `002_add_workflow_tables.py`, etc.
+- Migrations are auto-generated from model changes, then reviewed and frozen as explicit DDL. A migration never calls `SQLModel.metadata.create_all`, so it does not drift when the models change
+- Each migration has a descriptive name: `001_initial_schema.py`, `002_audit_events.py`, etc.
+- Alembic is the only code that creates tables. Routes and bootstrap never run `CREATE TABLE`
 
 ### Version Tracking
-- Alembic stores the current schema version in the `alembic_version` table within each workspace's SQLite database
-- On app startup, the system checks whether the database schema is current
-- If behind, the app runs pending migrations before proceeding
+- Alembic stores the current schema version in the `alembic_version` table of the server database. There is one server database for all workspaces (see `docs/guides/how-molabel-works-today.md` section 4.2)
+- On startup, the server runs `upgrade_database`, which is `alembic upgrade head`
+- Servers that share a SQLite file migrate it one at a time. Each takes an OS-level lock on `<database>.migrate.lock` beside the file, then re-reads the revision before running anything. The lock file may stay after startup on Linux; it holds no data
+- A database created by `create_all` before Alembic owned the schema has tables but no `alembic_version`. It is stamped at `001`, whose DDL is frozen at exactly that schema, and then upgraded
+- Before stamping, the server checks that such a database has every table and column that `001` creates. If any are missing, startup stops with an error that lists them, and the database is not changed
 
 ## Migration Lifecycle
 
@@ -57,7 +60,7 @@ Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 - Each migration must be idempotent (safe to run twice)
 
 ## Backup Strategy
-- Before running migrations, the app creates a backup: `{db_name}.backup.{timestamp}.sqlite`
+- Before running migrations on a database that has tables, the app creates a backup: `{db_name}.backup.{timestamp}.sqlite`. It is written with SQLite's backup API, so rows still in the WAL file are included
 - Backups are kept for 30 days, then cleaned up
 - If a migration fails, the user can restore from the backup via the Settings screen
 
@@ -71,6 +74,5 @@ Migration files live at `packages/molabel-core/src/molabel/core/migrations/`
 - If a workspace manifest declares a newer `core_version` than the installed app, the app warns: "This workspace was created with a newer version of MoLabel"
 
 ## Testing
-- Fixture databases at known schema versions are stored in `fixtures/migrations/`
-- CI runs upgrade tests: start from each fixture version, migrate to head, verify data integrity
-- The migration test suite is part of `tests/integration/migrations/`
+- Fixture schemas at known versions are stored in `fixtures/migrations/`. `pre-alembic-create-all.sql` is the schema `create_all` produced before Alembic owned it
+- `tests/integration/test_schema_migrations.py` starts the server on a fresh database and on each fixture, and checks that the result is at head and that autogenerate finds no difference from the models. A model change without a matching migration fails it
