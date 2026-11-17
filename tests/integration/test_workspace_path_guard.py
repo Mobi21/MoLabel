@@ -602,3 +602,32 @@ async def test_bootstrap_refuses_a_manifest_linked_out_of_the_folder(
     workspaces = await client.get("/api/v1/workspaces")
     names = [w["workspace_name"] for w in workspaces.json()["items"]]
     assert "Elsewhere" not in names
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "con",
+        "CON",
+        "Prn.txt",
+        "aux.tar.gz",
+        "nul",
+        "com1",
+        "COM9.yaml",
+        "lpt1",
+        "lpt9",
+        "con .txt",
+        "com" + chr(0xB9),
+        "folder.",
+        "folder ",
+    ],
+)
+def test_a_name_windows_cannot_hold_is_not_portable(name):
+    assert workspace_paths.portable_name_problem(name) is not None
+
+
+@pytest.mark.parametrize(
+    "name", ["console", "com10", "lpt", "nul-set", "gold.yaml", "my.con", ".molabel"]
+)
+def test_an_ordinary_name_is_portable(name):
+    assert workspace_paths.portable_name_problem(name) is None

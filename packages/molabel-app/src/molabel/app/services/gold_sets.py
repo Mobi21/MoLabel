@@ -35,7 +35,7 @@ from molabel.app.workspace_config import (
     workspace_files,
     workspace_folder,
 )
-from molabel.app.workspace_paths import resolve_in_workspace
+from molabel.app.workspace_paths import require_portable, resolve_in_workspace
 from molabel.core.agents.queue_binding import deserialize_agent_output_ids
 from molabel.core.database import hyphenated_id
 from molabel.core.gold.calibration import CalibrationItems
@@ -601,6 +601,7 @@ def export_gold_set(
     folder = workspace_folder(engine, str(workspace_id))
     with workspace_files(folder) as files:
         stored = read_gold_set(folder, slug)
+        require_portable(folder.path, path)
         target = resolve_in_workspace(folder.path, path)
         if target.exists() and not overwrite:
             relative = target.relative_to(folder.path).as_posix()

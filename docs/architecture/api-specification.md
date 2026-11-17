@@ -94,7 +94,12 @@ glob finds there is checked too. A path is first refused if it contains a
 a registered root or inside one. Artifact routes need `workspace_root` or
 `workspace_id`; there is no fallback to the server's working directory.
 Bootstrap is the one route that takes a new root. It needs an absolute path
-without `..`.
+without `..`. A file the server writes in a workspace, such as a config file,
+a gold set or an export, must also have names Windows can hold, whatever
+platform runs the server, so the workspace opens on every machine. No folder
+or file name may end with a dot or a space, or be a Windows device name
+(`con`, `prn`, `aux`, `nul`, `com0` to `com9`, `lpt0` to `lpt9`, in any case
+and with any extension).
 
 | HTTP Status | Code                     | When                                              |
 |-------------|--------------------------|---------------------------------------------------|
@@ -102,6 +107,7 @@ without `..`.
 | 400         | `PATH_NOT_ABSOLUTE`      | A workspace root or bootstrap path is relative    |
 | 400         | `WORKSPACE_REQUIRED`     | Neither `workspace_root` nor `workspace_id` given |
 | 403         | `PATH_OUTSIDE_WORKSPACE` | The resolved path is outside every registered root |
+| 422         | `PATH_NOT_PORTABLE`      | A name to write ends with a dot or space, or is a Windows device name |
 
 `details.path` echoes the rejected path. A workflow step whose path is
 refused fails with "Path is outside the workspace" in its `error_summary`.

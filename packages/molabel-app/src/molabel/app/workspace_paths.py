@@ -58,6 +58,53 @@ def _reject_traversal(raw: str) -> None:
         )
 
 
+_WINDOWS_DEVICES = frozenset(
+    {"con", "prn", "aux", "nul", "conin$", "conout$"}
+    | {
+        f"{port}{number}"
+        for port in ("com", "lpt")
+        for number in [*"0123456789", chr(0xB9), chr(0xB2), chr(0xB3)]
+    }
+)
+
+
+def portable_name_problem(name: str) -> str | None:
+    """Why Windows cannot hold a file or folder called *name*, or None.
+
+    Windows drops a trailing dot or space, and reserves its device names in
+    any case and with any extension.
+    """
+    if name != name.rstrip(" ."):
+        return f"'{name}' ends with a dot or a space, which Windows drops"
+    if name.split(".", 1)[0].rstrip(" ").lower() in _WINDOWS_DEVICES:
+        return f"'{name}' is a device name Windows reserves"
+    return None
+
+
+def require_portable(root: Path, raw: str) -> None:
+    """Refuse to write *raw* when a folder or file name in it is not portable.
+
+    A workspace is committed to git and opened on other machines, so every
+    name MoLabel writes must work on Windows, whatever platform writes it.
+    """
+    path = Path(raw).expanduser()
+    if path.is_absolute():
+        if not path.is_relative_to(root):
+            return
+        path = path.relative_to(root)
+    for name in path.parts:
+        if name in (".", ".."):
+            continue
+        problem = portable_name_problem(name)
+        if problem is not None:
+            raise WorkspacePathError(
+                422,
+                "PATH_NOT_PORTABLE",
+                f"{problem}, so the workspace would not open there. Pick another name.",
+                raw,
+            )
+
+
 def new_workspace_root(raw: str) -> Path:
     """Validate a path the caller is about to register as a workspace root."""
     _reject_traversal(raw)

@@ -26,8 +26,9 @@ schema. Promotion from a queue of another schema answers
 `GOLD_TASK_SCHEMA_MISMATCH`.
 
 Every write goes through `workspace_files`. It takes the workspace lock, checks
-each path with the `workspace_paths` guard, and restores both files if the
-write fails. It replaces `gold.jsonl` before `gold.yaml`, so the header's
+each path with the `workspace_paths` guard, refuses a name Windows cannot
+hold (`422 PATH_NOT_PORTABLE`, so a slug such as `con` or `lpt1` is refused),
+and restores both files if the write fails. It replaces `gold.jsonl` before `gold.yaml`, so the header's
 `content_hash` and `item_count` always describe a file already on disk. A
 process killed between the two leaves the previous header beside the new
 items, and every read reports that, as below. The header goes through `dump_yaml`, which keeps a person's

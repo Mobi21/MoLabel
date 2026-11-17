@@ -96,6 +96,65 @@ async def _create(client: AsyncClient, route: str, body: dict) -> dict:
     return resp.json()
 
 
+def _tree(workspace: Path) -> list[str]:
+    return sorted(
+        p.relative_to(workspace).as_posix()
+        for p in workspace.rglob("*")
+        if ".molabel" not in p.parts
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("route", "body"),
+    [
+        ("/api/v1/task-schemas", {**SCHEMA, "task_schema_slug": "Con"}),
+        ("/api/v1/task-schemas", {**SCHEMA, "task_schema_slug": "nul.v2"}),
+        (
+            "/api/v1/task-schemas",
+            {**SCHEMA, "file_path": "workbench/config/task-schemas/sentiment.yaml "},
+        ),
+        (
+            "/api/v1/task-schemas",
+            {**SCHEMA, "file_path": "workbench/config./sentiment.yaml"},
+        ),
+        ("/api/v1/workflows", {**WORKFLOW, "workflow_slug": "com1"}),
+    ],
+)
+async def test_config_with_a_name_windows_cannot_hold_is_refused(
+    client, workspace, route, body
+):
+    before = _tree(workspace)
+
+    resp = await client.post(route, json={**body, "workspace_id": client.workspace_id})
+
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["error"]["code"] == "PATH_NOT_PORTABLE"
+    assert "Windows" in resp.json()["error"]["message"]
+    assert _tree(workspace) == before
+
+
+@pytest.mark.asyncio
+async def test_a_prompt_named_like_a_windows_device_is_refused(client, workspace):
+    schema = await _create(client, "/api/v1/task-schemas", SCHEMA)
+    before = _tree(workspace)
+
+    resp = await client.post(
+        "/api/v1/prompts",
+        json={
+            "workspace_id": client.workspace_id,
+            "name": "AUX",
+            "agent_role": "proposer",
+            "task_schema_id": schema["task_schema_id"],
+            "system_instructions": "Label the sentiment.",
+        },
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["error"]["code"] == "PATH_NOT_PORTABLE"
+    assert _tree(workspace) == before
+
+
 @pytest.mark.asyncio
 async def test_creating_config_writes_files_listed_in_the_manifest(client, workspace):
     schema = await _create(client, "/api/v1/task-schemas", SCHEMA)

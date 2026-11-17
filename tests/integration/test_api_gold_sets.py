@@ -195,6 +195,26 @@ async def test_create_refuses_a_folder_holding_files_the_manifest_does_not_list(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("slug", ["con", "prn", "aux", "nul", "com1", "lpt9"])
+async def test_create_refuses_a_slug_windows_reserves(client, app, tmp_path, slug):
+    _, tokens, _ = await _start_review(client, app, tmp_path)
+
+    resp = await client.post(
+        "/api/v1/gold-sets",
+        json={"gold_set_id": slug, "task_schema_id": "sentiment-demo-v1"},
+        headers=_as(tokens[0]),
+    )
+
+    assert resp.status_code == 422, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "PATH_NOT_PORTABLE"
+    assert f"'{slug}' is a device name Windows reserves" in error["message"]
+    assert not (tmp_path / "gold").exists()
+    listed = await client.get("/api/v1/gold-sets", headers=_as(tokens[0]))
+    assert listed.json()["items"] == []
+
+
+@pytest.mark.asyncio
 async def test_create_writes_into_an_empty_folder(client, app, tmp_path):
     _, tokens, _ = await _start_review(client, app, tmp_path)
     (tmp_path / "gold" / GOLD).mkdir(parents=True)

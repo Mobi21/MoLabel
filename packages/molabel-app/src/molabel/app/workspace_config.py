@@ -26,7 +26,11 @@ from fastapi import HTTPException
 from filelock import FileLock
 from sqlalchemy import text
 
-from molabel.app.workspace_paths import WorkspacePathError, resolve_in_workspace
+from molabel.app.workspace_paths import (
+    WorkspacePathError,
+    require_portable,
+    resolve_in_workspace,
+)
 from molabel.core.gold.model import (
     GOLD_DIRECTORY,
     HEADER_FILENAME,
@@ -168,9 +172,7 @@ class WorkspaceFiles:
         source, and the caller is registering it. Returns the path relative
         to the workspace folder.
         """
-        target = resolve_in_workspace(
-            self.folder.path, file_path or f"{kind.directory}/{slug}.yaml"
-        )
+        target = self._target(file_path or f"{kind.directory}/{slug}.yaml")
         if overwrite or not target.exists():
             self._write(target, dump_yaml(document, _text_or_none(target)))
         relative = target.relative_to(self.folder.path).as_posix()
@@ -229,9 +231,8 @@ class WorkspaceFiles:
         killed between the two leaves a header that names the previous file,
         which every read reports as ``content_hash_matches: false``.
         """
-        header_path = resolve_in_workspace(
-            self.folder.path,
-            definition_path or f"{GOLD_DIRECTORY}/{slug}/{HEADER_FILENAME}",
+        header_path = self._target(
+            definition_path or f"{GOLD_DIRECTORY}/{slug}/{HEADER_FILENAME}"
         )
         relative = header_path.relative_to(self.folder.path).as_posix()
         items_path = resolve_in_workspace(
@@ -254,9 +255,14 @@ class WorkspaceFiles:
 
     def write_file(self, relative: str, content: bytes) -> str:
         """Write a generated file, such as an export, inside the workspace."""
-        path = resolve_in_workspace(self.folder.path, relative)
+        path = self._target(relative)
         self._write(path, content)
         return path.relative_to(self.folder.path).as_posix()
+
+    def _target(self, raw: str) -> Path:
+        """Where *raw* is in the workspace, checked before anything touches it."""
+        require_portable(self.folder.path, raw)
+        return resolve_in_workspace(self.folder.path, raw)
 
     def _update_manifest(self, change: Callable[[WorkspaceManifest], None]) -> None:
         path = resolve_in_workspace(self.folder.path, MANIFEST_FILENAME)
